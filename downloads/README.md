@@ -5,11 +5,35 @@ without building it.
 
 | file | version | size |
 |---|---|---|
+| [whereq-dosbox-1.0.0.8.apk](whereq-dosbox-1.0.0.8.apk) | 1.0.0.8 | 15.5 MB |
 | [whereq-dosbox-1.0.0.7.apk](whereq-dosbox-1.0.0.7.apk) | 1.0.0.7 | 15.5 MB |
 | [whereq-dosbox-1.0.0.6.apk](whereq-dosbox-1.0.0.6.apk) | 1.0.0.6 | 15.5 MB |
 | [whereq-dosbox-1.0.0.5.apk](whereq-dosbox-1.0.0.5.apk) | 1.0.0.5 | 15.5 MB |
 | [whereq-dosbox-1.0.0.4.apk](whereq-dosbox-1.0.0.4.apk) | 1.0.0.4 | 5.0 MB |
 | [whereq-dosbox-1.0.0.3.apk](whereq-dosbox-1.0.0.3.apk) | 1.0.0.3 | 5.0 MB |
+
+## What changed in 1.0.0.8
+
+* **Save states.** Every game gets three slots. **States** in the Files panel
+  opens them; **Save** freezes the whole running machine — the CPU, the DOS
+  memory, the video memory, the open DOS file handles, the hardware timers —
+  and **Load** jumps back to that exact moment. A slot is a file on the phone,
+  so it survives quitting the app and rebooting the phone.
+* **Resume resumes.** The **Resume** button used to start the last game from
+  the beginning. It now restores its newest save state, so the player
+  continues where they left off. With no save state the game starts from the
+  beginning, as before.
+* **The arrows are an inverted T.** In landscape the four arrow keys sit in
+  the right-hand column the way they do on a real keyboard — up on top, left
+  and right side by side, down below.
+* **The game keeps running.** While a game is running, a small ongoing
+  notification holds the emulator process, so switching to another app no
+  longer loses the game. Tap the notification to come back to the same frame.
+
+Some old DOS programs do not survive a restore — the extender of Ultima VIII
+still aborts on it. That is a limitation of the DOS internals the snapshot
+does not capture yet, not of the app; `porting/ANDROID-PORT.md` has the
+details.
 
 ## What changed in 1.0.0.7
 
@@ -43,6 +67,8 @@ from 1.0.0.7 on it can be picked in the app, see above.
 The APK is signed with the release key of this repository, so it can be
 updated in place: a later version replaces it without uninstalling first.
 
+* SHA-256 of the 1.0.0.8 APK:
+  `ed17f39bddeb9e871485df390f772f19c5a43abdbf3b5845c7abd4afbb602ca3`
 * SHA-256 of the 1.0.0.7 APK:
   `2e97f12f3901acbdc23f62395316df25aa51f4a081d941a950b2d7dfa36910a1`
 * SHA-256 of the 1.0.0.6 APK:

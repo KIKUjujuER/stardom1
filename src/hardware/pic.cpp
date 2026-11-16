@@ -16,6 +16,8 @@
  *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
+#include <stdio.h>
+
 #include "dosbox.h"
 #include "inout.h"
 #include "cpu.h"
@@ -114,6 +116,34 @@ static PIC_Controller& master = pics[0];
 static PIC_Controller& slave  = pics[1];
 Bitu PIC_Ticks = 0;
 Bitu PIC_IRQCheck = 0; //Maybe make it a bool and/or ensure 32bit size (x86 dynamic core seems to assume 32 bit variable size)
+
+// WhereQ save-states: the two PIC controllers are file-static POD. Their
+// masks / in-service / request registers are restored so the game's interrupt
+// configuration (and any IRQ it had in service at save time) resumes correctly.
+// PIC_Ticks is deliberately NOT restored: the clock stays continuous and the PIT
+// start times are re-based onto it instead (see timer.cpp).
+size_t PIC_StateSize(void) {
+	return sizeof(pics);
+}
+bool PIC_SaveState(FILE *f) {
+	return fwrite(pics, sizeof(pics), 1, f) == 1;
+}
+bool PIC_LoadState(FILE *f) {
+	if (fread(pics, sizeof(pics), 1, f) != 1) return false;
+	// Keep the game's interrupt MASK and configuration, but drop any stale
+	// pending/in-service state: a restored in-service bit would block all
+	// lower-priority IRQs (so the RTC that drives INT 15h/86h, and thus sound
+	// timing, would stall), and a stale request bit would fire a spurious IRQ.
+	// At the top-of-main-loop restore point no IRQ is genuinely mid-service.
+	for (int i = 0; i < 2; i++) {
+		pics[i].imrr = ~pics[i].imr;
+		pics[i].irr = 0;
+		pics[i].isr = 0;
+		pics[i].isrr = ~pics[i].isr;
+		pics[i].active_irq = 8;
+	}
+	return true;
+}
 
 
 void PIC_Controller::set_imr(Bit8u val) {

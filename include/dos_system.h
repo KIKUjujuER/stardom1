@@ -113,6 +113,9 @@ public:
 	virtual bool	ReadFromControlChannel(PhysPt bufptr,Bit16u size,Bit16u * retcode);
 	virtual bool	WriteToControlChannel(PhysPt bufptr,Bit16u size,Bit16u * retcode);
 	void SetDeviceNumber(Bitu num) { devnum=num;}
+	/* WhereQ-DOSBox: the number of this device in the device table. A save
+	 * state needs it to re-create the handle (see src/dos/dos_state.cpp). */
+	Bitu GetDeviceNumber(void) const { return devnum;}
 private:
 	Bitu devnum;
 };

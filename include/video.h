@@ -61,6 +61,16 @@ Bitu GFX_GetRGB(Bit8u red,Bit8u green,Bit8u blue);
 Bitu GFX_SetSize(Bitu width,Bitu height,Bitu flags,double scalex,double scaley,GFX_CallBack_t cb);
 
 void GFX_ResetScreen(void);
+/*
+ * Whether the video output is up and settled.
+ *
+ * A save-state restore rebuilds the whole picture (the VGA is re-derived and
+ * the renderer gets a new texture), so it must not run while the output is
+ * still settling - on Android the app is rotated into place a moment after
+ * the boot, and a picture drawn before that is thrown away by the resize
+ * that follows. See src/gui/sdlmain.cpp.
+ */
+bool GFX_VideoReady(void);
 void GFX_Start(void);
 void GFX_Stop(void);
 void GFX_SwitchFullScreen(void);

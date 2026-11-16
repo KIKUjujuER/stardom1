@@ -18,6 +18,7 @@
 
 
 #include <math.h>
+#include <stdio.h>
 #include "dosbox.h"
 #include "inout.h"
 #include "pic.h"
@@ -76,6 +77,42 @@ static void PIT0_Event(Bitu /*val*/) {
 		}
 		PIC_AddEvent(PIT0_Event,pit[0].delay);
 	}
+}
+
+// WhereQ save-states: the PIT lives in file-static state, so expose small
+// serialise helpers. On load, the channel start times are absolute PIC
+// timestamps; they are shifted by the time that passed between the save and
+// the load (clock_saved is the PIC clock of the save), so the counter phase -
+// and with it the rate and the phase of IRQ0 - continues exactly where it
+// left off instead of restarting at zero. Channel 0's IRQ0 event is then
+// re-armed with the *remaining* time of the current period, not with a whole
+// period, so the interrupt keeps its place in the tick.
+size_t TIMER_StateSize(void) {
+	return sizeof(pit) + sizeof(gate2);
+}
+bool TIMER_SaveState(FILE *f) {
+	return fwrite(pit, sizeof(pit), 1, f) == 1 &&
+	       fwrite(&gate2, sizeof(gate2), 1, f) == 1;
+}
+bool TIMER_LoadState(FILE *f, double clock_saved) {
+	if (fread(pit, sizeof(pit), 1, f) != 1) return false;
+	if (fread(&gate2, sizeof(gate2), 1, f) != 1) return false;
+	PIC_RemoveEvents(PIT0_Event);
+	const double now = PIC_FullIndex();
+	/* Shift the absolute timestamps forward by the elapsed time, so the
+	 * counter phase is exactly the one the game saw when it was saved. */
+	const double elapsed = now - clock_saved;
+	if (elapsed > 0)
+		for (int i = 0; i < 3; i++) pit[i].start += elapsed;
+	if (pit[0].mode != 0 && pit[0].delay > 0) {
+		/* Time left in the current period. */
+		double phase = now - pit[0].start;
+		if (phase < 0) phase = 0;
+		float remaining = (float)(pit[0].delay - phase);
+		if (remaining <= 0) remaining = pit[0].delay;
+		PIC_AddEvent(PIT0_Event, remaining);
+	}
+	return true;
 }
 
 static bool counter_output(Bitu counter) {

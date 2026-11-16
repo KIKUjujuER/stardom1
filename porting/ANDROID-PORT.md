@@ -744,6 +744,14 @@ two vertical columns. The modifiers and the editing keys (Esc, Tab, Ctrl,
 Alt, Shift, Bks) sit on the left, **File**, **Ent**, **Space** and the arrow
 keys on the right, both columns centred vertically for thumb reach.
 
+The four arrows were first stacked in a single vertical column, which is
+nothing like the keyboard they stand in for: the finger had to know which of
+the four was which. They now sit in the inverted-T of a real keyboard — up
+on top, left and right side by side in the middle, down at the bottom — so
+the thumb finds the direction by shape alone. The cluster is a small vertical
+container holding the up key, a horizontal row of the two weight-one side
+keys, and the down key; the layout primitives did not change.
+
 The columns are only used when a bar is at least 56 dp wide; in portrait the
 same keys fall back to a slim strip along the bottom. The overlay is
 transparent and not clickable, so a tap on the empty middle still falls
@@ -916,6 +924,491 @@ The generated config is the shipped template with the `core=` line replaced
 
 ---
 
+## 7e. Save states — snapshotting the running machine  ✅ DONE
+
+A save state is a snapshot of the **whole emulated machine**, written to a
+file and read back later — including into a *freshly booted* DOSBox. It is
+not an emulator feature: DOSBox has none, and a game that is 40 minutes into
+Ultima VIII could not be put back the way it was without one.
+
+### What is in a snapshot
+
+| Block | Notes |
+|---|---|
+| `cpu_regs`, `cpu` (CPUBlock), `Segs` | the whole CPU, including the GDT/IDT/LDT/TSS registers, the privilege level and the debug registers |
+| guest RAM | every page, `MEM_TotalPages() * 4096` bytes |
+| paging registers | CR2/CR3, the base, and whether paging is on |
+| `paging.firstmb` | the host's linear→physical map of the first megabyte (see below) |
+| the `vga` struct + video memory | the VGA registers, the DAC palette and the video RAM, plus the `fastmem` mirror the EGA/LIN modes are drawn from |
+| the x87 FPU | the register file and the control word |
+| the two PICs and the three PIT channels | the interrupt state and the timer phase |
+| the PIC clock | so the PIT phase can be continued instead of restarted |
+| the PC speaker | the square-wave state |
+| the DOS layer | the open file handles, the current drive, the loaded code page and the current directory of every drive (milestone B2, section 7g) |
+
+### The three rules that make a snapshot work
+
+1. **Host pointers are never read from the file.** The `vga` struct holds
+   ten host pointers (the video RAM, the `fastmem` mirror, the font tables,
+   the LFB page handler) and `cpu.hlt.old_decoder` is a *function* pointer
+   into the CPU core. They are process-local, so the live values are kept
+   and only the register/content state is restored.
+2. **The restore happens at a safe point only.** `Normal_Loop` is re-entered
+   from inside BIOS callbacks (`CALLBACK_Idle`), the I/O-fault handlers and
+   the page-fault handler; each of those frames keeps the CPU registers on
+   the host stack and writes them back when it returns, so a restore done
+   there would be overwritten a moment later. The loop therefore counts its
+   nesting depth and only the outermost loop services a pending
+   save/load — there the CPU is at an instruction boundary in the guest
+   program.
+3. **The derived state is rebuilt, not restored.** The renderer size, the
+   draw pipeline and the code cache are *consequences* of the restored
+   registers, and DOSBox's own helpers skip the work when the values they
+   compare against already match. After a load the VGA is therefore forced
+   through a full rebuild (`vga.draw.resizing/width/height` cleared) and the
+   dynrec code cache is dropped, so no stale translation of the replaced
+   memory is ever executed.
+
+### Two bugs that only a device could show
+
+* **Black screen, then a SIGSEGV.** `do_load` called `VGA_StartResize(0)`,
+  but `vga.draw.resizing` is part of the `vga` struct and came back from the
+  file, so the resize never happened. Worse, `VGA_SetupDrawing()` only
+  rebuilds the output window when the new dimensions *differ* from
+  `vga.draw.width/height` — which also came from the file, so they matched
+  and the whole resize block was skipped. The renderer kept the old mode,
+  and the pending draw event of the old mode then fired with the new state
+  and wrote through a stale output pointer: `SIGSEGV (SEGV_ACCERR)` in
+  `Normal1x_8_32_L`. Forcing the rebuild fixed both.
+* **The app closed itself.** After a restore of a protected-mode game the
+  machine diverged, hit a far return with a bad stack segment and DOSBox
+  aborted with `Exit to error: RET:SS selector type no writable data
+  segment`. That ends `SDL_main`, the activity finishes and the app
+  disappears — which looked like Android putting the app into the
+  background. The cause was `paging.firstmb`: while paging is *off* DOSBox
+  resolves the first megabyte through that array instead of the guest's
+  page tables, and the EMS page frame is mapped through it. It is host
+  state, so it has to travel with the snapshot.
+
+### What a snapshot is *not*
+
+The snapshot is the **machine**, not DOSBox's host-side environment. These
+are not captured and stay the ones of the process that loads the file:
+
+* **Open DOS file handles.** A game that had `SOUND\MUSIC.FLX` open when
+  the state was taken gets `DOS error 6 (invalid handle)` the next time it
+  touches that handle, and its runtime aborts. Save at a menu or an idle
+  point for games that keep data files open. (This is milestone B2.)
+  *(Fixed in milestone B2 — see section 7g: the open file handles are part of
+  the snapshot now, together with the current drive, the loaded code page and
+  the current directory of every drive.)*
+* The EMS/XMS handle tables and the `MEM_AllocatePages` bookkeeping.
+* The VCPI PIC vector remapping, the mouse, and the sound chips.
+* **The PIC event queue.** The vertical retrace that drives the screen
+  refresh is a PIC event (`VGA_VerticalTimer`), so it is gone with the rest
+  of the queue. `VGA_RestartFrameTimer()` re-arms it after a load; without it
+  the guest would keep running while the picture stayed frozen for ever.
+
+### Verification (emulator, API 37, x86_64)
+
+* STARFALL (real mode): save, kill the app, restart, load the slot — the
+  game comes back, is visible and plays.
+* Ultima8 (protected mode): save at the title screen, kill the app,
+  restart, load the slot — the game comes back and is interactive. The
+  machine fingerprint logged by the save and by the load is *identical*
+  (same registers, same descriptor-table checksum, same stack checksum),
+  which is the proof that the snapshot restores the machine and not
+  something that merely looks like it.
+
+---
+
+## 7f. Coming back to the foreground — the picture was the wrong one  ✅ DONE
+
+The user reported that after restoring a game, sending the app to the
+background and bringing it back made the app "crash because of the video
+mode". It did not crash — but the **picture was wrong**: instead of the
+game the screen showed the DOSBox start-up banner (or a black rectangle),
+and the picture never changed again.
+
+### What actually happens on Android
+
+When the app goes to the background, Android destroys the `SurfaceView`
+surface; when it comes back, a *new* surface is created. SDL keeps one
+`SDL_Window`, and that window owns the EGL surface that the renderer draws
+into. SDL refreshes the window's native handle
+(`onNativeSurfaceCreated`) and re-creates the EGL surface
+(`onNativeSurfaceChanged`), but **DOSBox's own `GFX_SetSize()` destroys the
+renderer and creates a new one** — and the new renderer is bound to the
+window's EGL surface, which at that moment is the *old* one.
+
+The result is a silent failure: the emulator keeps running, `SDL_RenderPresent`
+returns without an error, the texture even holds the right picture — but
+every frame goes into a buffer that nobody looks at. The screen keeps
+whatever the recycled surface buffer happened to contain (the start-up
+banner), and the app looks frozen.
+
+The proof that this is an Android binding problem and not an emulator
+problem: reading the texture back right after a present showed the *game*
+picture (`p0=ff00001c` = the game's dark blue, `pc=ffdbb682` = the parchment)
+while the screen showed the DOSBox banner.
+
+### The fix
+
+`SDL_WINDOWEVENT_RESTORED` is sent by SDL when the app returns to the
+foreground. On Android the window is now re-created
+(`sdl.recreate_window`), which re-fetches the native window of the *current*
+surface, and the renderer is bound to the surface the user actually sees.
+The in-flight frame is killed before the texture is destroyed
+(`VGA_KillDrawing()`), because DOSBox hands one line per timer tick to the
+PIC and the remaining lines of the old frame would be written into the
+destroyed texture.
+
+### Verification (emulator, API 37, release APK with all three ABIs)
+
+* Ultima8 (protected mode): load the slot, send the app to the background,
+  bring it back — the picture is **byte-identical** to the picture before
+  the backgrounding (the game is still there), the process keeps its pid,
+  the renderer is re-created with the right texture (`texture=320x200`,
+  the mode is not changed), and there is no `Exit to error` and no fatal
+  signal. The guest keeps executing: re-saving the state afterwards gives a
+  *different* fingerprint (`ip` and the IDT base have moved).
+* STARFALL (real mode, animated): load the slot, background, foreground —
+  the game is still on screen and pressing a key starts the game, so the
+  frames are live, not a frozen picture.
+* The same test without any save state (a game that was simply running)
+  behaves the same way, so the fix does not depend on the snapshot.
+
+---
+
+## 7g. Milestone B2 — the open DOS file handles  ✅ DONE
+
+The user restored a state in a Chinese Ultima VIII (三國志英傑傳) and saw two
+symptoms: the in-game text came out **garbled**, and the game aborted by itself
+with `DOS Error=0006` (invalid handle) when it touched `SOUND\MUSIC.FLX`.
+
+Both have the same cause: **the open DOS file handles were not part of the
+snapshot.**
+
+### Why the handles are part of the machine
+
+DOSBox keeps the open files in one global table, `Files[]`
+(`src/dos/dos_files.cpp`, 127 entries). A DOS handle is *not* a pointer: the
+guest's Job File Table — which lives in the PSP, i.e. in the guest's memory —
+stores the **index** of the entry in that table.
+
+The snapshot restores the guest's memory, so the restored PSP points at
+indices 4…15 of a table that the freshly-booted DOSBox had never filled: those
+entries were empty. Every access through such a handle failed with
+`DOSERR_INVALID_HANDLE` — error 6. That is exactly what the extender reported.
+
+The two symptoms fall out of the same fact:
+
+* `GAMES\G2\STATIC\U8FONTS.FLX` — the font file — was open, so the game drew
+  its dialogue with garbage glyphs. That is the "the text encoding became
+  messed up" report.
+* `GAMES\G2\SOUND\MUSIC.FLX` was open, so the extender's next access to it
+  failed with error 6 and it aborted the game by itself.
+
+### What is stored
+
+`src/dos/dos_state.cpp` (new) writes one fixed-size record per table entry:
+
+| Field | Meaning |
+|---|---|
+| `kind` | empty slot, device or file |
+| `name` | the DOS name of the file (the drive-relative path DOSBox built it from) |
+| `hdrive` | the drive the handle belongs to |
+| `flags` | the open mode (`DOS_File::flags`) |
+| `pos` | the position in the file |
+| `refCtr` | the reference count (a duplicated handle shares one entry) |
+| `time`, `date`, `attr` | the file attributes |
+
+Beside the handles the DOS block carries the pieces of DOS state that are not
+in the guest's memory either: the current drive, the loaded code page and the
+current directory of every drive.
+
+### How a handle is restored
+
+A file is **re-opened through its drive** — exactly the way `DOS_OpenFile()`
+does it when the guest opens it — and the file pointer is then put back where
+the guest left it (`DOS_File::Seek(DOS_SEEK_SET)`). A device is restored from
+the device table (`new DOS_Device(*Devices[n])`, the same thing
+`DOS_OpenFile()` does).
+
+The table is rebuilt **in the same order**, because the guest's handles are
+indices into it: entry *n* of the snapshot has to become entry *n* of the
+table, or the guest reads somebody else's file.
+
+Two details that are easy to get wrong:
+
+* A handle that is *closed* but still in the table (a file that was deleted
+  while it was open) is stored as an empty slot — it is invalid for the guest
+  either way, and re-opening it would resurrect a deleted file.
+* The write buffers of the open files are flushed before the snapshot is
+  taken, so the state contains what the guest has written so far.
+
+### The state file grew, so the version grew
+
+`SS_VERSION` went from 4 to 5. A slot written by an older build is refused
+("that save file is damaged") instead of being misread.
+
+### Verification (emulator, API 37, release APK with all three ABIs)
+
+Ultima8 (PAGAN Ultima VIII, protected mode), state taken while the game runs:
+
+```
+savestate: dos state: drive 2, code page 437, 16 open handle(s)
+...
+savestate: dos handle  4: GAMES\G2\STATIC\XFORMPAL.DAT (drive 2, pos 2448, refs 1)
+savestate: dos handle  5: GAMES\G2\USECODE\EUSECODE.FLX (drive 2, pos 1251108, refs 1)
+savestate: dos handle 11: GAMES\G2\STATIC\U8FONTS.FLX (drive 2, pos 102395, refs 1)
+savestate: dos handle 13: GAMES\G2\SOUND\MUSIC.FLX (drive 2, pos 76879, refs 1)
+savestate: dos handle 14: GAMES\G2\SOUND\SOUND.FLX (drive 2, pos 770702, refs 1)
+savestate: dos state restored: drive 2, code page 437, 16 handle(s)
+```
+
+All sixteen handles are back — the font file the garbled text came from
+(`U8FONTS.FLX`) and the music file the extender died on (`SOUND\MUSIC.FLX`)
+among them — and the machine fingerprint of the load is *identical* to the one
+of the save (same registers, same descriptor-table checksum, same stack
+checksum).
+
+STARFALL (real mode): save while the game is running, kill the app, restart,
+load the slot — the game comes back and is interactive (pressing a key starts
+it again). No `Exit to error`.
+
+### The abort that is *not* fixed by B2
+
+Restoring a state that was taken **during the Ultima8 intro animation** (or
+later, at the "give the game a name" screen) still ends in
+
+```
+Exit to error: RET from illegal descriptor type 13
+```
+
+about a second after the load. That one is **not** caused by the missing
+handles: the same test with the build from before B2 aborts with the very same
+message at the very same moment. The guest diverges after the restore because
+host state that the game depends on is still not captured — most likely the
+sound chips (the SB/OPL/GUS and their DMA), the EMS/XMS handle tables, the
+mouse and the RTC. That is the next milestone (B3); see the open items.
+
+---
+
+## 7h. "Resume" resumes — the button that always started the game again  ✅ DONE
+
+The launcher's **Resume** button did not resume anything: it relaunched the app
+into the last-played game, which started it from the beginning every time. The
+snapshot machinery of section 7e was there, but nothing connected the button to
+it.
+
+**Resume now restores the newest saved slot of the last-played game.** If that
+game has no slot, it is started the normal way — so the button is never a dead
+end.
+
+### The app side
+
+The launcher (Kotlin) knows the last-played game (`KEY_LAST_GAME`) and can see
+the slot files (`no_backup/states/<G-folder>/slot<N>.sav`). The newest slot is
+the one with the newest modification time.
+
+Tapping **Resume**:
+
+1. writes the pending launch **and** the pending slot into the shared
+   preferences (synchronously — the process is torn down right after),
+2. starts the app again and kills the current process, so the next boot is a
+   clean one with a freshly mounted C:,
+3. the next boot reads the pending slot and **does not** append the game's
+   `RUN.BAT` to the `[autoexec]`: the saved machine *is* the game, so starting
+   it as well would only flash its intro before the restore replaces it,
+4. as soon as the emulator is up, the slot is restored.
+
+If the restore fails (a slot from another machine setup, a damaged file), the
+app relaunches into a normal start of the game, so the player is never left
+staring at a bare `C:\>` prompt.
+
+The button shows what it will do: `▶ Resume <game> · slot <n> · <age>`.
+
+### The two native gates
+
+A restore replaces the whole machine, so it must not run at the wrong moment.
+Two conditions are checked in `SAVESTATE_RunPending()`
+(`src/gui/savestate.cpp`), both on the DOSBox thread:
+
+**1. The guest must be running.** During the boot the machine loop already
+runs — DOSBox paints its start-up banner through the BIOS, and the BIOS runs
+the machine while it does so. Replacing the machine *there* would throw the
+boot away, so the request waits until the DOS shell has reached its prompt
+(`DOS_Shell::InputCommand()` → `SAVESTATE_GuestReady()`).
+
+A game that was started by the autoexec never lets the shell reach its prompt
+— the shell is blocked inside the program it started — so the module is also
+told from the other side: as soon as a guest program has been loaded and the
+CPU has been pointed at it (`DOS_Execute()` in `src/dos/dos_execute.cpp`).
+Without that second hook every save of a running game timed out.
+
+**2. The video output must have settled.** This is the bug that made the first
+version of the feature show a **black screen**; see below.
+
+### The black screen: a restore during the device rotation
+
+On Android the app starts in the orientation the display has natively and is
+rotated into place a moment later. DOSBox learns the display size at start-up
+(`GFX_ObtainDisplayDimensions()`) and letterboxes the picture against it, so
+until the rotation has settled the picture is scaled for the *old*
+orientation — and the resize that follows replaces the renderer and its
+texture.
+
+A restore that lands in that window is drawn for the old screen size and then
+thrown away by the resize: the screen stays black until the guest happens to
+change the video mode. The log shows it clearly:
+
+```
+Android texture output: renderer=2400x1080 ... clip=660,135 1080x810 texture=320x200   <- the restore
+Android texture output: renderer=2400x1080 ... clip=480,0 1440x1080 texture=320x200   <- the rotation
+```
+
+The restore therefore waits for `GFX_VideoReady()` (`src/gui/sdlmain.cpp`):
+a frame has been presented **and** the letterbox matches the window that is
+actually on screen. (A device that never reports a matching size must not
+block the restore forever, so after three seconds of steady output the
+picture is accepted anyway.)
+
+### The interrupt stubs
+
+DOSBox's own interrupt stubs are the "extra callback" instruction (`FE 38`)
+followed by an `IRET`: the host handler runs *inside* the `FE 38` instruction,
+and the `IRET` that follows pops the shadow registers the interrupt pushed. A
+restore that lands between the two would replace the stack the `IRET` pops
+from — and the "real interrupt" stubs stop the emulated machine right after
+the handler returned, so a restore there would end the program that was just
+restored.
+
+`cpu_in_interrupt_stub()` (`src/gui/savestate.cpp`) keeps the service point
+away from that window: the stubs live in the `F000` segment between
+`CB_SOFFSET` and the end of the real-interrupt table, and the BIOS' own code
+is outside of it (the stubs overwrote that part of the ROM image).
+
+### Verification (emulator, API 37, release APK with all three ABIs)
+
+Cold boot, tap **Resume** (the demo bundle, slot 1):
+
+```
+Android texture output: renderer=1080x2400 ... clip=0,795 1080x810 texture=640x400   <- portrait
+Android texture output: renderer=2400x1080 ... clip=480,0 1440x1080 texture=640x400  <- the rotation
+Android first frame presented, sdl error: ""
+savestate: dos state restored: drive 2, code page 437, 4 handle(s)
+Android texture output: renderer=2400x1080 ... clip=480,0 1440x1080 texture=320x200  <- the restore
+savestate: loaded .../states/G1/slot1.sav (cs:0192 ip:0000022a mode 3)
+savestate: loaded cs:0192/00001920 ip:0000022a sp:0000fff6 ... gdtck:811c9dc5 stckck:5d748f41
+auto-restore of G1 slot 1 done
+```
+
+The restore happens **after** the rotation has settled, the clip rectangle is
+the correct one, and the machine fingerprint is identical to the one of the
+save. The game is on the screen and interactive (pressing Space restarts it).
+
+Saving while a game runs works as well — that was the regression the second
+native gate fixed:
+
+```
+savestate: dos state: drive 2, code page 437, 4 open handle(s)
+savestate: saved .../states/G1/slot1.sav (cs:0192 ip:0000022a mode 3)
+```
+
+Ultima8 (protected mode) restores its sixteen DOS handles as well, but the
+extender still aborts a second later with `Exit to error: RET from illegal
+descriptor type 0` — the same abort as with a *manual* load of the same slot,
+i.e. the known B3 limitation (section 7g), not something the Resume path
+adds.
+
+---
+
+## 7i. The 1.0.0.8 release — save states, Resume and the inverted-T arrows  ✅ DONE
+
+One release carries the four changes of this milestone:
+
+| | |
+|---|---|
+| **Save states** | Three slots per game. `States` in the Files panel opens them, `Save` freezes the whole running machine, `Load` jumps back to it (section 7e). |
+| **Resume resumes** | The button restores the newest slot of the last-played game instead of starting it again (section 7h). |
+| **The inverted-T arrows** | The four arrow keys in the landscape right-hand column sit in the shape of a real keyboard (section 7b). |
+| **The keep-alive service** | A foreground service holds the emulator process while a game runs, so switching to another app does not lose it. |
+
+### The keep-alive service
+
+`android/app/src/main/java/com/whereq/dosbox/DosboxForegroundService.kt` is a
+foreground service with the `specialUse` type and no logic of its own: it
+shows an ongoing notification (*Playing <game> — tap to return*) and holds the
+process. Without it Android may reclaim the process while the player is in
+another app, and DOSBox r4305 has no save state of its own — the whole
+machine lives in RAM, so the game would be gone.
+
+The service is `START_NOT_STICKY`: a game launch restarts the whole process
+(`relaunch()` tears it down on purpose), so the OS must not resurrect it on
+its own. It is started when a game is launched and stopped when the player
+exits to the prompt. `POST_NOTIFICATIONS` is requested, so Android asks once
+for the notification permission on the first game launch.
+
+### The screenshots
+
+`resources/screenshot-phone.jpg` — the picture at the top of the README — is
+now a photo of the app on a **phone** (2376×1080) instead of an emulator
+capture, and it shows the new arrow cluster. The emulator captures in
+`porting/screenshots/` were taken again with the same layout.
+
+### The build
+
+All three ABIs were rebuilt from scratch (NDK r27 + CMake), the APK was
+signed with the release key and installed over the published 1.0.0.7 on the
+emulator:
+
+```
+versionName=1.0.0.8   versionCode=1000008
+SHA-256 (APK):      ed17f39bddeb9e871485df390f772f19c5a43abdbf3b5845c7abd4afbb602ca3
+cert SHA-256:       b16b480d5a1ff6d35baff0b15fa3fc4b0ee815e500861fbff1b062c9bf7d3933
+```
+
+The build is reproducible: a second clean build of the same tree produced the
+same `libdosbox.so` for all three ABIs, byte for byte.
+
+### Verification on the release APK
+
+The whole flow was run again on the 1.0.0.8 APK, with the app data wiped
+first:
+
+1. fresh install → the DOS prompt, the keyboard and the arrow cluster;
+2. the demo bundle installed through the app's own file picker;
+3. **Play** → STARFALL runs;
+4. **States → Save** on slot 1 →
+   `savestate: saved …/states/G1/slot1.sav (cs:0192 ip:0000022a mode 3)`;
+5. the process was killed (`am force-stop`) and the app started cold — the
+   button reads *▶ Resume whereq-demo-bundle · slot 1 · just now*;
+6. **Resume** →
+   `savestate: loaded …/states/G1/slot1.sav (cs:0192 ip:0000022a mode 3)` with
+   the fingerprint of the save (`gdtck:811c9dc5 stckck:221cbe88`), the game is
+   on the screen and playing after a tap on **Space**.
+
+### One intermittent black screen
+
+During this work the app was seen **once** in a completely black state at
+cold start: the activity window had drawn (`HAS_DRAWN`) but its surface was
+still `0×0`, and the platform's starting window stayed on top of it. The
+log line
+
+```
+BLASTBufferQueue: … rejecting buffer:active_size=2400x1080, requested_size=2400x1080 buffer{size=1080x2400 transform=0}
+```
+
+points at the portrait→landscape rotation racing the first frame — the
+buffer SDL handed over was still in the portrait size. It could not be
+reproduced afterwards (12+ launches, including the published 1.0.0.7 APK on
+the same emulator), and the app recovers on its own whenever the rotation
+settles. It is recorded here because it would be very visible on a phone if
+it ever happens there.
+
+---
+
 ## 8. Release (production) APK
 
 The debug build is signed with an auto-generated key and is
@@ -1064,27 +1557,37 @@ Java-only helper (`bin/build.sh apk --legacy-apk`).
 
 ## 9. Open items
 
-1. **App polish** — the app layer is Kotlin with AndroidX and the Gradle
+1. **Save state, milestone B3** — the open DOS file handles are captured now
+   (section 7g). What is still missing is the rest of the host state a game
+   depends on: the sound chips (SB/OPL/GUS and their DMA), the EMS/XMS handle
+   tables and the `MEM_AllocatePages` bookkeeping, the VCPI PIC vector
+   remapping, the mouse, the RTC and the PIC event queue. Restoring an Ultima8
+   state still ends in `Exit to error: RET from illegal descriptor type 13`
+   (a state taken during the intro animation) or `… type 0` (a state taken
+   while the game runs) about a second after the load — the same with a
+   *manual* load of the same slot and the same with the build from before B2,
+   so it is not the handles and not the Resume path.
+2. **App polish** — the app layer is Kotlin with AndroidX and the Gradle
    build is the canonical one (see section 8). Still worth doing: back button
    behaviour outside the launcher, lifecycle handling (`onPause`/`onResume`
    must not corrupt emulator state).
-2. **Storage** — `chdir` to the app-private files dir is done. Game
+3. **Storage** — `chdir` to the app-private files dir is done. Game
    bundles are imported with the system file and folder pickers and with
    the "open with" intent (see section 7b) — no storage permission, since
    Android does not have `READ_EXTERNAL_STORAGE` any more. Still missing:
    export of a bundle back to the phone, and a way to run a bundle that
    ships its own `dosbox.conf` (it would need a restart of DOSBox).
-3. **Input** — touch (as a DOS mouse) and an on-screen keyboard are done
+4. **Input** — touch (as a DOS mouse) and an on-screen keyboard are done
    (see section 7). Still missing: gamepad mapping (the tree references *no*
    `SDL_CONTROLLER*` symbols at all), an on-screen joystick for the
    direction keys, and IME / non-ASCII text input. (The hardware keyboard
    works too — the emulator's soft keyboard is delivered as normal key
    events.)
-4. **Audio latency** — tune `blocksize` / `prebuffer` for Android's 20–40 ms
+5. **Audio latency** — tune `blocksize` / `prebuffer` for Android's 20–40 ms
    round trip (the Emscripten build used 2048/40).
-5. **GLES2 scalers** — optional; without them we rely on the CPU scalers via
+6. **GLES2 scalers** — optional; without them we rely on the CPU scalers via
    SDL's renderer.
-6. **On-device benchmark** — run the `bench/` probe on real ARM64 hardware.
-7. **Licensing** — the tree is GPLv2, so the app must be GPLv2 and open
+7. **On-device benchmark** — run the `bench/` probe on real ARM64 hardware.
+8. **Licensing** — the tree is GPLv2, so the app must be GPLv2 and open
    source; "DOSBox" is a trademark, so the app needs its own name.
 

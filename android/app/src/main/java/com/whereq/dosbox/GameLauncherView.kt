@@ -50,6 +50,18 @@ class GameLauncherView(context: Context, private val listener: Listener) : Frame
         /** Open the settings dialog (the DOSBox CPU core). */
         fun onConfigRequested()
 
+        /** Resume the last-played game. */
+        fun onResumeRequested()
+
+        /** Save the currently running machine into [slot] (1-based) of this game. */
+        fun onSaveStateRequested(bundle: GameBundle, slot: Int)
+
+        /** Restore [slot] (1-based) of this game — replaces the running machine. */
+        fun onLoadStateRequested(bundle: GameBundle, slot: Int)
+
+        /** @return a short label for a saved slot (e.g. "5 min ago"), or null when empty. */
+        fun stateSlotLabel(bundle: GameBundle, slot: Int): String?
+
         /** Close the panel. */
         fun onCloseRequested()
     }
@@ -58,6 +70,14 @@ class GameLauncherView(context: Context, private val listener: Listener) : Frame
     private val scroll: ScrollView
     private val status: TextView
     private val empty: TextView
+    private val resume: Button
+
+    /**
+     * The folder of the game this process actually booted into (null at a clean
+     * prompt). Save is only offered for that game, so a slot can never be
+     * overwritten with the wrong machine (e.g. the bare prompt).
+     */
+    private var currentGame: String? = null
 
     init {
         setBackgroundColor(COLOR_BACKGROUND)
@@ -139,6 +159,21 @@ class GameLauncherView(context: Context, private val listener: Listener) : Frame
         browseParams.gravity = Gravity.CENTER_HORIZONTAL
         panel.addView(browse, browseParams)
 
+        // -------------------------------------------------------- resume ---
+        // Jump straight back into the last game played (shown only when there is
+        // one). The emulator keep-alive usually brings a backgrounded game back
+        // on its own; this is the fallback for when the process was killed.
+        resume = makeButton("▶ Resume")
+        resume.setTextColor(0xFF10202E.toInt())
+        resume.setBackgroundColor(COLOR_RESUME)
+        resume.visibility = GONE
+        val resumeParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        )
+        resumeParams.bottomMargin = dp(10)
+        panel.addView(resume, resumeParams)
+        resume.setOnClickListener { listener.onResumeRequested() }
+
         // ------------------------------------------------------ the bundles ---
         empty = TextView(context)
         empty.text = "No games installed yet.\n\nInstall a .zip bundle from your phone — it is unpacked once and stays here. Then tap Play: the emulator restarts into the game with a clean, freshly mounted C: drive."
@@ -192,6 +227,35 @@ class GameLauncherView(context: Context, private val listener: Listener) : Frame
         status.text = text ?: ""
     }
 
+    /**
+     * Records which game this process is actually running (null at a clean
+     * prompt). Only that game offers "Save", so a save-state slot cannot be
+     * overwritten with an unrelated machine.
+     */
+    fun setCurrentGame(folder: String?) {
+        currentGame = folder
+    }
+
+    /**
+     * Shows (or hides) the "Resume" button for the last-played game.
+     *
+     * @param name the game's display name, or null to hide the button.
+     * @param detail what the button will resume from (e.g. "slot 2 · 5 min
+     *   ago"), or null when the game has no save yet.
+     */
+    fun setResumeGame(name: String?, detail: String? = null) {
+        if (name == null) {
+            resume.visibility = GONE
+        } else {
+            resume.text = if (detail == null) {
+                "▶ Resume $name"
+            } else {
+                "▶ Resume $name  ·  $detail"
+            }
+            resume.visibility = VISIBLE
+        }
+    }
+
     private fun makeRow(bundle: GameBundle): View {
         val row = LinearLayout(context)
         row.orientation = LinearLayout.VERTICAL
@@ -236,6 +300,10 @@ class GameLauncherView(context: Context, private val listener: Listener) : Frame
         play.setBackgroundColor(COLOR_ACCENT)
         play.setOnClickListener { listener.onPlayRequested(bundle) }
         actions.addView(play)
+
+        val states = makeButton("States")
+        states.setOnClickListener { showStatesDialog(bundle) }
+        actions.addView(states)
 
         val launch = makeButton("Launch…")
         launch.setOnClickListener { listener.onEditLaunchRequested(bundle) }
@@ -333,6 +401,97 @@ class GameLauncherView(context: Context, private val listener: Listener) : Frame
             .show()
     }
 
+    /**
+     * The save-state slots for one game.
+     *
+     * Save writes the whole running machine into a slot; Load restores it,
+     * replacing whatever is running (so it works from inside the game or from a
+     * fresh prompt). Save is only offered for the game this process is actually
+     * running ([currentGame]) — loading another game's slot is always allowed
+     * because it simply becomes that game.
+     */
+    private fun showStatesDialog(bundle: GameBundle) {
+        val isRunning = currentGame != null && currentGame == bundle.folder
+        var dialog: AlertDialog? = null
+
+        val column = LinearLayout(context)
+        column.orientation = LinearLayout.VERTICAL
+        column.setPadding(dp(18), dp(10), dp(18), dp(6))
+
+        val hint = TextView(context)
+        hint.text = if (isRunning) {
+            "Save the game exactly where it is now, or load a slot to jump back. A slot survives quitting the app and rebooting."
+        } else {
+            "Open States while this game is running to save. You can still load an existing slot now — it restores the game straight away."
+        }
+        hint.setTextColor(COLOR_DIM)
+        hint.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+        hint.setPadding(0, 0, 0, dp(8))
+        column.addView(hint)
+
+        for (slot in 1..STATE_SLOTS) {
+            val saved = listener.stateSlotLabel(bundle, slot)
+
+            val row = LinearLayout(context)
+            row.orientation = LinearLayout.HORIZONTAL
+            row.gravity = Gravity.CENTER_VERTICAL
+            val rowParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+            rowParams.bottomMargin = dp(6)
+            row.layoutParams = rowParams
+
+            val label = TextView(context)
+            label.text = "Slot $slot   ·   " + (saved ?: "empty")
+            label.setTextColor(if (saved != null) COLOR_TEXT else COLOR_DIM)
+            label.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            row.addView(
+                label,
+                LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            )
+
+            val save = makeButton("Save")
+            save.isEnabled = isRunning
+            save.alpha = if (isRunning) 1f else 0.4f
+            save.setOnClickListener {
+                dialog?.dismiss()
+                if (saved != null) {
+                    // Confirm before clobbering a slot that already holds a save.
+                    AlertDialog.Builder(context)
+                        .setTitle("Overwrite slot $slot?")
+                        .setMessage("Slot $slot already holds a save ($saved).")
+                        .setPositiveButton("Overwrite") { _, _ ->
+                            listener.onSaveStateRequested(bundle, slot)
+                        }
+                        .setNegativeButton("Cancel", null)
+                        .show()
+                } else {
+                    listener.onSaveStateRequested(bundle, slot)
+                }
+            }
+            row.addView(save)
+
+            val load = makeButton("Load")
+            load.setTextColor(COLOR_RESUME)
+            load.isEnabled = saved != null
+            load.alpha = if (saved != null) 1f else 0.4f
+            load.setOnClickListener {
+                dialog?.dismiss()
+                listener.onLoadStateRequested(bundle, slot)
+            }
+            row.addView(load)
+
+            column.addView(row)
+        }
+
+        dialog = AlertDialog.Builder(context)
+            .setTitle("Save states — " + bundle.displayName)
+            .setView(column)
+            .setNegativeButton("Close", null)
+            .create()
+        dialog.show()
+    }
+
     /** The launcher panel, as a rounded card over the emulator. */
     private fun cardBackground(): GradientDrawable {
         val drawable = GradientDrawable()
@@ -370,6 +529,10 @@ class GameLauncherView(context: Context, private val listener: Listener) : Frame
         private const val COLOR_TEXT = 0xFFE8EAED.toInt()
         private const val COLOR_DIM = 0xFF9AA0AA.toInt()
         private const val COLOR_ACCENT = 0xFFF5A623.toInt()
+        private const val COLOR_RESUME = 0xFF4CAF50.toInt()
+
+        /** Save-state slots offered per game. */
+        private const val STATE_SLOTS = 3
 
         fun formatSize(bytes: Long): String = when {
             bytes >= 1024 * 1024 -> "${bytes / (1024 * 1024)} MB"

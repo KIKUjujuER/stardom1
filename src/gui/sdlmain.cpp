@@ -164,8 +164,20 @@ struct SDL_Block {
 #if SDL_VERSION_ATLEAST(2,0,0)
 	bool update_display_contents;
 	bool update_window;
+	/* Android: the app comes back to the foreground with a *new* SurfaceView
+	   surface. The SDL window still carries the EGL surface of the old one,
+	   so everything the renderer draws ends up in a buffer nobody looks at:
+	   the emulator keeps running (and even presents without an error) while
+	   the screen shows a stale picture. Recreating the window re-fetches the
+	   native window of the current surface and binds the renderer to it. */
+	bool recreate_window;
 	int window_desired_width, window_desired_height;
 #endif
+	/* WhereQ: the video output has shown at least one frame (and when it
+	   did). Used by GFX_VideoReady() to tell whether the output is settled
+	   enough to rebuild the picture into (see src/gui/savestate.cpp). */
+	bool video_presented;
+	Uint32 video_presented_at;
 	struct {
 		Bit32u width;
 		Bit32u height;
@@ -714,6 +726,45 @@ void GFX_ResetScreen(void) {
 	CPU_Reset_AutoAdjust();
 }
 
+/*
+ * Whether the video output is up and settled.
+ *
+ * On Android the app starts in the orientation the display has natively and
+ * is rotated into place a moment later. DOSBox learns the display size at
+ * start-up (GFX_ObtainDisplayDimensions) and letterboxes the picture against
+ * it, so until the rotation has settled the picture is scaled for the *old*
+ * orientation - and the resize that follows replaces the renderer and its
+ * texture. A machine restored in that window was drawn for the old size and
+ * then thrown away by the resize, which is what left the screen black.
+ *
+ * The output therefore counts as ready when a frame has been presented and
+ * the letterbox matches the window that is actually on screen.
+ */
+bool GFX_VideoReady(void) {
+#if defined(__ANDROID__)
+	if (!sdl.video_presented || !sdl.window) return false;
+
+	int win_w = 0, win_h = 0;
+	SDL_GetWindowSize(sdl.window, &win_w, &win_h);
+	if (win_w <= 0 || win_h <= 0) return false;
+
+	if (sdl.desktop.fullscreen && sdl.desktop.full.fixed) {
+		/* The letterbox is computed from the display size, so it is only
+		   right once that size is the size of the window on screen. */
+		if (win_w == sdl.desktop.full.width && win_h == sdl.desktop.full.height)
+			return true;
+		/* A device that never reports a matching size must not block the
+		   restore forever: after a few seconds of steady output the picture
+		   is being shown anyway. */
+		return (SDL_GetTicks() - sdl.video_presented_at) > 3000;
+	}
+	return true;
+#else
+	/* Everywhere else the output is stable as soon as it exists. */
+	return true;
+#endif
+}
+
 void GFX_ForceFullscreenExit(void) {
 	if (sdl.desktop.lazy_fullscreen) {
 //		sdl.desktop.lazy_fullscreen_req=true;
@@ -790,6 +841,7 @@ static SDL_Window * GFX_SetSDLWindowMode(Bit16u width, Bit16u height, bool fulls
 	 */
 	if (!sdl.window
 	    || (lastType != screenType)
+	    || (sdl.recreate_window)
 //	    || (currWidth != width) || (currHeight != height)
 //	    || (glwindow != (0 != (SDL_GetWindowFlags(sdl.window) & SDL_WINDOW_OPENGL)))
 //	    || (fullscreen && (0 == (SDL_GetWindowFlags(sdl.window) & SDL_WINDOW_FULLSCREEN)))
@@ -797,6 +849,7 @@ static SDL_Window * GFX_SetSDLWindowMode(Bit16u width, Bit16u height, bool fulls
 //	    || (fullscreen && ((width != currWidth) || (height != currHeight)))
 	) {
 		lastType = screenType;
+		sdl.recreate_window = false;
 		if (sdl.window) {
 			SDL_DestroyWindow(sdl.window);
 		}
@@ -1114,6 +1167,16 @@ dosurface:
 			if (!(flags&GFX_CAN_32) || (flags & GFX_RGBONLY)) goto dosurface;
 		}
 #endif
+		/* The renderer and the texture are destroyed and recreated below, and
+		   the texture is where the picture is drawn into. DOSBox does not
+		   draw a frame in one go: it hands one line per timer tick to the
+		   PIC, so a frame can still be in flight here. Its remaining lines
+		   would be written into the destroyed texture - that is where the
+		   "mixture of two frames" after the app comes back to the foreground
+		   comes from (on Android the SurfaceView is recreated then, and with
+		   it the texture). Stop the pending drawing first; the vertical timer
+		   starts the next frame. */
+		VGA_KillDrawing();
 		if (!GFX_SetupWindowScaled(sdl.desktop.want_type)) {
 			LOG_MSG("SDL:Can't set video mode, falling back to surface");
 			goto dosurface;
@@ -1158,6 +1221,15 @@ dosurface:
 			LOG_MSG("SDL:Can't create texture, falling back to surface");
 			goto dosurface;
 		}
+		/* The texture was just created, so it is empty - but DOSBox only
+		   redraws the lines whose pixels changed (see RENDER_StartUpdate),
+		   and the cache still holds the previous frame. Without invalidating
+		   it the new texture stays black until the guest happens to change a
+		   pixel. On Android the texture is recreated every time the
+		   SurfaceView comes back, i.e. when the app returns to the
+		   foreground, so this is the difference between "the game is there"
+		   and "a black screen until you touch it". */
+		if (sdl.draw.callback) sdl.draw.callback( GFX_CallBackRedraw );
 		SDL_SetRenderDrawColor(sdl.renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
 		sdl.desktop.type=SCREEN_TEXTURE;
 		Uint32 pixelFormat;
@@ -1722,6 +1794,13 @@ void GFX_EndUpdate( const Bit16u *changedLines ) {
 		SDL_RenderClear(sdl.renderer);
 		SDL_RenderCopy(sdl.renderer, sdl.texture.texture, NULL, &sdl.clip);
 		SDL_RenderPresent(sdl.renderer);
+		/* WhereQ: the output is alive once a frame has been shown. A
+		   save-state restore may only rebuild the picture after that (see
+		   GFX_VideoReady). */
+		if (!sdl.video_presented) {
+			sdl.video_presented = true;
+			sdl.video_presented_at = SDL_GetTicks();
+		}
 #if defined(__ANDROID__)
 		{
 			static bool reported = false;
@@ -2654,6 +2733,17 @@ void GFX_Events() {
 					 * and more on Android. Another case:
 					 * Update surface while using X11.
 					 */
+#if defined(__ANDROID__)
+					/* The app comes back to the foreground with a new
+					   SurfaceView surface. The SDL window still points at
+					   the EGL surface of the old one, so the renderer
+					   would draw into a buffer that is never shown. Force
+					   the window to be re-created: it re-fetches the
+					   native window of the current surface and the
+					   renderer is then bound to the surface the user
+					   actually sees. */
+					sdl.recreate_window = true;
+#endif
 					GFX_ResetScreen();
 					continue;
 				case SDL_WINDOWEVENT_RESIZED:

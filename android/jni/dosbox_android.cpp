@@ -36,6 +36,7 @@
 #include "SDL.h"
 
 #include "dosbox_log.h"
+#include "savestate.h"
 
 #define LOGCAT_TAG "DOSBox"
 
@@ -300,4 +301,44 @@ Java_com_whereq_dosbox_DosboxNative_nativePushKey(JNIEnv *env,
         return JNI_FALSE;
     }
     return JNI_TRUE;
+}
+
+/* ------------------------------------------------------------- save-state */
+
+/*
+ * Save/load the whole emulated machine to/from a file (WhereQ-DOSBox Phase B).
+ *
+ * The request is handed to the DOSBox thread and performed at an instruction
+ * boundary (see src/gui/savestate.cpp and the GFX_Events() hook); these JNI
+ * calls block on the UI thread until it is done, then return a SAVESTATE_*
+ * code so the launcher can report success or failure.
+ */
+static jint savestate_request(JNIEnv *env, jstring path, int op)
+{
+    if (path == NULL) {
+        return SAVESTATE_ERR_IO;
+    }
+    const char *p = env->GetStringUTFChars(path, NULL);
+    if (p == NULL) {
+        return SAVESTATE_ERR_IO;
+    }
+    int rc = SAVESTATE_Request(op, p);
+    env->ReleaseStringUTFChars(path, p);
+    return (jint)rc;
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_whereq_dosbox_DosboxNative_nativeSaveState(JNIEnv *env, jclass clazz,
+                                                    jstring path)
+{
+    (void)clazz;
+    return savestate_request(env, path, 1 /* save */);
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_whereq_dosbox_DosboxNative_nativeLoadState(JNIEnv *env, jclass clazz,
+                                                    jstring path)
+{
+    (void)clazz;
+    return savestate_request(env, path, 2 /* load */);
 }

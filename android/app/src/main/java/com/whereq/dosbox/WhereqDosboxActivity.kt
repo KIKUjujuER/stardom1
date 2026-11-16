@@ -1,12 +1,16 @@
 package com.whereq.dosbox
 
+import android.Manifest
 import android.app.AlertDialog
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.provider.DocumentsContract
 import android.provider.OpenableColumns
+import android.text.format.DateUtils
 import android.util.Log
 import android.view.Gravity
 import android.view.KeyEvent
@@ -74,6 +78,13 @@ class WhereqDosboxActivity : SDLActivity() {
     private lateinit var library: GameLibrary
 
     /**
+     * The folder of the game this process actually booted into (null at a clean
+     * prompt). Set once in [onCreate] from the pending launch. Used so "Save
+     * state" is only offered for the game that is really running.
+     */
+    private var currentGameFolder: String? = null
+
+    /**
      * Scope for the background install/import work. Tied to the activity and
      * cancelled in [onDestroy], so a running unpack can never post to a
      * destroyed activity (the raw-thread version could). `Main.immediate` means
@@ -129,15 +140,37 @@ class WhereqDosboxActivity : SDLActivity() {
         // force-quit lands back at a clean C:\> prompt instead of looping.
         val prefs = getSharedPreferences(LAUNCH_PREFS, MODE_PRIVATE)
         val pendingLaunch = prefs.getString(KEY_PENDING_LAUNCH, null)
+        // A "resume" also carries the slot to restore: the game is not started
+        // from the beginning, its saved machine is loaded instead.
+        val pendingState = prefs.getInt(KEY_PENDING_STATE, 0)
         if (pendingLaunch != null) {
-            prefs.edit().remove(KEY_PENDING_LAUNCH).commit()
+            prefs.edit().remove(KEY_PENDING_LAUNCH).remove(KEY_PENDING_STATE).commit()
+        } else if (pendingState != 0) {
+            prefs.edit().remove(KEY_PENDING_STATE).commit()
         }
+        // This is the game actually running this boot (null = a clean prompt);
+        // "Save state" is offered only for it, so a slot is never overwritten
+        // with an unrelated machine.
+        currentGameFolder = pendingLaunch
         // Regenerate the config from the asset on every boot: it keeps the
         // shipped settings current (e.g. core=auto reaches existing installs)
-        // and appends the autostart line for the pending game.
-        writeConfig(filesDir, pendingLaunch)
+        // and appends the autostart line for the pending game. With a slot to
+        // restore there is nothing to autostart - the restore brings the game
+        // back by itself.
+        writeConfig(filesDir, pendingLaunch, autostartGame = pendingState == 0)
 
         library = GameLibrary(filesDir)
+
+        // When a game is auto-starting, keep this process alive while the player
+        // switches to another app, so SDL's paused emulator survives and resumes
+        // the exact state on return (DOSBox has no save-state). A clean prompt
+        // boot runs no service.
+        if (pendingLaunch != null) {
+            requestNotificationPermission()
+            val name = library.list().firstOrNull { it.folder == pendingLaunch }?.displayName
+                ?: pendingLaunch
+            DosboxForegroundService.start(this, name)
+        }
 
         // HOME + working directory must be in place before SDL_main() runs; the
         // SDL thread is only started once the surface is ready, i.e. after
@@ -149,6 +182,13 @@ class WhereqDosboxActivity : SDLActivity() {
         // A bundle that was opened from a file manager is installed right away —
         // the user asked for it with a tap.
         handleOpenIntent(intent)
+
+        // "Resume" asked for a slot to be restored: do it now. The native side
+        // only services the request once the guest is running, so the call
+        // simply waits for the emulator to come up.
+        if (pendingLaunch != null && pendingState > 0) {
+            restoreAfterBoot(pendingLaunch, pendingState)
+        }
 
         Log.i(TAG, "prepared environment, config dir = " + DosboxNative.nativeConfigDir())
     }
@@ -249,6 +289,17 @@ class WhereqDosboxActivity : SDLActivity() {
 
                 override fun onConfigRequested() = showConfigDialog()
 
+                override fun onResumeRequested() = resumeLastGame()
+
+                override fun onSaveStateRequested(bundle: GameBundle, slot: Int) =
+                    saveState(bundle, slot)
+
+                override fun onLoadStateRequested(bundle: GameBundle, slot: Int) =
+                    loadState(bundle, slot)
+
+                override fun stateSlotLabel(bundle: GameBundle, slot: Int): String? =
+                    slotLabel(bundle, slot)
+
                 override fun onCloseRequested() = closeLauncher()
             })
 
@@ -260,12 +311,209 @@ class WhereqDosboxActivity : SDLActivity() {
             this.launcher = launcher
         }
         launcher.showFiles(library.list())
+        refreshResumeButton()
+        launcher.setCurrentGame(currentGameFolder)
         launcher.setStatus("")
         launcher.visibility = View.VISIBLE
     }
 
+    /**
+     * Updates the "Resume" button: the last-played game and what it will
+     * resume from (its newest save, if it has one).
+     */
+    private fun refreshResumeButton() {
+        val folder = getSharedPreferences(LAUNCH_PREFS, MODE_PRIVATE)
+            .getString(KEY_LAST_GAME, null)
+        val bundle = library.list().firstOrNull { it.folder == folder }
+        val slot = bundle?.let { newestSlot(it) }
+        val detail = if (bundle != null && slot != null) {
+            val age = slotLabel(bundle, slot)
+            if (age == null) null else "slot $slot · $age"
+        } else {
+            null
+        }
+        launcher?.setResumeGame(bundle?.displayName, detail)
+    }
+
+    /**
+     * Relaunches into the last-played game (the "Resume" button).
+     *
+     * "Resume" means *resume*: when the game has a saved slot, the newest one
+     * is restored, so the player continues exactly where they left off instead
+     * of starting the game from the beginning. Without a slot the game is
+     * simply started again.
+     *
+     * The emulator keep-alive handles the common case of returning to a
+     * backgrounded game; this covers the process actually having been killed.
+     */
+    private fun resumeLastGame() {
+        val folder = getSharedPreferences(LAUNCH_PREFS, MODE_PRIVATE)
+            .getString(KEY_LAST_GAME, null) ?: return
+        val bundle = library.list().firstOrNull { it.folder == folder } ?: return
+        val slot = newestSlot(bundle)
+        Log.i(TAG, "resume " + bundle.displayName + " from slot " + (slot ?: "none"))
+        relaunch(bundle.folder, slot)
+    }
+
+    /**
+     * @return the slot with the most recent save for this game, or null when
+     * the game has no save at all.
+     */
+    private fun newestSlot(bundle: GameBundle): Int? {
+        var newest: Int? = null
+        var newestTime = 0L
+        for (slot in 1..STATE_SLOTS) {
+            val file = slotFile(bundle, slot)
+            if (!file.exists() || file.length() == 0L) continue
+            val time = file.lastModified()
+            if (time > newestTime) {
+                newestTime = time
+                newest = slot
+            }
+        }
+        return newest
+    }
+
     private fun closeLauncher() {
         launcher?.visibility = View.GONE
+    }
+
+    /* ------------------------------------------------------------ save states */
+
+    /** @return the directory that holds a game's save-state slots. It lives
+     *  outside the C: mount (filesDir), so the slots never show up inside DOS
+     *  and are not swept into cloud backup (each is 16 MB+). */
+    private fun stateDir(bundle: GameBundle): File =
+        File(File(noBackupFilesDir, STATES_DIR), bundle.folder)
+
+    private fun slotFile(bundle: GameBundle, slot: Int): File =
+        File(stateDir(bundle), "slot$slot.sav")
+
+    /** @return a short "time ago" label for a saved slot, or null when empty. */
+    private fun slotLabel(bundle: GameBundle, slot: Int): String? {
+        val file = slotFile(bundle, slot)
+        if (!file.exists() || file.length() == 0L) {
+            return null
+        }
+        val now = System.currentTimeMillis()
+        // A slot that was just written would read "0 minutes ago".
+        if (now - file.lastModified() < DateUtils.MINUTE_IN_MILLIS) {
+            return "just now"
+        }
+        return DateUtils.getRelativeTimeSpanString(
+            file.lastModified(), now, DateUtils.MINUTE_IN_MILLIS
+        ).toString()
+    }
+
+    /**
+     * Snapshots the running machine into a slot. The native call hands the work
+     * to the DOSBox thread and blocks until it is done, so it runs off the UI
+     * thread.
+     */
+    private fun saveState(bundle: GameBundle, slot: Int) {
+        launcher?.setStatus("Saving slot $slot…")
+        val target = slotFile(bundle, slot)
+        workScope.launch {
+            val rc = withContext(Dispatchers.IO) {
+                target.parentFile?.mkdirs()
+                DosboxNative.nativeSaveState(target.absolutePath)
+            }
+            launcher?.setStatus(saveStateMessage(rc, slot))
+            // The slot that was just written is the newest one, so the "Resume"
+            // button has to say so - otherwise it still names the slot it would
+            // have used before.
+            refreshResumeButton()
+        }
+    }
+
+    /**
+     * Restores a slot, replacing the running machine (so it works from within a
+     * game or from a fresh prompt). On success the launcher closes so the player
+     * sees the restored game.
+     */
+    private fun loadState(bundle: GameBundle, slot: Int) {
+        val target = slotFile(bundle, slot)
+        if (!target.exists()) {
+            launcher?.setStatus("Slot $slot is empty")
+            return
+        }
+        launcher?.setStatus("Loading slot $slot…")
+        workScope.launch {
+            val rc = withContext(Dispatchers.IO) {
+                DosboxNative.nativeLoadState(target.absolutePath)
+            }
+            if (rc == DosboxNative.SAVESTATE_OK) {
+                // The restored machine *is* that game now, so the launcher must
+                // offer "Save" for it - otherwise a slot could only be written
+                // after a normal launch, and a game that was only ever restored
+                // could not be saved at all.
+                currentGameFolder = bundle.folder
+                launcher?.setCurrentGame(bundle.folder)
+                // The restored game is also the one to resume after a restart.
+                getSharedPreferences(LAUNCH_PREFS, MODE_PRIVATE)
+                    .edit().putString(KEY_LAST_GAME, bundle.folder).apply()
+                refreshResumeButton()
+                closeLauncher()
+            } else {
+                launcher?.setStatus(loadStateMessage(rc))
+            }
+        }
+    }
+
+    /**
+     * Restores a saved slot right after the boot ("Resume").
+     *
+     * The saved machine *is* the game, so the boot does not start the game at
+     * all - it only mounts C: - and the restore brings the game back. The
+     * native side holds the request until the guest is running, so the call
+     * can be made right away.
+     *
+     * If the slot cannot be restored (a save from another machine setup, a
+     * damaged file) the game is started the normal way instead, so the player
+     * is never left staring at a bare DOS prompt.
+     */
+    private fun restoreAfterBoot(folder: String, slot: Int) {
+        val target = File(File(noBackupFilesDir, STATES_DIR), folder)
+            .let { File(it, "slot$slot.sav") }
+        if (!target.exists()) {
+            Log.w(TAG, "auto-restore: $target is gone - starting the game instead")
+            relaunch(folder, null)
+            return
+        }
+        workScope.launch {
+            val rc = withContext(Dispatchers.IO) {
+                DosboxNative.nativeLoadState(target.absolutePath)
+            }
+            if (rc == DosboxNative.SAVESTATE_OK) {
+                Log.i(TAG, "auto-restore of $folder slot $slot done")
+            } else {
+                Log.w(TAG, "auto-restore of $folder slot $slot failed ($rc) - " +
+                    "starting the game instead")
+                relaunch(folder, null)
+            }
+        }
+    }
+
+    private fun saveStateMessage(rc: Int, slot: Int): String = when (rc) {
+        DosboxNative.SAVESTATE_OK -> "Saved to slot $slot"
+        DosboxNative.SAVESTATE_ERR_TIMEOUT -> "Save timed out — is a game running?"
+        DosboxNative.SAVESTATE_ERR_BUSY -> "Busy — try again in a moment"
+        else -> "Could not save (error $rc)"
+    }
+
+    private fun loadStateMessage(rc: Int): String = when (rc) {
+        DosboxNative.SAVESTATE_ERR_MISMATCH -> "That save is for a different machine setup"
+        DosboxNative.SAVESTATE_ERR_FORMAT -> "That save file is damaged"
+        DosboxNative.SAVESTATE_ERR_TIMEOUT -> "Load timed out — is the emulator running?"
+        DosboxNative.SAVESTATE_ERR_BUSY -> "Busy — try again in a moment"
+        else -> "Could not load (error $rc)"
+    }
+
+    /** Removes a game's save-state slots (called when the game is deleted). */
+    private fun deleteStateDir(bundle: GameBundle) {
+        val dir = stateDir(bundle)
+        dir.listFiles()?.forEach { it.delete() }
+        dir.delete()
     }
 
     /** Asks before a game is removed — the bundle is deleted from the phone. */
@@ -275,7 +523,14 @@ class WhereqDosboxActivity : SDLActivity() {
             .setMessage("The unpacked game is deleted from the phone.")
             .setPositiveButton("Remove") { _, _ ->
                 library.delete(bundle)
+                deleteStateDir(bundle)
+                // Forget the resume target if it was this game.
+                val prefs = getSharedPreferences(LAUNCH_PREFS, MODE_PRIVATE)
+                if (prefs.getString(KEY_LAST_GAME, null) == bundle.folder) {
+                    prefs.edit().remove(KEY_LAST_GAME).apply()
+                }
                 launcher?.showFiles(library.list())
+                refreshResumeButton()
                 launcher?.setStatus("Removed " + bundle.displayName)
             }
             .setNegativeButton("Keep", null)
@@ -518,17 +773,28 @@ class WhereqDosboxActivity : SDLActivity() {
     /**
      * Relaunches the app into a completely fresh process (and thus a fresh
      * DOSBox/SDL + a freshly mounted C:). [pendingFolder] is the games folder to
-     * auto-run on the next boot, or null to land at the prompt. The value is
-     * written synchronously so it survives the process tear-down below.
+     * auto-run on the next boot, or null to land at the prompt. [stateSlot] is
+     * a save-state slot to restore on the next boot instead of starting the
+     * game from the beginning (null = start it normally). The values are
+     * written synchronously so they survive the process tear-down below.
      */
-    private fun relaunch(pendingFolder: String?) {
+    private fun relaunch(pendingFolder: String?, stateSlot: Int? = null) {
         val editor = getSharedPreferences(LAUNCH_PREFS, MODE_PRIVATE).edit()
         if (pendingFolder != null) {
             editor.putString(KEY_PENDING_LAUNCH, pendingFolder)
+            editor.putInt(KEY_PENDING_STATE, stateSlot ?: 0)
+            // Remember it as the game to offer "Resume" for after a cold start.
+            editor.putString(KEY_LAST_GAME, pendingFolder)
         } else {
             editor.remove(KEY_PENDING_LAUNCH)
+            editor.remove(KEY_PENDING_STATE)
         }
         editor.commit() // synchronous: must be on disk before the process dies
+
+        // The keep-alive service lives in this process; stop it before the tear
+        // down (it is START_NOT_STICKY, so the OS will not revive it). The next
+        // process starts a fresh one in onCreate only if a game is pending.
+        DosboxForegroundService.stop(this)
 
         val intent = packageManager.getLaunchIntentForPackage(packageName)
         if (intent == null) {
@@ -563,10 +829,25 @@ class WhereqDosboxActivity : SDLActivity() {
     }
 
     override fun onDestroy() {
-        // Cancel pending install/import work so nothing touches the activity
-        // after it is gone.
+        // Stop keeping the process alive and cancel pending install/import work
+        // so nothing touches the activity after it is gone.
+        DosboxForegroundService.stop(this)
         workScope.cancel()
         super.onDestroy()
+    }
+
+    /** Requests the notification permission (API 33+) so the keep-alive service's
+     *  ongoing notification is visible. The service runs either way. */
+    private fun requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(
+                arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                REQUEST_POST_NOTIFICATIONS
+            )
+        }
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -596,10 +877,18 @@ class WhereqDosboxActivity : SDLActivity() {
      * The template's `[autoexec]` ends with `mount c .` + `c:`; when a game is
      * pending, its `RUN.BAT` is appended so DOSBox boots straight into it.
      *
+     * [autostartGame] is false when a save-state slot is restored on this boot:
+     * the saved machine *is* the game, so starting it as well would only flash
+     * its intro before the restore replaces it.
+     *
      * The DOS files live in the app's files directory, which is mounted as C:,
      * so this only rewrites settings — it never touches the games or saves.
      */
-    private fun writeConfig(filesDir: File, pendingLaunch: String?) {
+    private fun writeConfig(
+        filesDir: File,
+        pendingLaunch: String?,
+        autostartGame: Boolean = true
+    ) {
         val target = File(filesDir, CONF_NAME)
         try {
             val base = assets.open(CONF_ASSET).use { it.readBytes() }
@@ -612,7 +901,7 @@ class WhereqDosboxActivity : SDLActivity() {
             val text = if (core != null) applyCpuCore(config, core) else config
             FileOutputStream(target).use { out ->
                 out.write(text.toByteArray(Charsets.ISO_8859_1))
-                if (pendingLaunch != null) {
+                if (pendingLaunch != null && autostartGame) {
                     // DOS line endings; ISO-8859-1 matches how RUN.BAT is written.
                     val autostart = "\r\nC:\\" + GameBundle.DOS_GAMES_DIR + "\\" +
                         pendingLaunch + "\\RUN.BAT\r\n"
@@ -693,6 +982,22 @@ class WhereqDosboxActivity : SDLActivity() {
 
         /** The games folder (e.g. "G1") to auto-run on the next boot, or absent. */
         private const val KEY_PENDING_LAUNCH = "pending"
+
+        /** The save-state slot to restore on the next boot (1-based), or 0. */
+        private const val KEY_PENDING_STATE = "pending_state"
+
+        /** The last game Played — offered as "Resume" after a cold start. */
+        private const val KEY_LAST_GAME = "last_game"
+
+        /** Directory (under noBackupFilesDir, outside the C: mount) for save-state
+         *  slots, one subfolder per game. */
+        private const val STATES_DIR = "states"
+
+        /** Save-state slots offered per game (must match GameLauncherView). */
+        private const val STATE_SLOTS = 3
+
+        /** requestPermissions code for POST_NOTIFICATIONS (keep-alive notice). */
+        private const val REQUEST_POST_NOTIFICATIONS = 42
 
         /** The CPU core the user picked in the settings, or absent for the default. */
         private const val KEY_CPU_CORE = "cpu_core"

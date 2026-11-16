@@ -275,15 +275,11 @@ class VirtualKeyboardView(context: Context) : FrameLayout(context) {
         arrayOf("«", "", "symbols"),
     )
 
-    /** Keys for the right edge column (launcher + enter/space + arrows). */
+    /** Keys for the right edge column (launcher + enter/space). */
     private val rightColumnKeys = arrayOf(
         arrayOf("File", "", "file"),
         arrayOf("Ent", "enter", "k"),
         arrayOf("Space", "space", "k"),
-        arrayOf("↑", "up", "k"),
-        arrayOf("↓", "down", "k"),
-        arrayOf("←", "left", "k"),
-        arrayOf("→", "right", "k"),
     )
 
     /** All keys, for the portrait bottom-bar fallback. */
@@ -336,7 +332,7 @@ class VirtualKeyboardView(context: Context) : FrameLayout(context) {
 
         if (sideBars) {
             val left = buildColumn(leftColumnKeys)
-            val right = buildColumn(rightColumnKeys)
+            val right = buildRightColumn()
             addView(left, LayoutParams(columnWidth, LayoutParams.MATCH_PARENT).apply {
                 gravity = Gravity.START or Gravity.CENTER_VERTICAL
             })
@@ -367,6 +363,43 @@ class VirtualKeyboardView(context: Context) : FrameLayout(context) {
         }
         return column
     }
+
+    /** The right edge column: the launcher, enter/space and the arrow cluster. */
+    private fun buildRightColumn(): LinearLayout {
+        val column = buildColumn(rightColumnKeys)
+        column.addView(buildArrowCluster())
+        return column
+    }
+
+    /**
+     * The four arrow keys in the shape of a real keyboard.
+     *
+     * The up arrow sits on its own on top, left and right are side by side in
+     * the middle and the down arrow is on its own at the bottom — the
+     * inverted-T the fingers already know, instead of four keys in a line
+     * where the eye has to read each one.
+     */
+    private fun buildArrowCluster(): LinearLayout {
+        val cluster = LinearLayout(context)
+        cluster.orientation = LinearLayout.VERTICAL
+        cluster.addView(arrowKey("↑", "up"))
+
+        val middle = LinearLayout(context)
+        middle.orientation = LinearLayout.HORIZONTAL
+        middle.addView(arrowKey("←", "left", "w1"))
+        middle.addView(arrowKey("→", "right", "w1"))
+        cluster.addView(middle)
+
+        cluster.addView(arrowKey("↓", "down"))
+        return cluster
+    }
+
+    /**
+     * One arrow key of the cluster. [size] is `"c"` for a full-width key and
+     * `"w1"` for one of the two that share a row.
+     */
+    private fun arrowKey(label: String, keyName: String, size: String = "c"): TextView =
+        makeControlKey(label, keyName, size, "k", DP_KEY_HEIGHT)
 
     /** The portrait fallback: all control keys weighted across a bottom strip. */
     private fun buildBottomBar(): LinearLayout {

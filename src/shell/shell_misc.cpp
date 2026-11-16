@@ -25,6 +25,7 @@
 #include "regs.h"
 #include "callback.h"
 #include "support.h"
+#include "savestate.h"
 
 void DOS_Shell::ShowPrompt(void) {
 	Bit8u drive=DOS_GetDefaultDrive()+'A';
@@ -40,6 +41,12 @@ static void outc(Bit8u c) {
 }
 
 void DOS_Shell::InputCommand(char * line) {
+	/* WhereQ: the shell has reached its prompt, so the autoexec (and with it
+	 * the game) has been launched and the machine loop is about to run the
+	 * guest program. From here on a save-state request may be serviced: before
+	 * this point the loop also runs while DOSBox paints its start-up banner,
+	 * and replacing the machine there would throw the boot away. */
+	SAVESTATE_GuestReady();
 #if defined(EMSCRIPTEN) && !defined(EMTERPRETER_SYNC) && !defined(EM_ASYNCIFY)
 	if (!strcmp(Files[input_handle]->name, "CON")) {
 		// This can be called during startup, before main loop being used.

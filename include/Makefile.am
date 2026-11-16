@@ -30,6 +30,7 @@ programs.h \
 render.h \
 regs.h \
 render.h \
+savestate.h \
 serialport.h \
 setup.h \
 shell.h \

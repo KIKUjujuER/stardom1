@@ -2,6 +2,7 @@ AM_CPPFLAGS = -I$(top_srcdir)/include -I$(top_builddir)/include
 
 noinst_LIBRARIES = libgui.a
 libgui_a_SOURCES = sdlmain.cpp sdl_mapper.cpp dosbox_logo.h \
+	savestate.cpp \
 	render.cpp render_scalers.cpp render_scalers.h \
 	render_templates.h render_loops.h render_simple.h \
 	render_templates_sai.h render_templates_hq.h \

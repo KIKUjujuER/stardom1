@@ -196,6 +196,14 @@ void VGA_DAC_SetEntry(Bitu entry,Bit8u red,Bit8u green,Bit8u blue) {
 			VGA_DAC_SendColor( i, i );
 }
 
+// WhereQ save-states: after a state load restores vga.dac, re-push the whole
+// palette to the renderer (which keeps its own copy via RENDER_SetPal), the same
+// way a pel-mask write refreshes every entry.
+void VGA_DAC_UpdateAllColors(void) {
+	for (Bitu i = 0; i < 256; i++)
+		VGA_DAC_UpdateColor(i);
+}
+
 void VGA_SetupDAC(void) {
 	vga.dac.first_changed=256;
 	vga.dac.bits=6;

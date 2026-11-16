@@ -645,6 +645,16 @@ struct DOS_Block {
 
 extern DOS_Block dos;
 
+/* WhereQ-DOSBox: the DOS layer as part of a save-state (milestone B2).
+ *
+ * DOS_SaveState()/DOS_LoadState() store the open file handles (and the
+ * current drive, the code page and the current directories) next to the
+ * machine state, so a restored game finds its files open again. The
+ * implementation lives in src/dos/dos_state.cpp. */
+size_t DOS_StateSize(void);
+bool DOS_SaveState(FILE *f);
+bool DOS_LoadState(FILE *f);
+
 static INLINE Bit8u RealHandle(Bit16u handle) {
 	DOS_PSP psp(dos.psp());	
 	return psp.GetFileHandle(handle);

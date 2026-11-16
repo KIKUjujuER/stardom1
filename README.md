@@ -18,10 +18,21 @@
 
 <p align="center">
   <sub>The DOSBox welcome screen, a mounted drive and the two-sided on-screen
-  keyboard — touch moves the DOS mouse, the keys type into DOSBox.</sub>
+  keyboard — the arrows sit in the inverted T of a real keyboard, touch moves
+  the DOS mouse, the keys type into DOSBox.</sub>
 </p>
 
 ---
+
+New in 1.0.0.8
+--------------
+
+| | |
+|---|---|
+| **Save states** | Every game gets three slots. **Save** freezes the whole running machine — the CPU, the DOS memory, the video memory, the open DOS file handles, the hardware timers — and **Load** jumps back to that exact moment. A slot is a file on the phone, so it survives quitting the app and rebooting the phone. |
+| **Resume resumes** | The **Resume** button used to start the last game from the beginning. It now restores its newest save state, so the player continues where they left off. With no save state the game starts from the beginning, as before. |
+| **The arrows** | In landscape the four arrow keys sit in the inverted T of a real keyboard — up on top, left and right side by side, down below — in the right-hand column next to **File**, **Ent** and **Space**. |
+| **The game keeps running** | While a game is running, a small ongoing notification holds the emulator process, so switching to another app no longer loses the game. Tap the notification to come back to the same frame. |
 
 The upstream project this is based on is [Em-DOSBox][em-dosbox], the
 Emscripten/web build of DOSBox r4305 by [Boris Gjenero][dreamlayers]. The
@@ -60,6 +71,12 @@ ABIs. Both paths were verified on the emulator — STARFALL in real mode, Ultima
 VIII in protected mode. `core=normal` in `dosbox.conf` is the fallback if the
 JIT code cache cannot be allocated.
 
+**Save states** were verified the same way: a game was frozen into a slot
+while it was running, the app was killed, and **Resume** brought the game back
+exactly where it was — the restored machine matches the saved one down to the
+CPU registers, and the game keeps playing. See [Save states and
+Resume](#save-states-and-resume) below.
+
 | | |
 |---|---|
 | Emulator core | DOSBox r4305 (SDL2 branch) |
@@ -74,10 +91,12 @@ The on-screen keyboard
 The DOS picture is 4:3 and letterboxed, so in landscape there are black bars
 down the left and right. The always-on control keys live in those bars as two
 vertical columns — the modifiers and the editing keys on the left, **File**,
-**Ent**, **Space** and the arrows on the right — so the picture keeps the whole
-middle of the screen and the keys sit under the thumbs. In portrait the bars
-are too narrow for that, and the same keys fall back to a slim strip along the
-bottom.
+**Ent**, **Space** and the arrow keys on the right — so the picture keeps the
+whole middle of the screen and the keys sit under the thumbs. The arrows are
+in the inverted-T of a real keyboard (up on top, left and right side by side,
+down below), so the finger finds them without reading them. In portrait the
+bars are too narrow for that, and the same keys fall back to a slim strip along
+the bottom.
 
 ![The two-sided on-screen keyboard](porting/screenshots/android-n6-keyboard-layout.png)
 
@@ -130,6 +149,28 @@ folder when it lists it, and the listing of the drive was taken when DOSBox
 started, so a bundle that is installed afterwards is not in it. A file whose
 name DOS can spell is found all the same — and a program that asks for
 `RESOURCE.CFG` ends up at `RESOURC.CFG`, exactly as it did on a real DOS.
+
+Save states and Resume
+----------------------
+
+A game that is running can be frozen into a **save state** — the whole
+machine, not just the game's own save files: the CPU, the DOS memory, the
+video memory, the open DOS file handles and the hardware timers. **States**
+in the **Files** screen opens the three slots of the game that is running;
+**Save** writes the current machine into a slot and **Load** restores it
+straight away, jumping back to that exact moment. A slot is a file on the
+phone, so it survives quitting the app and rebooting the phone.
+
+**Resume** does what it says. It brings back the game that was played last,
+restored from its newest save state — the button names the game and the slot
+it will restore, e.g. *Resume STARFALL · slot 1 · 5 min ago*. If that game
+has no save state yet, the game simply starts from the beginning.
+
+> Some old DOS programs do not survive a restore — the extender of Ultima
+> VIII, for example, still aborts on it. That is a limitation of the DOS
+> internals that the snapshot does not capture yet (the sound chips and DMA,
+> the EMS/XMS handle tables and the PIC event queue), not of the app. The
+> details are in `porting/ANDROID-PORT.md`.
 
 The example bundle
 ------------------

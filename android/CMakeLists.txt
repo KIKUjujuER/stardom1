@@ -153,6 +153,7 @@ set(DOSBOX_SOURCES
     src/dos/dos_devices.cpp
     src/dos/dos_execute.cpp
     src/dos/dos_files.cpp
+    src/dos/dos_state.cpp
     src/dos/dos_ioctl.cpp
     src/dos/dos_memory.cpp
     src/dos/dos_misc.cpp
@@ -175,6 +176,7 @@ set(DOSBOX_SOURCES
     src/fpu/fpu.cpp
 
     src/gui/sdlmain.cpp
+    src/gui/savestate.cpp
     src/gui/sdl_mapper.cpp
     src/gui/render.cpp
     src/gui/render_scalers.cpp

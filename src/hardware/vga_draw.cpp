@@ -1634,6 +1634,27 @@ void VGA_KillDrawing(void) {
 	if (!vga.draw.vga_override) RENDER_EndUpdate(true);
 }
 
+/*
+ * Re-arm the timer that drives the screen refresh.
+ *
+ * The vertical retrace is a PIC event (VGA_VerticalTimer), and the PIC event
+ * queue is not part of a save state: after a restore the queue is empty, so
+ * nothing ever asks the VGA for the next line and the picture freezes - the
+ * guest keeps running, but the screen stops updating until the program
+ * happens to change the video mode.
+ *
+ * VGA_SetupDrawing() only re-arms the timer when the refresh rate changed,
+ * so the restore path has to do it explicitly. This is the same sequence the
+ * "fps changed" branch of VGA_SetupDrawing() uses.
+ */
+void VGA_RestartFrameTimer(void) {
+	PIC_RemoveEvents(VGA_Other_VertInterrupt);
+	PIC_RemoveEvents(VGA_VerticalTimer);
+	PIC_RemoveEvents(VGA_PanningLatch);
+	PIC_RemoveEvents(VGA_DisplayStartLatch);
+	VGA_VerticalTimer(0);
+}
+
 void VGA_SetOverride(bool vga_override) {
 	if (vga.draw.vga_override!=vga_override) {
 		

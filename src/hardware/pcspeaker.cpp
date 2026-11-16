@@ -18,6 +18,7 @@
  
 
 #include <math.h>
+#include <stdio.h>
 #include "dosbox.h"
 #include "mixer.h"
 #include "timer.h"
@@ -60,6 +61,27 @@ static struct {
 	DelayEntry entries[SPKR_ENTRIES];
 	Bitu used;
 } spkr;
+
+// WhereQ save-states: the speaker lives in a file-static struct, so expose
+// small serialise helpers. spkr.chan points at the mixer channel, which is
+// allocated per process - it is therefore never written to the file and the
+// live pointer is kept on load, the same way the VGA's host pointers are.
+size_t SPKR_StateSize(void) {
+	return sizeof(spkr);
+}
+bool SPKR_SaveState(FILE *f) {
+	MixerChannel *live_chan = spkr.chan;
+	spkr.chan = 0;
+	bool ok = fwrite(&spkr, sizeof(spkr), 1, f) == 1;
+	spkr.chan = live_chan;
+	return ok;
+}
+bool SPKR_LoadState(FILE *f) {
+	MixerChannel *live_chan = spkr.chan;
+	if (fread(&spkr, sizeof(spkr), 1, f) != 1) return false;
+	spkr.chan = live_chan;
+	return true;
+}
 
 static void AddDelayEntry(float index,float vol) {
 	if (spkr.used==SPKR_ENTRIES) {

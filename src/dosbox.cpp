@@ -45,6 +45,7 @@
 #include "ints/int10.h"
 #include "render.h"
 #include "pci_bus.h"
+#include "savestate.h"
 
 #if !SDL_VERSION_ATLEAST(2,0,0)
 #define SDL_TICKS_PASSED(A, B)  ((Sint32)((B) - (A)) <= 0)
@@ -147,7 +148,18 @@ static int runcount = 0;
 #endif
 #endif
 
-static Bitu Normal_Loop(void) {
+/* WhereQ save-states: how deeply the machine loop is nested.
+ *
+ * DOSBOX_RunMachineNoSleep() re-enters this loop from inside a BIOS callback
+ * (CALLBACK_Idle, used by the INT 15h/86h wait), from the page-fault handler
+ * and from the I/O-fault handlers. Each of those frames keeps the CPU
+ * registers on the *host* stack and writes them back when it returns, so a
+ * whole-machine snapshot taken (or restored) there would be overwritten the
+ * moment the frame returns. Only the outermost loop - where the CPU is in the
+ * guest program at an instruction boundary - is a safe point. */
+static int normal_loop_depth = 0;
+
+static Bitu Normal_Loop_Inner(void) {
 	Bits ret;
 #ifdef EMSCRIPTEN
 	ticksEntry = GetTicks();
@@ -184,6 +196,18 @@ static Bitu Normal_Loop(void) {
 #endif // defined(EMTERPRETER_SYNC) || defined(EM_ASYNCIFY)
 #endif // EMSCRIPTEN
 	while (1) {
+#if defined(__ANDROID__)
+		/* WhereQ: service a pending save-state here, at the top of the main
+		 * loop. This is the ONLY safe point for a whole-machine save/load - the
+		 * CPU is at an instruction boundary in the guest program and, crucially,
+		 * NOT nested inside a BIOS callback (e.g. the INT 15h/86h wait spins in
+		 * CALLBACK_Idle, which itself pumps the machine; doing the load from
+		 * there would replace the machine mid-callback and the frame would
+		 * then write its stale registers back over the restored ones).
+		 * normal_loop_depth is 1 only in the outermost loop. */
+		if (normal_loop_depth == 1)
+			SAVESTATE_RunPending();
+#endif
 		if (PIC_RunQueue()) {
 			ret = (*cpudecoder)();
 			if (GCC_UNLIKELY(ret<0)) return 1;
@@ -203,6 +227,15 @@ static Bitu Normal_Loop(void) {
 			} else {increaseticks();return 0;}
 		}
 	}
+}
+
+/* The machine loop, with the nesting depth kept for the save-state code.
+ * See normal_loop_depth above for why the depth matters. */
+static Bitu Normal_Loop(void) {
+	normal_loop_depth++;
+	Bitu result = Normal_Loop_Inner();
+	normal_loop_depth--;
+	return result;
 }
 
 /*** CPU cycle adjustment algorithm configuration ***/

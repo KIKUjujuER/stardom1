@@ -333,4 +333,14 @@ void CPU_Core_Dynrec_Cache_Close(void) {
 	cache_close();
 }
 
+// WhereQ save-states: drop every translated block so that stale translations of
+// guest memory a save-state load has just replaced are never executed. Each
+// ClearRelease() clears a page's blocks, reverts its memory handler and moves it
+// from cache.used_pages back onto the free list, so the loop ends when the used
+// list is empty. Safe when the cache was never initialised (used_pages is 0).
+void CPU_Core_Dynrec_Cache_Reset(void) {
+	while (cache.used_pages)
+		cache.used_pages->ClearRelease();
+}
+
 #endif

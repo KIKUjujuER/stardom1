@@ -71,4 +71,34 @@ object DosboxNative {
      */
     @JvmStatic
     external fun nativePushKey(scancode: Int, pressed: Boolean): Boolean
+
+    /**
+     * Writes a full snapshot of the running machine (CPU + guest RAM + paging +
+     * VGA) to [path]. The call is handed to the DOSBox thread and performed at
+     * an instruction boundary, then blocks until it is done.
+     *
+     * @return one of the [SAVESTATE_OK]/`SAVESTATE_ERR_*` codes.
+     */
+    @JvmStatic
+    external fun nativeSaveState(path: String): Int
+
+    /**
+     * Restores a snapshot written by [nativeSaveState]. The restored machine
+     * replaces whatever is currently running, so this works from within a game
+     * or from a freshly-booted `C:\>` prompt. Refuses (without touching the
+     * machine) a file that is not a save-state or was made for a different
+     * machine configuration.
+     *
+     * @return one of the [SAVESTATE_OK]/`SAVESTATE_ERR_*` codes.
+     */
+    @JvmStatic
+    external fun nativeLoadState(path: String): Int
+
+    // Result codes, mirroring include/savestate.h.
+    const val SAVESTATE_OK = 0
+    const val SAVESTATE_ERR_IO = 1
+    const val SAVESTATE_ERR_FORMAT = 2
+    const val SAVESTATE_ERR_MISMATCH = 3
+    const val SAVESTATE_ERR_TIMEOUT = 4
+    const val SAVESTATE_ERR_BUSY = 5
 }

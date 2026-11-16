@@ -26,6 +26,7 @@
 #include "callback.h"
 #include "debug.h"
 #include "cpu.h"
+#include "savestate.h"
 
 const char * RunningProgram="DOSBOX";
 
@@ -506,6 +507,12 @@ bool DOS_Execute(char * name,PhysPt block_pt,Bit8u flags) {
 		reg_di=RealOff(sssp);
 		reg_bp=0x91c;	/* DOS internal stack begin relict */
 		SegSet16(ds,pspseg);SegSet16(es,pspseg);
+		/* WhereQ: a guest program has taken over the machine, so the boot
+		 * is over and a save-state request may be serviced. The shell
+		 * itself never reaches its prompt in this case (it is blocked
+		 * inside the program it started), so this is the only place where
+		 * the save-state module learns that the guest is running. */
+		SAVESTATE_GuestReady();
 #if C_DEBUG		
 		/* Started from debug.com, then set breakpoint at start */
 		DEBUG_CheckExecuteBreakpoint(RealSeg(csip),RealOff(csip));
