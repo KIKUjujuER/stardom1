@@ -10,6 +10,7 @@
  *   - the VGA:      the whole `vga` struct plus the video memory
  *   - the FPU:      the x87 register file and control word
  *   - the PC speaker
+ *   - the OPL/AdLib FM chip (its exact state, envelope and LFO included)
  *   - hardware timing: the two PIC controllers and the three PIT channels
  *   - the clock:    the PIC timestamp the state was taken at
  *   - the paging map of the first megabyte (paging.firstmb)
@@ -66,6 +67,7 @@
 #include <cstdio>
 #include <cstdint>
 #include <cstring>
+#include <atomic>
 #include <mutex>
 #include <condition_variable>
 #include <chrono>
@@ -85,9 +87,12 @@
 #include "../cpu/lazyflags.h"
 #include "savestate.h"
 
-/* Defined in src/cpu/core_dynrec.cpp (compiled with C_DYNREC on Android):
+/* Defined in src/cpu/core_dynrec.cpp, which is compiled only with C_DYNREC on
+ * (the Android build; the desktop baseline uses --disable-dynamic-core):
  * drops every translated block so stale code is never executed after a load. */
+#if C_DYNREC
 extern void CPU_Core_Dynrec_Cache_Reset(void);
+#endif
 
 /* Defined in src/hardware/vga_dac.cpp: re-push the restored DAC palette to the
  * renderer (there is no stock "set entire palette" entry point). */
@@ -110,10 +115,18 @@ extern size_t SPKR_StateSize(void);
 extern bool   SPKR_SaveState(FILE *f);
 extern bool   SPKR_LoadState(FILE *f);
 
+/* Defined in src/hardware/adlib.cpp: the OPL/AdLib FM chip. The chip itself is
+ * snapshotted, so the envelope, the operator phase and the LFO survive the
+ * restore and no note is re-triggered; a handler that cannot snapshot itself
+ * falls back to replaying the register cache. */
+extern size_t OPL_StateSize(void);
+extern bool   OPL_SaveState(FILE *f);
+extern bool   OPL_LoadState(FILE *f);
+
 /* ----------------------------------------------------------------- format */
 
 static const char   SS_MAGIC[4] = { 'W', 'Q', 'S', 'S' };
-static const uint32_t SS_VERSION = 5;   /* 5: + the open DOS file handles */
+static const uint32_t SS_VERSION = 7;   /* 7: + the exact OPL chip snapshot */
 
 /* Fixed header; everything after it is a fixed-order sequence of raw blocks.
  * The config fields double as a guard: a state can only be loaded into a
@@ -146,6 +159,7 @@ static size_t expected_payload_size(uint32_t mem_pages, uint32_t vmemsize) {
 	       PIC_StateSize() + TIMER_StateSize() +
 	       sizeof(fpu) +
 	       SPKR_StateSize() +
+	       OPL_StateSize() +                 /* the OPL/AdLib FM chip   */
 	       DOS_StateSize();                  /* the DOS layer           */
 }
 
@@ -276,9 +290,10 @@ static int do_save(const char *path) {
 	/* hardware timing: PIC controllers, then the PIT channels */
 	ok = ok && PIC_SaveState(f);
 	ok = ok && TIMER_SaveState(f);
-	/* the x87 state and the PC speaker */
+	/* the x87 state, the PC speaker and the OPL/AdLib FM chip */
 	ok = ok && wr(f, &fpu, sizeof(fpu));
 	ok = ok && SPKR_SaveState(f);
+	ok = ok && OPL_SaveState(f);
 	/* the DOS layer: the open file handles and the rest of its state */
 	ok = ok && DOS_SaveState(f);
 
@@ -411,10 +426,12 @@ static int do_load(const char *path) {
 	    (!PIC_LoadState(f) || !TIMER_LoadState(f, clock_saved)))
 		rc = SAVESTATE_ERR_IO;
 
-	/* the x87 state and the PC speaker */
+	/* the x87 state, the PC speaker and the OPL/AdLib FM chip */
 	if (rc == SAVESTATE_OK && !rd(f, &fpu, sizeof(fpu)))
 		rc = SAVESTATE_ERR_IO;
 	if (rc == SAVESTATE_OK && !SPKR_LoadState(f))
+		rc = SAVESTATE_ERR_IO;
+	if (rc == SAVESTATE_OK && !OPL_LoadState(f))
 		rc = SAVESTATE_ERR_IO;
 	/* the DOS layer: the open file handles and the rest of its state.
 	 *
@@ -447,8 +464,14 @@ static int do_load(const char *path) {
 	 * translation of it is stale. */
 	PAGING_ClearTLB();
 
-	/* Drop all translated code: it belongs to the memory we just replaced. */
+	/* Drop all translated code: it belongs to the memory we just replaced.
+	 *
+	 * Only the recompiling core has a code cache. The desktop baseline build
+	 * is configured with --disable-dynamic-core, so there the function does
+	 * not exist at all and there is nothing to drop. */
+#if C_DYNREC
 	CPU_Core_Dynrec_Cache_Reset();
+#endif
 
 	/* Rebuild the VGA pipeline for the restored registers.
 	 *
@@ -504,6 +527,18 @@ static int   g_result = SAVESTATE_OK;
  * so no lock is needed. */
 static bool  g_guest_ready = false;
 
+/* Whether the reason a request is not being serviced has already been logged.
+ * A request that is starved repeats the same reason on every poll of the
+ * machine loop, and the log only needs to say it once. Reset with every new
+ * request.
+ *
+ * It is atomic because it is written from both sides: the requesting thread
+ * resets it under the mutex when a new request arrives, while the DOSBox
+ * thread sets it when it logs the reason - and the latter happens outside the
+ * mutex, because the machine state must not be inspected while the lock is
+ * held. */
+static std::atomic<bool> g_wait_logged(false);
+
 void SAVESTATE_GuestReady(void) {
 	g_guest_ready = true;
 }
@@ -518,6 +553,7 @@ int SAVESTATE_Request(int op, const char *path) {
 	g_path[sizeof(g_path) - 1] = '\0';
 	g_done = false;
 	g_result = SAVESTATE_OK;
+	g_wait_logged = false;
 	g_op = op;
 
 	/* The DOSBox thread services the request from the outermost machine loop.
@@ -546,7 +582,13 @@ void SAVESTATE_RunPending(void) {
 		 * start-up banner, and a restore there would throw the boot
 		 * away. The request simply waits until the shell has reached its
 		 * prompt. */
-		if (!g_guest_ready) return;
+		if (!g_guest_ready) {
+			if (!g_wait_logged) {
+				g_wait_logged = true;
+				LOG_MSG("savestate: waiting for the guest to start");
+			}
+			return;
+		}
 		op = g_op;
 		memcpy(path, g_path, sizeof(path));
 	}
@@ -563,8 +605,23 @@ void SAVESTATE_RunPending(void) {
 	if (op == 2 && !GFX_VideoReady()) return;
 
 	/* Never touch the machine while the CPU stands in one of DOSBox's own
-	 * interrupt stubs (see cpu_in_interrupt_stub). */
-	if (cpu_in_interrupt_stub()) return;
+	 * interrupt stubs (see cpu_in_interrupt_stub).
+	 *
+	 * A guest that spends all of its time inside one BIOS handler starves
+	 * the request: the machine loop polls this hook often enough for a
+	 * normal program, but a program that polls the keyboard in a tight
+	 * loop is inside the BIOS handler every single time the hook runs.
+	 * The log says so once per request, because "the save timed out" on
+	 * its own does not say why. */
+	if (cpu_in_interrupt_stub()) {
+		if (!g_wait_logged) {
+			g_wait_logged = true;
+			LOG_MSG("savestate: waiting for the CPU to leave the interrupt "
+			        "stub (cs:%04x ip:%08x)",
+			        (unsigned)SegValue(cs), (unsigned)reg_eip);
+		}
+		return;
+	}
 
 	int rc = (op == 1) ? do_save(path) : do_load(path);
 

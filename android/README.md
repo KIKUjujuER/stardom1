@@ -275,7 +275,7 @@ them. The three native libraries are byte-identical in both packages.
 
 Both APKs were installed on the emulator and ran: the DOSBox banner appears,
 the `C:\>` prompt is reached and the on-screen keyboard is shown
-(`porting/screenshots/n5-gradle-release.png`).
+(`docs/screenshots/n5-gradle-release.png`).
 
 The Gradle build prints `Unable to strip the following libraries, packaging
 them as they are: libdosbox.so.` — that is expected and harmless: the
@@ -348,7 +348,7 @@ window, and that framebuffer owns a renderer that would block the texture
 path from creating its own.
 
 Three upstream behaviours needed `#if defined(__ANDROID__)` patches in
-`src/gui/sdlmain.cpp` (details in `porting/ANDROID-PORT.md`, section 6):
+`src/gui/sdlmain.cpp` (details in `docs/TECHNICAL-REFERENCE.md`, §4.2):
 
 * the SDL window **must not be recreated** — on Android it *is* the
   `SurfaceView`, so `SCREEN_TEXTURE` windows are created with
@@ -457,16 +457,23 @@ therefore offers the cores (`auto`, `normal`, `dynamic`, `simple`,
 generated config. See `WhereqDosboxActivity.showConfigDialog()` and
 `applyCpuCore()`.
 
-## Remaining work
+## Maintenance phase
+
+The **Android migration is complete** — the tagged milestone
+`milestone/android-migration-complete` marks the end of the porting phase.
+From that point on the project is in **maintenance**: bug fixes and
+documentation polish only, no new features. The list below is therefore a
+**backlog of known gaps**, not a roadmap. Nothing here is scheduled; each item
+would need its own request before any work starts.
 
 1. **App polish** — the app layer is Kotlin with AndroidX and the Gradle build
-   (`android/app/build.gradle`) is the canonical one. Still worth doing: back
-   button, lifecycle (`onPause`/`onResume` must not lose emulator state).
+   (`android/app/build.gradle`) is the canonical one. Known gaps: back button
+   behaviour, lifecycle (`onPause`/`onResume` must not lose emulator state).
 2. **Storage** — `chdir` into the app-private files dir is done (see the JNI
    glue) and `mount c .` + `c:` gives a `C:\>` prompt. SAF import is done too:
    bundles are installed through the SAF picker and the working folder can be
-   picked with a tree picker. What is missing is SAF-based *export*.
-3. **Input** — touch→mouse and the on-screen keyboard are done. Still missing:
+   picked with a tree picker. Missing is SAF-based *export*.
+3. **Input** — touch→mouse and the on-screen keyboard are done. Missing:
    gamepad mapping (the tree has *zero* `SDL_CONTROLLER*` support and DOSBox
    still uses the legacy `SDL_Joystick` API), an on-screen joystick for games,
    and IME / non-ASCII text input.
@@ -476,4 +483,14 @@ generated config. See `WhereqDosboxActivity.showConfigDialog()` and
    GLES2 shaders, otherwise rely on the CPU scalers.
 6. **On-device benchmark** — run `bench/` on a real device to get the ARM64
    numbers.
+
+### Bug-fix reference
+
+Known defects that were found and fixed during the migration are written up in
+[`../docs/TECHNICAL-REFERENCE.md`](../docs/TECHNICAL-REFERENCE.md) — the OPL3
+save-state round trip (§6.8, §10.2, §10.3, §10.5), the stuck-key repeat fix,
+the file-cursor desync in the save-state fallback path, and the autotools
+desktop build that did not link. Use that document rather than a running log:
+it is the reference for *how the system works*, and the git history is the
+reference for *how it got there*.
 

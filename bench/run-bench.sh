@@ -3,7 +3,8 @@
 #
 #   ./run-bench.sh [rounds] [core ...]
 #
-# Metric notes (learned the hard way, see BENCH-NOTES.md):
+# Metric notes (learned the hard way, see
+# docs/TECHNICAL-REFERENCE.md §2.12 and Appendix D):
 #  * "core" and "cycles" belong to the [cpu] section in DOSBox 0.74, NOT [dosbox].
 #  * The BIOS tick counter is NOT a valid throughput metric: DOSBox advances its
 #    virtual clock once per CPU_CycleMax instructions, so "instructions per BIOS

@@ -451,6 +451,23 @@ Tags are `v{major}.{minor}.{patch}.{build}` — four numeric segments. The
 `android:versionCode` is the same four segments packed into a monotonically
 increasing integer (`1.0.0.2` → `1000002`).
 
+### Milestone tags
+
+A **milestone tag** marks a phase of the project, not a release. It is
+annotated, points at a release commit and does **not** follow the
+`vX.Y.Z.A` scheme — so `bin/release.sh`, which only looks at tags matching
+`^v[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$`, ignores it and will never try to
+release it again.
+
+```sh
+git tag -a milestone/<name> -m "What the milestone means"
+git push origin refs/tags/milestone/<name>
+```
+
+The first one is `milestone/android-migration-complete` — the end of the
+Android migration phase. From there on the project is in maintenance: bug
+fixes and documentation polish, no new features.
+
 The APK is built from the `VERSION` file, so it has to be built **after** the
 bump. The release order is therefore:
 
@@ -499,7 +516,8 @@ simple        2       2.57       2.23    240060000     93408560   3113.61%
 ```
 
 The notes on what counts as a valid metric are in
-[`porting/BENCH-NOTES.md`](porting/BENCH-NOTES.md).
+[`docs/TECHNICAL-REFERENCE.md`](docs/TECHNICAL-REFERENCE.md) — §2.12 for
+the benchmark and Appendix D for the upstream behaviours that will bite you.
 
 ---
 
@@ -559,6 +577,5 @@ build/
 ## See also
 
 - [`android/README.md`](android/README.md) — the Android side in detail
-- [`porting/ANDROID-PORT.md`](porting/ANDROID-PORT.md) — the porting log: what was verified, what was corrected, what is still open
-- [`porting/BENCH-NOTES.md`](porting/BENCH-NOTES.md) — the benchmark and what its numbers mean
+- [`docs/TECHNICAL-REFERENCE.md`](docs/TECHNICAL-REFERENCE.md) — the technical reference: how it works, with the diagrams, the benchmark and what its numbers mean
 - [`README.md`](README.md) — the project overview

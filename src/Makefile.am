@@ -12,7 +12,16 @@ endif
 	$(WINDRES) -o $@ $<
 
 dosbox_SOURCES = dosbox.cpp $(ico_stuff)
+# The gui archive now calls into the dos archive as well: the save-state code
+# (src/gui/savestate.cpp) asks the DOS layer for the open file handles, while
+# the dos archive has always called back into the gui archive (GFX_SetTitle in
+# src/dos/dos_execute.cpp). A linker walks a static archive once, in order, so
+# a dependency on a *later* archive is satisfied but one on an *earlier* one is
+# not - the dos archive is therefore listed a second time after the gui
+# archive, which resolves the gui -> dos references without a linker group
+# (--start-group is not available on every linker DOSBox builds with).
 dosbox_LDADD = cpu/libcpu.a debug/libdebug.a dos/libdos.a fpu/libfpu.a  hardware/libhardware.a gui/libgui.a \
+               dos/libdos.a \
                ints/libints.a misc/libmisc.a shell/libshell.a hardware/mame/libmame.a \
                hardware/serialport/libserial.a libs/gui_tk/libgui_tk.a
 

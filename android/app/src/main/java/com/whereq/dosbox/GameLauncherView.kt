@@ -66,6 +66,7 @@ class GameLauncherView(context: Context, private val listener: Listener) : Frame
         fun onCloseRequested()
     }
 
+    private val panel: LinearLayout
     private val list: LinearLayout
     private val scroll: ScrollView
     private val status: TextView
@@ -91,7 +92,7 @@ class GameLauncherView(context: Context, private val listener: Listener) : Frame
 
         // The panel itself is a card in the middle of the screen, so the
         // emulator stays visible around it.
-        val panel = LinearLayout(context)
+        panel = LinearLayout(context)
         panel.orientation = LinearLayout.VERTICAL
         panel.setPadding(dp(16), dp(14), dp(16), dp(14))
         panel.background = cardBackground()
@@ -210,15 +211,46 @@ class GameLauncherView(context: Context, private val listener: Listener) : Frame
         for (bundle in bundles) {
             list.addView(makeRow(bundle))
         }
-        // The list is only as tall as it needs to be, so the card stays small —
-        // but it is capped, so a long list cannot push the card off the screen.
-        scroll.post {
-            val wanted = list.measuredHeight
-            val capped = minOf(wanted, dp(320))
-            if (scroll.layoutParams.height != capped) {
-                scroll.layoutParams.height = capped
-                scroll.requestLayout()
-            }
+        scroll.post { capScrollHeight() }
+    }
+
+    /**
+     * Caps the height of the game-list scroll area so the whole card fits on
+     * screen.
+     *
+     * The card is centred and wraps its content, and only the list scrolls — the
+     * card itself does not. So a long list (three games or more) would push the
+     * lower rows, and their Play/States/Remove buttons, off the bottom edge
+     * where nothing could bring them back. The cap is the available screen
+     * height minus the card's fixed parts (header, the install/resume buttons,
+     * the status line, padding) and a small breathing margin; a short list stays
+     * small because the cap is only a ceiling.
+     */
+    private fun capScrollHeight() {
+        val wanted = list.measuredHeight
+        val screenH = height
+        // The card's fixed chrome is everything in it except the scroll area;
+        // it does not depend on the scroll's current height.
+        val chrome = (panel.height - scroll.height).coerceAtLeast(0)
+        val maxScroll = if (screenH > 0) {
+            (screenH - chrome - dp(24)).coerceAtLeast(dp(96))
+        } else {
+            dp(320) // not laid out yet; fall back to a safe fixed cap
+        }
+        val capped = minOf(wanted, maxScroll)
+        if (scroll.layoutParams.height != capped) {
+            scroll.layoutParams.height = capped
+            scroll.requestLayout()
+        }
+    }
+
+    // Re-cap when the overlay is resized (e.g. the device is rotated while the
+    // panel is open): the available height changes, so a cap computed for the
+    // old size could now overflow or waste space.
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        if (visibility == VISIBLE) {
+            scroll.post { capScrollHeight() }
         }
     }
 

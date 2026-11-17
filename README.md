@@ -24,6 +24,32 @@
 
 ---
 
+It runs DOS games. Install a `.zip` bundle, press **Play**, and the emulator
+boots into it; a running game can be frozen into a **save state** — the whole
+machine, the sound chips included — and resumed later, even after the app was
+killed. The on-screen keyboard and the touch input are part of the app, not
+add-ons.
+
+The Android migration is complete: the emulator core, the app layer, the
+bundle launcher, the save states and the build pipeline are all in place and
+verified. What follows is maintenance — bug fixes and documentation.
+
+New in 1.0.0.10
+---------------
+
+| | |
+|---|---|
+| **The sound survives a save state** | The FM chip is now snapshotted **exactly** — the envelope, the wave phase and the LFO counter all come back with the state. A note continues from the middle of its attack instead of starting its attack again, so the music does not restart when a state is loaded. The PC speaker comes back silent instead of droning on its own. |
+| **A key no longer sticks** | Rotating the phone while a key was held left that key pressed in DOSBox for ever. Every key that is down is now released when the layout is rebuilt, and a modifier that is shown in two places (the pad and the fold-up panel) counts its fingers instead of assuming there is only one. |
+| **The launcher fits on the screen** | The **Files** panel measures the space it has and caps the game list to it, so a third game no longer pushes its buttons off the bottom edge where nothing could bring them back. |
+| **The desktop build links again** | The save-state code was missing from the autotools build and the two archives had a circular dependency — the desktop baseline compiles and links again, which is what keeps the emulator core honest. |
+| **A technical reference** | [`docs/TECHNICAL-REFERENCE.md`](docs/TECHNICAL-REFERENCE.md) — the whole implementation in one document, with the diagrams: the native build, the save-state machine, the exact FM snapshot, the bundle launcher, the on-screen keyboard, the throughput benchmark, what is still open and the screenshot gallery. |
+
+The emulator core changed in this release — the sound chips are part of the
+snapshot now. **Save states written by 1.0.0.9 cannot be loaded by this
+build**: the state file grew a version, and an older state is refused rather
+than misread.
+
 New in 1.0.0.9
 --------------
 
@@ -52,16 +78,21 @@ Emscripten/web build of DOSBox r4305 by [Boris Gjenero][dreamlayers]. The
 DOSBox core here comes from that tree and keeps its GPLv2 license, its
 `AUTHORS`, its `ChangeLog` and its per-file headers.
 
-The port touches the core in four places, all of them small and local:
+The port touches the core in a handful of places, all of them small and local:
 
 | Where | What |
 |---|---|
 | `src/gui/sdlmain.cpp` | the Android display, touch and on-screen keyboard paths, fenced behind `#if defined(__ANDROID__)` |
 | `include/mouse.h`, `src/ints/mouse.cpp` | the touch-to-DOS-mouse mapping, likewise fenced |
-| the product name | `DOSBox SVN` → `WhereQ-DOSBox` in the banner, the version string, the config and the generated headers |
-| `src/hardware/dbopl.cpp` | the two percussion modes are named in a switch, so clang stops warning about it — the behavior is unchanged |
+| `src/gui/savestate.cpp`, `src/dos/dos_state.cpp` | the save-state machine: the snapshot of the machine, and the DOS layer inside it (new files) |
+| `src/hardware/adlib.cpp`, `src/hardware/dbopl.cpp`, `src/hardware/pcspeaker.cpp` | the sound chips: the exact FM chip snapshot, and the PC speaker reset on a load |
+| `src/hardware/pic.cpp`, `src/hardware/timer.cpp` | the interrupt controllers and the PIT, so their phase is part of the snapshot |
+| `src/hardware/vga_dac.cpp`, `src/hardware/vga_draw.cpp`, `src/cpu/core_dynrec.cpp` | the state that is *rebuilt* after a restore instead of restored |
+| `src/Makefile.am`, `src/dos/Makefile.am`, `src/gui/Makefile.am`, `include/Makefile.am` | the build files, so the desktop baseline stays in sync with the Android one |
+| the product name | the upstream product name → **WhereQ-DOSBox** in the banner, the version string, the config and the generated headers |
 
-Everything else in `src/` and `include/` is the imported upstream code.
+Everything else in `src/` and `include/` is the imported upstream code. The
+technical reference lists every change with the reason for it.
 
 Status
 ------
@@ -90,13 +121,20 @@ exactly where it was — the restored machine matches the saved one down to the
 CPU registers, and the game keeps playing. See [Save states and
 Resume](#save-states-and-resume) below.
 
+The **sound chips** were verified the same way, with a test program that
+programs one sustained tone on the FM chip and then waits for a key
+([`examples/opl-test-bundle`](examples/opl-test-bundle)). The port writes one
+line to the log on every save and on every load, and the two lines have to be
+identical — same envelope, same wave phase, same LFO counter. They are,
+two minutes of live chip time apart.
+
 | | |
 |---|---|
 | Emulator core | DOSBox r4305 (SDL2 branch) |
 | Android target | `arm64-v8a`, `armeabi-v7a`, `x86_64`, minSdk 21 |
 | Toolchain | NDK r27 + CMake; also builds a plain desktop Linux baseline |
 | Version scheme | `v{major}.{minor}.{patch}.{build}` — see `bin/release.sh` |
-| APK size | ~15.5 MB with all three ABIs (the native libraries are stored uncompressed, so they can be mapped straight from the APK) |
+| APK size | ~15.7 MB with all three ABIs (the native libraries are stored uncompressed, so they can be mapped straight from the APK) |
 
 The on-screen keyboard
 -----------------------
@@ -130,11 +168,11 @@ The pads are tight on an 18:9 screen: the letter keys come to about 24 dp
 wide there, against 33 dp on a 20:9 one. The D-pad and the action keys keep
 their full size either way.
 
-![The two pads beside the DOS picture, running on a phone](porting/screenshots/android-n7-pads-letters.png)
+![The two pads beside the DOS picture, running on a phone](docs/screenshots/android-n7-pads-letters.png)
 
 The **#+=** layer, with the punctuation — the key is lit while the layer is on:
 
-![The symbol layer of the two pads](porting/screenshots/android-n7-pads-symbols.png)
+![The symbol layer of the two pads](docs/screenshots/android-n7-pads-symbols.png)
 
 Files on the phone
 ------------------
@@ -191,11 +229,16 @@ Save states and Resume
 
 A game that is running can be frozen into a **save state** — the whole
 machine, not just the game's own save files: the CPU, the DOS memory, the
-video memory, the open DOS file handles and the hardware timers. **States**
-in the **Files** screen opens the three slots of the game that is running;
-**Save** writes the current machine into a slot and **Load** restores it
-straight away, jumping back to that exact moment. A slot is a file on the
-phone, so it survives quitting the app and rebooting the phone.
+video memory, the open DOS file handles, the hardware timers and the sound
+chips. **States** in the **Files** screen opens the three slots of the game
+that is running; **Save** writes the current machine into a slot and **Load**
+restores it straight away, jumping back to that exact moment. A slot is a file
+on the phone, so it survives quitting the app and rebooting the phone.
+
+The sound chips are part of the machine as well, and they are restored
+*exactly*: the FM chip is snapshotted as it is, so a note continues from the
+middle of its envelope instead of starting its attack again, and the PC
+speaker comes back silent instead of beeping on its own.
 
 **Resume** does what it says. It brings back the game that was played last,
 restored from its newest save state — the button names the game and the slot
@@ -204,9 +247,9 @@ has no save state yet, the game simply starts from the beginning.
 
 > Some old DOS programs do not survive a restore — the extender of Ultima
 > VIII, for example, still aborts on it. That is a limitation of the DOS
-> internals that the snapshot does not capture yet (the sound chips and DMA,
-> the EMS/XMS handle tables and the PIC event queue), not of the app. The
-> details are in `porting/ANDROID-PORT.md`.
+> internals that the snapshot does not capture yet (the DMA controller, the
+> EMS/XMS handle tables and the PIC event queue), not of the app. The
+> details are in `docs/TECHNICAL-REFERENCE.md`.
 
 The example bundle
 ------------------
@@ -232,10 +275,18 @@ repository. Copy it to the phone and open it with WhereQ-DOSBox (or pick it
 with *Install a bundle (.zip)* in the **Files** screen). The launcher
 finds `PLAY.BAT` as the entry point and the game starts with one tap.
 
-![STARFALL on the phone](porting/screenshots/android-n6-starfall-playing.png)
+![STARFALL on the phone](docs/screenshots/android-n6-starfall-playing.png)
 
 The [example README](examples/game-bundle/README.md) has the folder layout,
 the build steps and the notes that anyone reading the source will want.
+
+A second example is a test rather than a game:
+[`examples/opl-test-bundle`](examples/opl-test-bundle) programs one sustained
+tone on the FM chip and then waits for a key. It is what proves that a restore
+brings the sound back *exactly*: the app writes one line to the log on every
+save and on every load, and the two lines have to be identical — same
+envelope, same wave phase, same LFO. The details are in
+`docs/TECHNICAL-REFERENCE.md`.
 
 Layout
 ------
@@ -248,7 +299,8 @@ bench/                CPU-core throughput probe
 toolchain/            rootless dev toolchain (no root, no sudo)
 third_party/          SDL2 sources, fetched by third_party/fetch-sdl2.sh
 resources/            the logo and the screenshot
-porting/              the porting log, benchmark notes and screenshots
+docs/                 the technical reference and the screenshot gallery
+                       (and DOSBox's own man page and porting guide)
 examples/             the example bundle (STARFALL)
 downloads/            the release APK, for people who want to try the app
 bin/                  build.sh (every build scenario), release.sh
@@ -292,9 +344,12 @@ a command you can paste — the first build on a fresh clone, the release APK
 with its signing variables, the Gradle path, the launcher icons, the version
 bump and the benchmark.
 
-`porting/ANDROID-PORT.md` is the running log of the port: what was verified,
-what was corrected, and what is still open. `porting/BENCH-NOTES.md` has the
-throughput measurements.
+`docs/TECHNICAL-REFERENCE.md` is the technical reference for the
+implementation: how the native build works, how the save-state machine takes a
+snapshot of the whole machine, how the OPL chip is restored exactly, how a
+bundle becomes a running DOS program, and how the on-screen keyboard reaches
+the emulator — with the diagrams, the exact source references, the throughput
+benchmark, what is still open and the screenshot gallery.
 
 Release
 -------
@@ -310,6 +365,11 @@ bin/release.sh --patch -m "..."
 Tags are `v{major}.{minor}.{patch}.{build}` — four numeric segments. The
 `android:versionCode` is the same four segments packed into a monotonically
 increasing integer.
+
+A **milestone tag** marks a phase rather than a release: `milestone/<name>`,
+annotated, and deliberately outside the `vX.Y.Z.A` scheme so the release
+script never picks it up. `milestone/android-migration-complete` marks the end
+of the Android migration phase — from there the project is in maintenance.
 
 The production APK is signed with the release key, which is never committed:
 

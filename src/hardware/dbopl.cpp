@@ -38,6 +38,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stddef.h>
+#include <stdio.h>
 #include "dosbox.h"
 #include "dbopl.h"
 
@@ -1521,6 +1522,118 @@ void Handler::Generate( MixerChannel* chan, Bitu samples ) {
 void Handler::Init( Bitu rate ) {
 	InitTables();
 	chip.Setup( rate );
+}
+
+/* WhereQ save-states: an exact snapshot of the whole chip, so the envelope
+ * state, the operator phase and the LFO counters survive a restore - none of
+ * which the register cache captures. Replaying registers alone re-triggers
+ * every note from attack, which is what made the restored sound differ. */
+size_t Handler::StateSize( void ) {
+	return sizeof( chip );
+}
+
+/* A one-line summary of the chip's live state, for the save-state log.
+ *
+ * The envelope state and the position inside it (rateIndex) are exactly the
+ * fields the register cache cannot capture: a driver that only ever writes
+ * "key on" and "key off" leaves the chip somewhere in the middle of an
+ * envelope, and only the live state says where. A save and the matching load
+ * have to print the same numbers - that is the proof of an exact restore. */
+static const char *envelope_name( Bit8u state ) {
+	switch ( state ) {
+	case Operator::OFF:     return "off";
+	case Operator::RELEASE: return "release";
+	case Operator::SUSTAIN: return "sustain";
+	case Operator::DECAY:   return "decay";
+	case Operator::ATTACK:  return "attack";
+	default:                return "?";
+	}
+}
+
+/* Every operator that is not idle is listed, so the log names the operator the
+ * guest actually keyed on instead of always the first one of the chip - the
+ * first operator of channel 0 stays in "release" from the chip's own power-up
+ * clearing (Setup writes 0xff and then 0x00 to every register, which keys on
+ * and immediately keys off again) and would hide a real note.
+ *
+ * The phase (the wave counter) and the LFO counter are the two fields that
+ * only the exact snapshot can carry over: a replay of the registers leaves the
+ * wave counter at its start value and lets the LFO keep running, so a restored
+ * chip that prints the same numbers as the saved one is bit-for-bit the same
+ * machine. */
+static void log_chip_state( const char *tag, const Chip& chip ) {
+	char ops[320];
+	size_t used = 0;
+	Bitu active = 0;
+	for ( int c = 0; c < 18; c++ ) {
+		for ( int o = 0; o < 2; o++ ) {
+			const Operator& op = chip.chan[c].op[o];
+			if ( op.state == Operator::OFF )
+				continue;
+			active++;
+			if ( active > 4 || used + 80 >= sizeof(ops) )
+				continue;
+			int n = snprintf( ops + used, sizeof(ops) - used,
+				"%sch%d.op%d %s rate=%u phase=%08x vol=%08x",
+				used ? " " : "", c, o, envelope_name( op.state ),
+				(unsigned)op.rateIndex, (unsigned)op.waveIndex,
+				(unsigned)op.volume );
+			if ( n > 0 )
+				used += (size_t)n;
+		}
+	}
+	if ( used == 0 )
+		strcpy( ops, "(idle)" );
+	LOG_MSG("savestate: OPL chip %s: %s| active=%u lfo=%08x opl3=%d",
+	        tag, ops, active, (unsigned)chip.lfoCounter,
+	        chip.opl3Active ? 1 : 0 );
+}
+
+bool Handler::SaveState( FILE* f ) {
+	log_chip_state( "saved", chip );
+	return fwrite( &chip, sizeof( chip ), 1, f ) == 1;
+}
+
+void Handler::LogState( const char *tag ) {
+	log_chip_state( tag, chip );
+}
+
+/* Restore the chip from an exact snapshot: the whole struct is copied back and
+ * the host pointers it carries are re-derived. */
+static bool load_chip_exact( Chip& chip, FILE* f ) {
+	if ( fread( &chip, sizeof( chip ), 1, f ) != 1 )
+		return false;
+	// The chip struct carries host pointers that are meaningless in another
+	// process: per-operator volHandler (a member-function pointer to the
+	// envelope generator) and the wave pointer/offsets (into the static
+	// WaveTable), and per-channel synthHandler. Re-derive them all from the
+	// restored register/state fields - no note is re-triggered.
+	chip.UpdateSynths();
+	for ( int c = 0; c < 18; c++ ) {
+		for ( int o = 0; o < 2; o++ ) {
+			Operator& op = chip.chan[c].op[o];
+			Bit8u st = op.state;
+			if ( st > Operator::ATTACK ) st = Operator::OFF;
+			op.volHandler = VolumeHandlerTable[ st ];
+			Bit8u waveForm = op.regE0 &
+				( ( 0x3 & chip.waveFormMask ) | ( 0x7 & chip.opl3Active ) );
+#if ( DBOPL_WAVE == WAVE_HANDLER )
+			op.waveHandler = WaveHandlerTable[ waveForm ];
+#else
+			op.waveBase  = WaveTable + WaveBaseTable[ waveForm ];
+			op.waveStart = WaveStartTable[ waveForm ] << WAVE_SH;
+			op.waveMask  = WaveMaskTable[ waveForm ];
+#endif
+		}
+	}
+	return true;
+}
+
+bool Handler::LoadState( FILE* f ) {
+	if ( !load_chip_exact( chip, f ) )
+		return false;
+	log_chip_state( "restored", chip );
+	return true;
 }
 
 

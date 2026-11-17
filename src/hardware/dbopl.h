@@ -253,6 +253,11 @@ struct Handler : public Adlib::Handler {
 	virtual void WriteReg( Bit32u addr, Bit8u val );
 	virtual void Generate( MixerChannel* chan, Bitu samples );
 	virtual void Init( Bitu rate );
+	//WhereQ save-states: exact snapshot of the whole chip (see dbopl.cpp).
+	virtual size_t StateSize( void );
+	virtual bool SaveState( FILE* f );
+	virtual bool LoadState( FILE* f );
+	virtual void LogState( const char *tag );
 };
 
 

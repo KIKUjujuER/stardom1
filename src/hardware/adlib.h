@@ -20,6 +20,8 @@
 #ifndef DOSBOX_ADLIB_H
 #define DOSBOX_ADLIB_H
 
+#include <stdio.h>
+
 #include "dosbox.h"
 #include "mixer.h"
 #include "inout.h"
@@ -104,6 +106,16 @@ public:
 	virtual void Generate( MixerChannel* chan, Bitu samples ) = 0;
 	//Initialize at a specific sample rate and mode
 	virtual void Init( Bitu rate ) = 0;
+	//WhereQ save-states: a handler that can snapshot its chip exactly (envelope
+	//phase, operator phase, LFO - things the registers do not capture) overrides
+	//these. The default means "not handled", and the Module falls back to
+	//replaying the register cache. StateSize() must be constant for a handler.
+	virtual size_t StateSize( void ) { return 0; }
+	virtual bool SaveState( FILE* f ) { (void)f; return true; }
+	virtual bool LoadState( FILE* f ) { (void)f; return false; }
+	//WhereQ save-states: write the chip's live state to the log. The default
+	//handler has no chip of its own, so it does nothing.
+	virtual void LogState( const char *tag ) { (void)tag; }
 	virtual ~Handler() {
 	}
 };
@@ -151,6 +163,13 @@ public:
 	void PortWrite( Bitu port, Bitu val, Bitu iolen );
 	Bitu PortRead( Bitu port, Bitu iolen );
 	void Init( Mode m );
+
+	//WhereQ save-states: snapshot the register cache (plus the addressing latch
+	//and the run-time mode) and replay it to the chip on load, so FM music and
+	//effects survive a restore instead of going silent.
+	size_t StateSize( void );
+	bool SaveState( FILE* f );
+	bool LoadState( FILE* f );
 
 	Module( Section* configuration); 
 	~Module();

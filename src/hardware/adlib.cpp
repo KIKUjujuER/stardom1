@@ -698,6 +698,150 @@ static void OPL_CallBack(Bitu len) {
 	}
 }
 
+/* ---- WhereQ save-states --------------------------------------------------
+ *
+ * The OPL chip is driven entirely by its register writes, which the Module
+ * caches in cache[]. The cache rebuilds the whole FM state on a load, so a
+ * game's music and FM sound effects resume after a restore instead of going
+ * silent: a game sets up its instruments once at song start and only sends
+ * note on/off afterwards, so without the cache the restored driver would play
+ * into silence.
+ *
+ * The cache alone is not enough, though: the registers do not record where the
+ * envelope of a note is, and replaying them re-triggers every note from its
+ * attack. A handler that can snapshot its chip exactly (dbopl) therefore does
+ * that instead - see Handler::StateSize/SaveState/LoadState in dbopl.cpp.
+ */
+
+/* A one-line summary of the register cache, for the save-state log.
+ *
+ * The cache holds every register the guest has written since the chip was
+ * created, so the number of non-zero entries says whether the guest programmed
+ * the chip at all, and the values of the key registers show what it
+ * programmed. */
+static void log_module_state( const char *tag, bool exact, Adlib::Mode mode,
+                              const Bit8u* cache, size_t cache_size ) {
+	Bitu used = 0;
+	for ( size_t i = 0; i < cache_size; i++ )
+		if ( cache[i] )
+			used++;
+	LOG_MSG("savestate: OPL module %s: exact=%d mode=%d regs=%u/%u "
+	        "r20=%02x r23=%02x r40=%02x r43=%02x r60=%02x r63=%02x "
+	        "r80=%02x r83=%02x rA0=%02x rB0=%02x",
+	        tag, exact ? 1 : 0, (int)mode, used, (unsigned)cache_size,
+	        cache[0x20], cache[0x23], cache[0x40], cache[0x43],
+	        cache[0x60], cache[0x63], cache[0x80], cache[0x83],
+	        cache[0xA0], cache[0xB0] );
+}
+
+size_t Adlib::Module::StateSize( void ) {
+	return sizeof(mode) + sizeof(reg) + sizeof(ctrl) + sizeof(cache) +
+	       (handler ? handler->StateSize() : 0);
+}
+
+bool Adlib::Module::SaveState( FILE* f ) {
+	bool ok = fwrite(&mode, sizeof(mode), 1, f) == 1 &&
+	          fwrite(&reg,  sizeof(reg),  1, f) == 1 &&
+	          fwrite(&ctrl, sizeof(ctrl), 1, f) == 1 &&
+	          fwrite(cache, sizeof(cache),1, f) == 1;
+	// The handler snapshots the exact chip state (envelope phase, operator
+	// phase, LFO) that the register cache cannot capture; the default handler
+	// writes nothing and the load falls back to replaying the cache.
+	if (ok && handler) ok = handler->SaveState(f);
+	log_module_state( "saved", true, mode, cache, sizeof(cache) );
+	return ok;
+}
+
+/* Skip over n bytes in the state file.
+ *
+ * The handler's chip block is a fixed part of the file, so it has to be
+ * consumed in every case - even when the handler cannot restore itself and the
+ * registers are replayed instead. Skipping keeps the rest of the file (the DOS
+ * layer behind it) aligned. */
+static bool skip_bytes( FILE* f, size_t n ) {
+	if ( n == 0 )
+		return true;
+	long here = ftell( f );
+	if ( here < 0 )
+		return false;
+	long after = here + (long)n;
+	if ( fseek( f, after, SEEK_SET ) != 0 )
+		return false;
+	/* The file has to really contain the bytes that were skipped over. */
+	long end;
+	if ( fseek( f, 0, SEEK_END ) != 0 )
+		return false;
+	end = ftell( f );
+	if ( fseek( f, after, SEEK_SET ) != 0 )
+		return false;
+	return end >= after;
+}
+
+bool Adlib::Module::LoadState( FILE* f ) {
+	if (fread(&mode, sizeof(mode), 1, f) != 1) return false;
+	if (fread(&reg,  sizeof(reg),  1, f) != 1) return false;
+	if (fread(&ctrl, sizeof(ctrl), 1, f) != 1) return false;
+	if (fread(cache, sizeof(cache),1, f) != 1) return false;
+
+	// Prefer the handler's exact chip snapshot (dbopl). It restores the
+	// envelope/phase/LFO state as well, so the sound is identical and no note
+	// is re-triggered.
+	//
+	// The handler's block is a fixed part of the file, so it has to be
+	// consumed either way: a handler that cannot restore itself (a MAME or
+	// the compat OPL2/OPL3 emulator) has its block skipped over and the
+	// registers are replayed instead. Not doing that would leave the file
+	// cursor in the middle of the block and the DOS layer behind it - the
+	// open file handles - would be read from the wrong place.
+	bool exact = false;
+	size_t chip_size = handler ? handler->StateSize() : 0;
+	if ( handler && chip_size ) {
+		long block = ftell( f );
+		if ( handler->LoadState(f) ) {
+			exact = true;
+		} else {
+			if ( block < 0 || fseek( f, block, SEEK_SET ) != 0 )
+				return false;
+			if ( !skip_bytes( f, chip_size ) )
+				return false;
+		}
+	}
+
+	log_module_state( "restored", exact, mode, cache, sizeof(cache) );
+
+	if (!exact && handler) {
+		// Fallback (e.g. a MAME handler, which cannot snapshot itself): replay
+		// the register cache. This gets the instruments and notes right but
+		// re-triggers envelopes, so the sound is close rather than identical.
+		//
+		// Order matters: register 0x105 (OPL3 enable) and 0x104 (the 4-operator
+		// channel pairing) decide how every other register is interpreted - the
+		// second bank, the 4-op voices, and which waveforms are selectable (in
+		// OPL2 mode WriteE0 clamps to waveforms 0-3, so OPL3 voices come back
+		// with the wrong timbre). Apply them before the operator/channel
+		// registers, which a flat 0..511 sweep would not do.
+		handler->WriteReg( 0x105, cache[0x105] );
+		handler->WriteReg( 0x104, cache[0x104] );
+		for (Bitu r = 0; r < sizeof(cache); r++) {
+			if (r == 0x104 || r == 0x105) continue;
+			handler->WriteReg( (Bit32u)r, cache[r] );
+		}
+		// Show what the replay left behind: the registers rebuild the
+		// instruments, but they cannot restore where the envelope was, so the
+		// note starts again from its attack.
+		handler->LogState( "replayed" );
+	}
+	// Keep the channel on: it had auto-disabled on the silent fresh boot.
+	if (mixerChan) mixerChan->Enable(true);
+	lastUsed = PIC_Ticks;
+	return true;
+}
+
+/* Thin wrappers for src/gui/savestate.cpp (module is file-static here). */
+size_t OPL_StateSize(void) { return module ? module->StateSize() : 0; }
+bool OPL_SaveState(FILE* f) { return module ? module->SaveState(f) : true; }
+bool OPL_LoadState(FILE* f) { return module ? module->LoadState(f) : true; }
+
 static Bitu OPL_Read(Bitu port,Bitu iolen) {
 	return module->PortRead( port, iolen );
 }

@@ -80,6 +80,22 @@ bool SPKR_LoadState(FILE *f) {
 	MixerChannel *live_chan = spkr.chan;
 	if (fread(&spkr, sizeof(spkr), 1, f) != 1) return false;
 	spkr.chan = live_chan;
+	// The speaker is a real-time output device. Its queued delay entries and its
+	// PIC-relative timing indices (pit_index/last_index/last_ticks) were taken
+	// against the *saved* machine's clock; replaying them against the current
+	// clock makes the mixer emit a drone or a steady beep the guest never asked
+	// for. Keep the restored configuration (rate, min_tr, chan) but reset the
+	// real-time state to silence - the guest re-drives the speaker on its next
+	// tone, so no audible event is lost in practice.
+	spkr.mode       = SPKR_OFF;
+	spkr.used       = 0;
+	spkr.last_ticks = 0;   // the next SetCounter/SetType re-enables cleanly
+	spkr.last_index = 0;
+	spkr.pit_index  = 0;
+	spkr.pit_last   = 0;
+	spkr.volwant    = 0;
+	spkr.volcur     = 0;
+	if (spkr.chan) spkr.chan->Enable(false);
 	return true;
 }
 

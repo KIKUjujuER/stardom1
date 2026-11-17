@@ -85,8 +85,22 @@ class VirtualKeyboardView(context: Context) : FrameLayout(context) {
     /** key name of a modifier -> is it currently pressed inside DOSBox. */
     private val armed = HashMap<String, Boolean>()
 
-    /** Modifiers a finger is on right now. */
-    private val held = HashSet<String>()
+    /**
+     * Modifier key name -> how many fingers are on it right now. A modifier can
+     * appear twice (e.g. Shift in both a side column and the fold-up panel), so
+     * a plain set could not tell "both fingers lifted" from "one of two lifted"
+     * and would release the modifier while a finger was still down. The count
+     * fixes that: the modifier arms on 0->1 and releases on 1->0.
+     */
+    private val heldCount = HashMap<String, Int>()
+
+    /**
+     * Every scancode currently pressed *down* in DOSBox. A layout rebuild
+     * removes the key views mid-gesture without an ACTION_UP, so without this
+     * an ordinary key held at that moment (an arrow, Space) would stay stuck
+     * down in the emulator. The rebuild releases everything in here.
+     */
+    private val downScancodes = HashSet<Int>()
 
     /** Held modifiers that an ordinary key was typed with. */
     private val usedWhileHeld = HashSet<String>()
@@ -155,13 +169,19 @@ class VirtualKeyboardView(context: Context) : FrameLayout(context) {
             return
         }
 
-        // Start from nothing. A modifier that is still pressed inside DOSBox
-        // has to be released first, its key is about to disappear.
+        // Start from nothing. Anything still pressed inside DOSBox has to be
+        // released first — the key views are about to disappear, so their
+        // ACTION_UP would never arrive and the key would stick down. This covers
+        // the modifiers (armed/held) and any ordinary key a finger is on.
         releaseModifiers(force = true)
+        for (scancode in downScancodes.toList()) {
+            DosboxNative.nativePushKey(scancode, false)
+        }
+        downScancodes.clear()
         removeAllViews()
         modifierViews.clear()
         armed.clear()
-        held.clear()
+        heldCount.clear()
         usedWhileHeld.clear()
         disarmedByTouch.clear()
         heldSince.clear()
@@ -699,6 +719,13 @@ class VirtualKeyboardView(context: Context) : FrameLayout(context) {
     /**
      * Builds one key that reacts to touch.
      *
+     * The DOS keys use a raw touch listener (not a click listener) so that a
+     * press and a release map to a key-down and a key-up and modifiers can be
+     * held — which a click cannot express. The trade-off is that these keys are
+     * not exposed to TalkBack; the action buttons (File, the layer keys, the
+     * panel toggle) use click listeners and stay accessible. For a DOS game pad
+     * driven by thumbs this is the right balance, hence the lint suppression.
+     *
      * @param size `"w<weight>"` weighted, `"c"` full column width, `"f"` fixed.
      * @param kind `"k"` ordinary, `"m"` modifier, `"s"` key that needs Shift.
      * @param color the key's resting colour.
@@ -796,12 +823,13 @@ class VirtualKeyboardView(context: Context) : FrameLayout(context) {
     /** A key went down. */
     private fun keyDown(keyName: String, kind: Int) {
         if (kind == KIND_MODIFIER) {
-            if (keyName in held) {
+            val fingers = (heldCount[keyName] ?: 0) + 1
+            heldCount[keyName] = fingers
+            if (fingers > 1) {
                 // The same modifier is shown twice (column and panel) and a
-                // finger is already on the other one.
+                // finger is already on the other one — keep the count, do nothing.
                 return
             }
-            held.add(keyName)
             heldSince[keyName] = SystemClock.uptimeMillis()
             if (isArmed(keyName)) {
                 // A second tap takes an armed modifier back.
@@ -817,8 +845,10 @@ class VirtualKeyboardView(context: Context) : FrameLayout(context) {
         }
         if (kind == KIND_SHIFTED) {
             // Shift is wrapped around the key so that the character comes out
-            // shifted.
-            push(SHIFT, true)
+            // shifted — but not re-pushed if it is already down (armed or held).
+            if (!isArmed(SHIFT)) {
+                push(SHIFT, true)
+            }
             push(keyName, true)
             return
         }
@@ -828,9 +858,16 @@ class VirtualKeyboardView(context: Context) : FrameLayout(context) {
     /** A key went up. */
     private fun keyUp(keyName: String, kind: Int) {
         if (kind == KIND_MODIFIER) {
-            if (!held.remove(keyName)) {
+            val fingers = heldCount[keyName] ?: 0
+            if (fingers == 0) {
                 return
             }
+            if (fingers > 1) {
+                // Another finger is still on this modifier; keep it pressed.
+                heldCount[keyName] = fingers - 1
+                return
+            }
+            heldCount.remove(keyName)
             val heldFor = SystemClock.uptimeMillis() - (heldSince.remove(keyName) ?: 0L)
             val used = usedWhileHeld.remove(keyName)
             if (disarmedByTouch.remove(keyName)) {
@@ -866,7 +903,7 @@ class VirtualKeyboardView(context: Context) : FrameLayout(context) {
     }
 
     /**
-     * Releases the armed modifiers after a key was typed. One a finger is
+     * Releases the armed modifiers after a key was typed. One that a finger is
      * still holding stays pressed (and is remembered as used) unless [force]d.
      */
     private fun releaseModifiers(force: Boolean) {
@@ -874,7 +911,7 @@ class VirtualKeyboardView(context: Context) : FrameLayout(context) {
             if (armed[key] != true) {
                 continue
             }
-            if (!force && key in held) {
+            if (!force && (heldCount[key] ?: 0) > 0) {
                 usedWhileHeld.add(key)
                 continue
             }
@@ -898,6 +935,15 @@ class VirtualKeyboardView(context: Context) : FrameLayout(context) {
         }
         if (!DosboxNative.nativePushKey(scancode, pressed)) {
             Log.w(TAG, "could not push " + keyName + (if (pressed) " down" else " up"))
+            return
+        }
+        // Remember what is down, so a layout rebuild can release it (see
+        // downScancodes). A release clears it even if the same scancode has two
+        // keys — the set holds it once, which is exactly what DOSBox wants.
+        if (pressed) {
+            downScancodes.add(scancode)
+        } else {
+            downScancodes.remove(scancode)
         }
     }
 
@@ -972,6 +1018,10 @@ class VirtualKeyboardView(context: Context) : FrameLayout(context) {
         /**
          * The left halves of the three layers, indexed by `LAYER_*`. The split
          * is where a touch typist's hands split a keyboard.
+         *
+         * The symbol mappings assume a US layout (`!` = Shift+1, `:` = Shift+`;`,
+         * …), which is what DOS programs expect — DOSBox feeds scancodes to the
+         * BIOS, and the US code page is the shipped default.
          */
         private val LEFT_LAYERS = arrayOf(
             arrayOf("1 2 3 4 5", "q w e r t", "a s d f g", "z x c v b"),

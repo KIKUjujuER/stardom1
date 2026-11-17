@@ -8,7 +8,7 @@
  * macros as well as the feature switches.
  *
  * Feature set is intentionally the Android-equivalent one (see
- * porting/ANDROID-PORT.md):
+ * docs/TECHNICAL-REFERENCE.md):
  *   - C_SDLGFX      : SDL2 graphics back end
  *   - no C_OPENGL   : DOSBox's own fixed-function GL path is desktop GL and
  *                     cannot run on GLES2; we use the SDL_Renderer path

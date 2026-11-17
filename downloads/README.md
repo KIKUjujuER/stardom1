@@ -5,6 +5,7 @@ without building it.
 
 | file | version | size |
 |---|---|---|
+| [whereq-dosbox-1.0.0.10.apk](whereq-dosbox-1.0.0.10.apk) | 1.0.0.10 | 15.7 MB |
 | [whereq-dosbox-1.0.0.9.apk](whereq-dosbox-1.0.0.9.apk) | 1.0.0.9 | 15.7 MB |
 | [whereq-dosbox-1.0.0.8.apk](whereq-dosbox-1.0.0.8.apk) | 1.0.0.8 | 15.5 MB |
 | [whereq-dosbox-1.0.0.7.apk](whereq-dosbox-1.0.0.7.apk) | 1.0.0.7 | 15.5 MB |
@@ -12,6 +13,37 @@ without building it.
 | [whereq-dosbox-1.0.0.5.apk](whereq-dosbox-1.0.0.5.apk) | 1.0.0.5 | 15.5 MB |
 | [whereq-dosbox-1.0.0.4.apk](whereq-dosbox-1.0.0.4.apk) | 1.0.0.4 | 5.0 MB |
 | [whereq-dosbox-1.0.0.3.apk](whereq-dosbox-1.0.0.3.apk) | 1.0.0.3 | 5.0 MB |
+
+## What changed in 1.0.0.10
+
+* **The sound survives a save state.** The FM chip is now snapshotted
+  *exactly* — the envelope, the wave phase and the LFO counter all come back
+  with the state. A note continues from the middle of its attack instead of
+  starting its attack again, so the music does not restart when a state is
+  loaded. The PC speaker comes back silent instead of droning on its own.
+* **A key no longer sticks.** Rotating the phone while a key was held left
+  that key pressed in DOSBox for ever. Every key that is down is now released
+  when the layout is rebuilt, and a modifier that is shown in two places (the
+  pad and the fold-up panel) counts its fingers instead of assuming there is
+  only one.
+* **The launcher fits on the screen.** The **Files** panel measures the space
+  it has and caps the game list to it, so a third game no longer pushes its
+  buttons off the bottom edge where nothing could bring them back.
+* **The desktop build links again.** The save-state code was missing from the
+  autotools build and the two archives had a circular dependency — the
+  desktop baseline compiles and links again.
+* **A technical reference.** `docs/TECHNICAL-REFERENCE.md` in the repository
+  describes the whole implementation with the diagrams: the native build, the
+  save-state machine, the exact FM snapshot, the bundle launcher, the
+  on-screen keyboard, the throughput benchmark, what is still open and the
+  screenshot gallery.
+
+**Save states written by 1.0.0.9 cannot be loaded by this build.** The state
+file grew a version when the sound chips became part of the snapshot, and an
+older state is refused rather than misread.
+
+This release also carries the **milestone tag** for the end of the Android
+migration phase. What follows is maintenance: bug fixes and documentation.
 
 ## What changed in 1.0.0.9
 
@@ -63,7 +95,7 @@ in the app layer.
 
 Some old DOS programs do not survive a restore — the extender of Ultima VIII
 still aborts on it. That is a limitation of the DOS internals the snapshot
-does not capture yet, not of the app; `porting/ANDROID-PORT.md` has the
+does not capture yet, not of the app; `docs/TECHNICAL-REFERENCE.md` has the
 details.
 
 ## What changed in 1.0.0.7
@@ -98,6 +130,8 @@ from 1.0.0.7 on it can be picked in the app, see above.
 The APK is signed with the release key of this repository, so it can be
 updated in place: a later version replaces it without uninstalling first.
 
+* SHA-256 of the 1.0.0.10 APK:
+  `80bdce1b4bdeba809159310441e450e704f6c322e2a3ff98bcc822ed50077018`
 * SHA-256 of the 1.0.0.9 APK:
   `cd6d0bdafd0f84c7324936c89a6cab14ed87a21e4211ed8909078b4a7a51ac02`
 * SHA-256 of the 1.0.0.8 APK:
@@ -120,6 +154,13 @@ arcade game that shows what a bundle looks like when it runs.  Its bundle
 zip is [`whereq-demo-bundle.zip`](../examples/game-bundle/dist/whereq-demo-bundle.zip);
 install it with *Install a bundle (.zip)*.
 
+To hear the save-state fix for yourself, install
+[`examples/opl-test-bundle`](../examples/opl-test-bundle): it programs one
+sustained tone on the FM chip and then waits for a key.  Save a state while it
+plays, wait a couple of minutes, load the state — the tone continues from the
+middle of its attack instead of starting over, and the log lines written by the
+save and by the load are identical.
+
 ## Building it yourself
 
 The APK is built from this repository with Gradle:
@@ -135,4 +176,4 @@ Without the release key the Gradle build falls back to the debug key, and the
 resulting APK is *debuggable* — it cannot be installed over a release-signed
 one (Android refuses it with `INSTALL_FAILED_UPDATE_INCOMPATIBLE`).
 
-See [porting/ANDROID-PORT.md](../porting/ANDROID-PORT.md) for the details.
+See [docs/TECHNICAL-REFERENCE.md](../docs/TECHNICAL-REFERENCE.md) for the details.

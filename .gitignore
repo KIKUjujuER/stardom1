@@ -72,6 +72,9 @@ Makefile
 # example can be installed on a phone without building anything.
 /examples/game-bundle/build/
 
+# the same for the OPL save-state test bundle.
+/examples/opl-test-bundle/build/
+
 # Android build outputs
 /android/.cxx/
 /android/build/
@@ -95,3 +98,7 @@ __pycache__/
 # Native libraries staged for the Gradle build by android/build-android.sh.
 # They are build output, not source - regenerate them with that script.
 /android/app/src/main/jniLibs/
+
+# Raw device and build logs captured while porting. The findings that matter
+# are written up in docs/TECHNICAL-REFERENCE.md; the raw logs stay local.
+/docs/logs/

@@ -8,8 +8,11 @@ contributors, imported here unmodified.
 DOSBox
 --------------------------------------------------------------------------
 
-The DOSBox emulator core in `src/`, `include/`, `visualc_net/`, `scripts/`
-and `docs/` is DOSBox r4305, imported verbatim from the Em-DOSBox project.
+The DOSBox emulator core in `src/`, `include/`, `visualc_net/` and `scripts/`
+is DOSBox r4305, imported verbatim from the Em-DOSBox project. The documents
+that came with it - `docs/dosbox.1`, `docs/PORTING` and `docs/README.video` -
+are part of that import and are kept unmodified; the WhereQ documents that
+sit beside them are listed below.
 
     DOSBox - an open source DOS emulator
     Copyright (C) 2002-2019 The DOSBox Team
@@ -57,7 +60,7 @@ Everything outside the emulator core is the whereq porting work:
     bench/        CPU-core throughput probe
     toolchain/    rootless dev toolchain
     third_party/  fetch scripts for the SDL2 sources
-    porting/      the porting log, benchmark notes and screenshots
+    docs/        the technical reference and the screenshot gallery
     bin/          release.sh
 
 These are distributed under the same GNU General Public License, version 2,
