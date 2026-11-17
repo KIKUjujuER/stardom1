@@ -374,10 +374,15 @@ DOSBox captures the mouse when it goes fullscreen, which would put it into
 SDL's relative mouse mode - on a touch screen that makes every tap useless,
 so the capture is disabled on Android.
 
-**The on-screen keyboard** (`VirtualKeyboardView.java`) is drawn on top of
-the SDL surface: a slim toolbar that is always visible, plus a foldable
-QWERTY panel with a symbol row. Shift/Ctrl/Alt are sticky - tap them, then
-tap a character.
+**The on-screen keyboard** (`VirtualKeyboardView.kt`) is drawn on top of
+the SDL surface, which stays full-screen. In landscape the keys sit in the two
+letterbox bars like the two halves of a handheld console: the left pad has
+the arrow keys and the left half of a split QWERTY, the right pad the action
+keys (Alt, Ctrl, Shift, Space, Enter) and the right half, with symbol and
+function layers. Bars too narrow for that get one key column per side plus a
+foldable QWERTY panel; portrait gets a bottom bar plus the same panel.
+Shift/Ctrl/Alt arm on a tap (tap them, then tap a character) and act as
+ordinary keys while held.
 
 No DOSBox patch was needed for the keyboard. DOSBox's SDL2 back end routes
 key events through the mapper (`src/gui/sdl_mapper.cpp`), which indexes its

@@ -17,12 +17,25 @@
 </p>
 
 <p align="center">
-  <sub>The DOSBox welcome screen, a mounted drive and the two-sided on-screen
-  keyboard — the arrows sit in the inverted T of a real keyboard, touch moves
-  the DOS mouse, the keys type into DOSBox.</sub>
+  <sub>The DOSBox welcome screen, a mounted drive and the two-pad on-screen
+  keyboard — the picture in the middle, one hand on each side, touch moves the
+  DOS mouse, the keys type into DOSBox.</sub>
 </p>
 
 ---
+
+New in 1.0.0.9
+--------------
+
+| | |
+|---|---|
+| **The keyboard is a console now** | In landscape the keys sit in the two black bars beside the picture, the way a handheld console is built: the **left pad** holds the arrow keys as a D-pad and the left half of a split QWERTY, the **right pad** holds the action keys (Alt, Ctrl, Shift, Space, Enter) and the right half. Nothing covers the picture any more. |
+| **Three layers, one key each** | **#+=** swaps both halves for the punctuation, **Fn** for F1–F12, Ins/Del, Home/End, PgUp/PgDn, Caps, PrtSc and Pause. The switched key lights up while its layer is on. The letter layer already carries `: . / \`, so a DOS path needs no switching at all. |
+| **Modifiers work both ways** | *Tap* Ctrl, Alt or Shift and it stays armed for the next key (Ctrl, then C). *Hold* it and it behaves like a real key for as long as the finger is down — which is what a game expects from its fire and strafe keys while the other thumb steers. |
+| **The layout follows the screen** | A bar wide enough (≥ 116 dp) gets the full pads; a narrower one gets a single key column per side and the fold-up QWERTY; portrait gets a slim strip along the bottom. The letter keys are about 33 dp wide on a 20:9 screen and about 24 dp on an 18:9 one. |
+
+The whole change is in the app layer — the emulator core is the one from
+1.0.0.8, unchanged.
 
 New in 1.0.0.8
 --------------
@@ -88,17 +101,40 @@ Resume](#save-states-and-resume) below.
 The on-screen keyboard
 -----------------------
 
-The DOS picture is 4:3 and letterboxed, so in landscape there are black bars
-down the left and right. The always-on control keys live in those bars as two
-vertical columns — the modifiers and the editing keys on the left, **File**,
-**Ent**, **Space** and the arrow keys on the right — so the picture keeps the
-whole middle of the screen and the keys sit under the thumbs. The arrows are
-in the inverted-T of a real keyboard (up on top, left and right side by side,
-down below), so the finger finds them without reading them. In portrait the
-bars are too narrow for that, and the same keys fall back to a slim strip along
-the bottom.
+The DOS picture is 4:3 and centred, so a phone in landscape has a black bar on
+either side of it. The keys live in those bars, laid out like a handheld
+console: the picture in the middle, one hand on each side, nothing on top of
+the picture.
 
-![The two-sided on-screen keyboard](porting/screenshots/android-n6-keyboard-layout.png)
+* **The left pad** — the arrow keys as a D-pad under the left thumb (up on
+  top, left and right side by side, down below); above it the left half of a
+  split QWERTY, and **File**, **Esc** and **Tab** along the top.
+* **The right pad** — the action keys under the right thumb: **Alt**,
+  **Ctrl**, **Shift**, **Space** and **Enter**; above them the right half of
+  the QWERTY, and **#+=**, **Fn** and Backspace along the top.
+* **The split QWERTY** has a number row and carries `: . / \` on the letter
+  layer, so a DOS path needs no switching. **#+=** swaps both halves for the
+  punctuation, **Fn** for F1–F12, Ins/Del, Home/End, PgUp/PgDn, Caps, PrtSc
+  and Pause.
+
+Ctrl, Alt and Shift work both ways: *tap* one and it stays pressed for the next
+key (Ctrl, then C), or *hold* it like a real key while the other thumb steers —
+which is what a game expects from its fire and strafe keys.
+
+On a 16:9 screen the bars are too narrow for half a keyboard, so each side is
+a single column — the arrows left, the action keys right — and the full QWERTY
+folds up from the bottom with **⌨**. In portrait the keys are a slim strip
+along the bottom, with the same fold-up QWERTY.
+
+The pads are tight on an 18:9 screen: the letter keys come to about 24 dp
+wide there, against 33 dp on a 20:9 one. The D-pad and the action keys keep
+their full size either way.
+
+![The two pads beside the DOS picture, running on a phone](porting/screenshots/android-n7-pads-letters.png)
+
+The **#+=** layer, with the punctuation — the key is lit while the layer is on:
+
+![The symbol layer of the two pads](porting/screenshots/android-n7-pads-symbols.png)
 
 Files on the phone
 ------------------

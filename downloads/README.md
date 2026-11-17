@@ -5,12 +5,43 @@ without building it.
 
 | file | version | size |
 |---|---|---|
+| [whereq-dosbox-1.0.0.9.apk](whereq-dosbox-1.0.0.9.apk) | 1.0.0.9 | 15.7 MB |
 | [whereq-dosbox-1.0.0.8.apk](whereq-dosbox-1.0.0.8.apk) | 1.0.0.8 | 15.5 MB |
 | [whereq-dosbox-1.0.0.7.apk](whereq-dosbox-1.0.0.7.apk) | 1.0.0.7 | 15.5 MB |
 | [whereq-dosbox-1.0.0.6.apk](whereq-dosbox-1.0.0.6.apk) | 1.0.0.6 | 15.5 MB |
 | [whereq-dosbox-1.0.0.5.apk](whereq-dosbox-1.0.0.5.apk) | 1.0.0.5 | 15.5 MB |
 | [whereq-dosbox-1.0.0.4.apk](whereq-dosbox-1.0.0.4.apk) | 1.0.0.4 | 5.0 MB |
 | [whereq-dosbox-1.0.0.3.apk](whereq-dosbox-1.0.0.3.apk) | 1.0.0.3 | 5.0 MB |
+
+## What changed in 1.0.0.9
+
+* **The keyboard is a console now.** In landscape the keys sit in the two
+  black bars beside the picture, the way a handheld console is built: the
+  picture in the middle, one hand on each side, nothing on top of the
+  picture. The **left pad** holds the arrow keys as a D-pad (up on top, left
+  and right side by side, down below) and the left half of a split QWERTY,
+  with **File**, **Esc** and **Tab** along the top. The **right pad** holds
+  the action keys — **Alt**, **Ctrl**, **Shift**, **Space**, **Enter** — and
+  the right half of the QWERTY, with **#+=**, **Fn** and Backspace along the
+  top.
+* **Three layers, one key each.** **#+=** swaps both halves for the
+  punctuation, **Fn** for F1–F12, Ins/Del, Home/End, PgUp/PgDn, Caps, PrtSc
+  and Pause. The switched key lights up while its layer is on. The letter
+  layer of the right half already carries `: . / \`, so a DOS path needs no
+  layer switch at all.
+* **Modifiers work both ways.** *Tap* Ctrl, Alt or Shift and it stays armed
+  for the next key — Ctrl, then C. *Hold* it and it behaves like a real key
+  for as long as the finger is down, which is what a game expects from its
+  fire and strafe keys while the other thumb steers.
+* **The layout follows the screen.** A letterbox bar of at least 116 dp gets
+  the full pads; a narrower one gets a single key column per side and the
+  fold-up QWERTY; portrait gets a slim strip along the bottom. The letter
+  keys come to about 33 dp wide on a 20:9 screen and about 24 dp on an 18:9
+  one — tight on the narrowest phones, where the D-pad and the action keys
+  keep their full size.
+
+The emulator core is the one from 1.0.0.8, unchanged — the whole change is
+in the app layer.
 
 ## What changed in 1.0.0.8
 
@@ -42,7 +73,7 @@ details.
   `normal`, `dynamic`, `simple` and `prefetch`. In 1.0.0.6 the fallback to
   `core=normal` was only documented — the configuration file is regenerated
   on every boot, so it could not be edited on the phone.
-* The keyboard of the current release is two columns in the letterbox bars
+* The keyboard of that release is two columns in the letterbox bars
   (the modifiers on the left, **File**, **Ent**, **Space** and the arrows on
   the right). The README shows it.
 
@@ -67,6 +98,8 @@ from 1.0.0.7 on it can be picked in the app, see above.
 The APK is signed with the release key of this repository, so it can be
 updated in place: a later version replaces it without uninstalling first.
 
+* SHA-256 of the 1.0.0.9 APK:
+  `cd6d0bdafd0f84c7324936c89a6cab14ed87a21e4211ed8909078b4a7a51ac02`
 * SHA-256 of the 1.0.0.8 APK:
   `ed17f39bddeb9e871485df390f772f19c5a43abdbf3b5845c7abd4afbb602ca3`
 * SHA-256 of the 1.0.0.7 APK:

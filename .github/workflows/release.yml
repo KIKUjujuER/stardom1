@@ -1,0 +1,206 @@
+name: Release
+
+# A version tag (v1.0.0.9) is the trigger. The APK is built here from the
+# tagged source - the native emulator for all three ABIs plus the app layer -
+# signed with the release key held in the repository secrets, and published as
+# a GitHub Release next to the tag.
+#
+# The release key never leaves the secrets: the keystore is stored base64
+# encoded as WHEREQ_RELEASE_KEYSTORE_B64 and decoded into the runner's
+# temporary directory at build time. The store password and the key alias
+# come from WHEREQ_RELEASE_STORE_PASS and WHEREQ_RELEASE_ALIAS.
+#
+# The certificate is checked against the known release fingerprint below, so a
+# wrong key in the secrets fails the release loudly instead of publishing an
+# APK that cannot be installed over the previous one.
+on:
+  push:
+    tags: ["v*"]
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  native:
+    name: libdosbox.so (${{ matrix.abi }})
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        abi: [arm64-v8a, armeabi-v7a, x86_64]
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: install the build tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq nasm
+
+      - uses: android-actions/setup-android@v3
+
+      - name: install the SDK packages
+        run: |
+          yes | sdkmanager --licenses >/dev/null
+          sdkmanager "platform-tools" "platforms;android-36" \
+                     "build-tools;36.0.0" "cmake;3.22.1" "ndk;27.1.12297006"
+
+      - name: fetch the SDL2 sources
+        run: ./third_party/fetch-sdl2.sh
+
+      - name: build libdosbox.so
+        run: |
+          export WQ_ANDROID_SDK="$ANDROID_SDK_ROOT"
+          . toolchain/env.sh
+          ./android/build-android.sh "${{ matrix.abi }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: libdosbox-${{ matrix.abi }}
+          path: build/android/${{ matrix.abi }}/libdosbox.so
+          if-no-files-found: error
+
+  publish:
+    name: build · sign · publish
+    needs: native
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write        # create the GitHub Release for the tag
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: android-actions/setup-android@v3
+
+      - name: install the SDK packages
+        run: |
+          yes | sdkmanager --licenses >/dev/null
+          sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
+      - name: collect the native libraries
+        uses: actions/download-artifact@v4
+        with:
+          name: libdosbox-arm64-v8a
+          path: build/android/arm64-v8a
+      - uses: actions/download-artifact@v4
+        with:
+          name: libdosbox-armeabi-v7a
+          path: build/android/armeabi-v7a
+      - uses: actions/download-artifact@v4
+        with:
+          name: libdosbox-x86_64
+          path: build/android/x86_64
+
+      # The tag is the single source of truth for the version - it is mirrored
+      # into the VERSION file and read by the Gradle build. A tag that does
+      # not match would ship an APK of a different version than its tag says.
+      - name: verify the tag matches the version
+        run: |
+          version="$(cat VERSION)"
+          tag_version="${GITHUB_REF_NAME#v}"
+          if [ "$version" != "$tag_version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match VERSION $version"
+            exit 1
+          fi
+          echo "Releasing version $version"
+
+      # The keystore is decoded into the runner's temp directory. The password
+      # is never written to disk - it is passed to Gradle through the
+      # environment.
+      - name: unpack the release key
+        env:
+          KEYSTORE_B64: ${{ secrets.WHEREQ_RELEASE_KEYSTORE_B64 }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ]; then
+            echo "::error::WHEREQ_RELEASE_KEYSTORE_B64 is not set - the release cannot be signed"
+            exit 1
+          fi
+          printf '%s' "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+          chmod 600 "$RUNNER_TEMP/release.keystore"
+          echo "WHEREQ_RELEASE_KEYSTORE=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
+
+      - name: build the release APK
+        env:
+          WHEREQ_RELEASE_STORE_PASS: ${{ secrets.WHEREQ_RELEASE_STORE_PASS }}
+          WHEREQ_RELEASE_ALIAS: ${{ secrets.WHEREQ_RELEASE_ALIAS }}
+        run: ./android/gradlew --project-dir android :app:assembleRelease --console=plain
+
+      - name: stage the APK and its checksum
+        run: |
+          apk="whereq-dosbox-${GITHUB_REF_NAME}.apk"
+          cp android/app/build/outputs/apk/release/app-release.apk "$apk"
+          sha256sum "$apk" > "$apk.sha256"
+          ls -la "$apk" "$apk.sha256"
+          cat "$apk.sha256"
+
+      # A release-signed APK has to carry the certificate of every previous
+      # release, otherwise Android refuses to install it over the old one.
+      - name: verify the release certificate
+        run: |
+          apk="whereq-dosbox-${GITHUB_REF_NAME}.apk"
+          expected="b16b480d5a1ff6d35baff0b15fa3fc4b0ee815e500861fbff1b062c9bf7d3933"
+          "$ANDROID_SDK_ROOT/build-tools/36.0.0/apksigner" verify --print-certs "$apk" \
+            | tee certificate.txt
+          actual="$(grep -o '[0-9a-f]\{64\}' certificate.txt | head -1)"
+          if [ "$actual" != "$expected" ]; then
+            echo "::error::The APK is signed with $actual, expected $expected"
+            exit 1
+          fi
+          echo "release certificate verified"
+
+      - name: check that all three ABIs are in the APK
+        run: |
+          apk="whereq-dosbox-${GITHUB_REF_NAME}.apk"
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            unzip -l "$apk" | grep -q "lib/$abi/libdosbox.so" \
+              || { echo "::error::$abi is missing from the APK"; exit 1; }
+          done
+          echo "all three ABIs are packaged"
+
+      - name: create the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          apk="whereq-dosbox-${GITHUB_REF_NAME}.apk"
+          {
+            echo "**WhereQ-DOSBox ${GITHUB_REF_NAME}**"
+            echo
+            echo "The Android port of DOSBox. The APK is signed with the release key"
+            echo "of this repository, so it can be installed over the previous"
+            echo "version without uninstalling it first."
+            echo
+            echo "\`${apk}\` — SHA-256:"
+            echo
+            echo '```'
+            cat "$apk.sha256"
+            echo '```'
+            echo
+            echo "Signing certificate (SHA-256):"
+            echo
+            echo '```'
+            echo "b16b480d5a1ff6d35baff0b15fa3fc4b0ee815e500861fbff1b062c9bf7d3933"
+            echo '```'
+          } > release-notes.md
+          cat release-notes.md
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
+            --notes-file release-notes.md \
+            --verify-tag \
+            "$apk" "$apk.sha256"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: whereq-dosbox-${{ github.ref_name }}-apk
+          path: |
+            whereq-dosbox-${{ github.ref_name }}.apk
+            whereq-dosbox-${{ github.ref_name }}.apk.sha256
+          if-no-files-found: error

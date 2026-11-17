@@ -124,9 +124,8 @@ class WhereqDosboxActivity : SDLActivity() {
         // NOTE: do NOT resize/pad the SDL surface here to make room for the
         // keyboard. Changing the SurfaceView size breaks DOSBox's Android
         // texture renderer (black screen) — the porting log warns the window
-        // must not be recreated/resized. The keyboard toolbar overlapping the
-        // bottom of the picture is handled a safe way instead (see the overlay
-        // keyboard; a native sdl.clip inset is the planned proper fix).
+        // must not be recreated/resized. The surface stays full-screen and the
+        // keyboard only uses the letterbox bars left and right of the picture.
 
         val filesDir = filesDir
 
@@ -225,8 +224,8 @@ class WhereqDosboxActivity : SDLActivity() {
      * Puts the on-screen keyboard on top of the DOSBox surface.
      *
      * The keyboard is added to the activity's content view, i.e. it is drawn
-     * above the SDL `SurfaceView`. It only occupies the strip at the bottom of
-     * the screen, so touches anywhere else still reach the emulator — which is
+     * above the SDL `SurfaceView`. Its keys only occupy the space next to the
+     * DOS picture, so touches on the picture still reach the emulator — which is
      * what turns a tap into a click inside the DOS picture (SDL turns the touch
      * into a mouse event, DOSBox maps it back through the letterboxed clip
      * rectangle).
@@ -235,9 +234,9 @@ class WhereqDosboxActivity : SDLActivity() {
         val keyboard = VirtualKeyboardView(this)
         keyboard.setOnFilesRequestedListener { showLauncher() }
 
-        // Full-screen overlay: the keyboard positions its control keys in the
-        // letterbox bars itself and leaves the DOS picture in the middle free
-        // (a tap there falls through to DOSBox as a mouse click).
+        // Full-screen overlay: the keyboard positions its keys beside the DOS
+        // picture itself and leaves the picture free (a tap there falls
+        // through to DOSBox as a mouse click).
         val lp = FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,
             FrameLayout.LayoutParams.MATCH_PARENT

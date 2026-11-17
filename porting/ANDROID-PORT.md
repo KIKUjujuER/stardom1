@@ -1409,6 +1409,86 @@ it ever happens there.
 
 ---
 
+## 7j. The keyboard became a handheld console  ✅ DONE (shipped in 1.0.0.9)
+
+The two columns in the letterbox bars were a compromise: the picture kept the
+middle, and whatever fitted went into the bars. In 1.0.0.9 the bars became
+**two console-style pads** — the picture in the middle, one hand on each side,
+nothing on top of the picture.
+
+### The layout
+
+| | |
+|---|---|
+| **Left pad** | the arrow keys as a D-pad under the left thumb (up on top, left and right side by side, down below); above it the left half of a split QWERTY (1–5, qwert, asdfg, zxcvb); **File**, **Esc** and **Tab** along the top. |
+| **Right pad** | the action keys under the right thumb: **Alt**, **Ctrl**, **Shift**, **Space** and **Enter**; above them the right half of the QWERTY; **#+=**, **Fn** and Backspace along the top. |
+
+**Three layers, one key each.** The right pad's top row carries the switches:
+
+| Key | Layer |
+|---|---|
+| — | the **letters** (the default) |
+| **#+=** | the **symbols** — the key turns into *abc* and is lit while the layer is on |
+| **Fn** | the **functions** — F1–F12 on the left, Ins/Del, Home/End, PgUp/PgDn, Caps, PrtSc and Pause on the right |
+
+The letter layer of the right half already carries `: . / \`, so a DOS path
+needs no layer switch at all, and on the symbol layer every shifted character
+sits directly below its unshifted key.
+
+**Modifiers work both ways.** A *tap* on Ctrl, Alt or Shift arms it for the
+next key; a *hold* keeps it pressed for as long as the finger is down, like a
+real key — which is what a game expects from its fire and strafe keys while
+the other thumb is on the arrows.
+
+### Three widths, three layouts
+
+The layout is chosen from the width of the letterbox bar (`VirtualKeyboardView.kt`):
+
+| Bar | Layout |
+|---|---|
+| ≥ 116 dp | **pads** — the two console pads |
+| ≥ 56 dp | **columns** — one key column per side (arrows left, action keys right) plus the fold-up QWERTY |
+| below that | **bar** — a slim strip along the bottom (portrait, 4:3 tablets) |
+
+### Measured on the emulator (API 37, release APK, 420 dpi)
+
+| Display | bar | letter key | key height | layout |
+|---|---|---|---|---|
+| 2400×1080 (20:9) | 183 dp | **32.8 dp** | 44 dp | pads |
+| 2160×1080 (18:9) | 137 dp | **23.6 dp** | 44 dp | pads |
+
+The 18:9 case was checked by switching the emulator to a 2160×1080 display
+(`adb shell wm size 1080x2160`). All three layers switch as drawn, and the
+keys type the right characters — `abc` came out as `abc`.
+
+**23.6 dp is tight.** It is about 2.9 % of the screen width, where a normal
+phone keyboard key is roughly twice that. The D-pad and the action keys are
+unaffected; it is the letters that are small.
+
+### Verification
+
+Screenshots of all three layers, at both widths:
+
+* `porting/screenshots/android-n7-pads-letters.png` — 20:9
+* `porting/screenshots/android-n7-pads-symbols.png` — 20:9
+* `porting/screenshots/android-n7-pads-functions.png` — 20:9
+* `porting/screenshots/android-n7-pads-18x9-letters.png` — 18:9
+* `porting/screenshots/android-n7-pads-18x9-symbols.png` — 18:9
+* `porting/screenshots/android-n7-pads-18x9-functions.png` — 18:9
+
+The design itself, with the to-scale drawings of the three layers and the
+notes it was built from, is in
+[`porting/KEYBOARD-PADS-DESIGN.md`](KEYBOARD-PADS-DESIGN.md).
+
+### No native change
+
+The layout is pure app-layer work: the SDL surface stays full-screen and the
+keyboard only uses the letterbox bars beside the picture. The picture is
+centred, so the native picture-position hook of an earlier experiment is not
+needed — `libdosbox.so` of 1.0.0.8 is used unchanged.
+
+---
+
 ## 8. Release (production) APK
 
 The debug build is signed with an auto-generated key and is

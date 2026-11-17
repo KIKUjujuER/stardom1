@@ -3,9 +3,11 @@ package com.whereq.dosbox
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.drawable.GradientDrawable
+import android.os.SystemClock
 import android.util.Log
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
 import android.widget.FrameLayout
@@ -30,17 +32,32 @@ import android.widget.TextView
  * of SDL key events, exactly like the hardware keyboard.
  *
  * **Layout.** This view is a transparent full-screen overlay on top of the SDL
- * surface. The DOS picture is 4:3 and letterboxed, so in landscape there are
- * black bars down the left and right; the always-on control keys live in those
- * bars (two vertical columns), leaving the whole DOS picture in the middle
- * unobstructed. When the bars are too narrow (portrait), the controls fall back
- * to a slim bottom bar. The empty centre does not intercept touches, so a tap
- * there still reaches DOSBox as a mouse click. A full QWERTY panel folds up from
- * the bottom for typing.
+ * surface. The DOS picture is 4:3 and centred, so in landscape a phone has a
+ * black bar on either side of it. The keys live in those bars, laid out like a
+ * handheld console — the picture in the middle, one hand on each side:
  *
- * Modifier keys (Shift, Ctrl, Alt) are *sticky*: tapping one arms it, it stays
- * pressed until the next ordinary key is typed, which is the behaviour a touch
- * screen can offer without a second finger.
+ *  - **pads** (a normal landscape phone): the *left pad* has the left half of
+ *    a split QWERTY on top and the arrow keys, the D-pad, under the left
+ *    thumb; the *right pad* has the right half of the QWERTY on top and the
+ *    action keys — Ctrl, Alt, Shift, Space, Enter — under the right thumb.
+ *    The QWERTY halves switch between three layers (letters, symbols,
+ *    function keys). Nothing covers the DOS picture, so a game is steered
+ *    with the left thumb and fired with the right, and typing is two-thumbed;
+ *  - **columns** (a 16:9 screen, bars too narrow for half a keyboard): one
+ *    column of keys per side, arrows left and action keys right; the full
+ *    QWERTY folds up from the bottom on demand;
+ *  - **bar** (portrait, or a 4:3 tablet): a slim bar at the bottom plus the
+ *    fold-up QWERTY.
+ *
+ * The part of the overlay above the DOS picture does not intercept touches, so
+ * a tap there still reaches DOSBox as a mouse click.
+ *
+ * **Modifiers** (Shift, Ctrl, Alt) work both ways a touch screen needs:
+ *  - a *tap* arms the modifier; it stays pressed until the next ordinary key
+ *    is typed (or until it is tapped again) — one-finger typing of `Ctrl`+`C`;
+ *  - a *hold* keeps it pressed for exactly as long as the finger is down, like
+ *    a real key — which is what a game wants from Ctrl (fire) or Alt (strafe)
+ *    while the other thumb is on the arrows.
  */
 class VirtualKeyboardView(context: Context) : FrameLayout(context) {
 
@@ -65,39 +82,301 @@ class VirtualKeyboardView(context: Context) : FrameLayout(context) {
     /** key name -> numeric SDL scancode. */
     private val scancodes = HashMap<String, Int>()
 
-    /** key name of a sticky modifier -> is it currently pressed. */
+    /** key name of a modifier -> is it currently pressed inside DOSBox. */
     private val armed = HashMap<String, Boolean>()
 
-    /** key name -> the view, so the armed state can be shown. */
-    private val modifierViews = HashMap<String, TextView>()
+    /** Modifiers a finger is on right now. */
+    private val held = HashSet<String>()
 
-    private lateinit var panel: LinearLayout
-    private lateinit var symbolScroll: HorizontalScrollView
+    /** Held modifiers that an ordinary key was typed with. */
+    private val usedWhileHeld = HashSet<String>()
+
+    /** Held modifiers whose touch *dis*armed them, so lifting must not re-arm. */
+    private val disarmedByTouch = HashSet<String>()
+
+    /** key name of a modifier -> when the finger came down (uptimeMillis). */
+    private val heldSince = HashMap<String, Long>()
+
+    /** key name -> every view showing that modifier, to show the armed state. */
+    private val modifierViews = HashMap<String, ArrayList<TextView>>()
+
+    /** The fold-up QWERTY; null in the pads layout, which does not need one. */
+    private var panel: LinearLayout? = null
+    private var symbolScroll: HorizontalScrollView? = null
     private var toggleButton: TextView? = null
     private var panelVisible = false
 
-    /** The current control views (edge columns or bottom bar), so they can be
-     *  swapped when the orientation / letterbox changes. */
-    private val controlViews = ArrayList<View>()
+    /**
+     * The key layers of the pads, indexed by `LAYER_*`: each has a left and a
+     * right half. Empty outside the pads layout.
+     */
+    private val layerViews = ArrayList<ArrayList<View>>()
+    private var layer = LAYER_LETTERS
+    private var symbolsKey: TextView? = null
+    private var functionsKey: TextView? = null
 
-    /** null = not built yet; true = side columns; false = bottom bar. */
-    private var usingSideBars: Boolean? = null
+    /** `MODE_*` of the layout that is currently built, or -1 for none yet. */
+    private var mode = -1
+
+    /** Width of one letterbox bar the current layout was built for. */
+    private var builtBarWidth = -1
 
     init {
         // The overlay itself must never swallow a touch over the DOS picture:
-        // it is not clickable, so a tap on the empty centre falls through to the
+        // it is not clickable, so a tap on the empty part falls through to the
         // SDL surface below and becomes a DOS mouse click.
         isClickable = false
-        buildPanel()
-        // The control keys are laid out in onSizeChanged(), once the letterbox
-        // geometry (and thus the black-bar width) is known.
+        // Two thumbs on two different keys are two independent touches.
+        isMotionEventSplittingEnabled = true
+        // The keys are laid out in onSizeChanged(), once the geometry (and thus
+        // the width of the bars next to the DOS picture) is known.
     }
 
     /* ------------------------------------------------------------- layout */
 
-    /** Builds the foldable full-size keyboard (a bottom-centre overlay). */
+    /**
+     * Rebuilds the keys for the current geometry — see the class comment for
+     * the three layouts.
+     */
+    private fun rebuildControls(w: Int, h: Int) {
+        if (w <= 0 || h <= 0) {
+            return
+        }
+        // The DOS picture is 4:3 and fills the height in landscape, so each side
+        // bar is this wide. (Matches DOSBox's own letterbox clip.)
+        val barWidth = if (w > h) maxOf(0, (w - h * 4 / 3) / 2) else 0
+
+        val newMode = when {
+            barWidth >= dp(DP_MIN_PAD_WIDTH) -> MODE_PADS
+            barWidth >= dp(DP_MIN_COLUMN_WIDTH) -> MODE_COLUMNS
+            else -> MODE_BAR
+        }
+        if (newMode == mode && barWidth == builtBarWidth) {
+            return
+        }
+
+        // Start from nothing. A modifier that is still pressed inside DOSBox
+        // has to be released first, its key is about to disappear.
+        releaseModifiers(force = true)
+        removeAllViews()
+        modifierViews.clear()
+        armed.clear()
+        held.clear()
+        usedWhileHeld.clear()
+        disarmedByTouch.clear()
+        heldSince.clear()
+        layerViews.clear()
+        layer = LAYER_LETTERS
+        symbolsKey = null
+        functionsKey = null
+        panel = null
+        symbolScroll = null
+        toggleButton = null
+        panelVisible = false
+
+        when (newMode) {
+            MODE_PADS -> {
+                // No wider than a thumb can cover: on a very wide screen the
+                // pads hug the edges and the rest of the bar stays black.
+                val padWidth = minOf(barWidth, dp(DP_MAX_PAD_WIDTH))
+                addView(buildPad(left = true), LayoutParams(padWidth, LayoutParams.MATCH_PARENT).apply {
+                    gravity = Gravity.START
+                })
+                addView(buildPad(left = false), LayoutParams(padWidth, LayoutParams.MATCH_PARENT).apply {
+                    gravity = Gravity.END
+                })
+            }
+            MODE_COLUMNS -> {
+                buildPanel()
+                val columnWidth = minOf(barWidth, dp(DP_MAX_COLUMN_WIDTH))
+                addView(buildColumn(left = true), LayoutParams(columnWidth, LayoutParams.MATCH_PARENT).apply {
+                    gravity = Gravity.START
+                })
+                addView(buildColumn(left = false), LayoutParams(columnWidth, LayoutParams.MATCH_PARENT).apply {
+                    gravity = Gravity.END
+                })
+            }
+            else -> {
+                buildPanel()
+                addView(buildBottomBar(), LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
+                    gravity = Gravity.BOTTOM
+                })
+            }
+        }
+        mode = newMode
+        builtBarWidth = barWidth
+    }
+
+    /* --------------------------------------------------------------- pads */
+
+    /**
+     * One of the two pads beside the DOS picture.
+     *
+     * Top to bottom: a row of utility keys, four rows of the split QWERTY that
+     * switch between three layers, then the thumb block — the arrow keys on
+     * the left pad, the action keys on the right one. The rows share the full
+     * height, and the thumb block gets the taller keys.
+     */
+    private fun buildPad(left: Boolean): LinearLayout {
+        val pad = LinearLayout(context)
+        pad.orientation = LinearLayout.VERTICAL
+        pad.isMotionEventSplittingEnabled = true
+        pad.setPadding(dp(2), dp(2), dp(2), dp(2))
+        pad.setBackgroundColor(COLOR_TOOLBAR)
+
+        val top = LinearLayout(context)
+        top.orientation = LinearLayout.HORIZONTAL
+        if (left) {
+            top.addView(fill(actionKey("File", COLOR_KEY_ACCENT) { launcherListener?.onFilesRequested() }, 1f, false))
+            top.addView(fill(makeKey("Esc", "esc", "c", "k", 0, COLOR_KEY_DARK), 1f, false))
+            top.addView(fill(makeKey("Tab", "tab", "c", "k", 0, COLOR_KEY_DARK), 1f, false))
+        } else {
+            symbolsKey = actionKey("#+=", COLOR_KEY_DARK) {
+                showLayer(if (layer == LAYER_SYMBOLS) LAYER_LETTERS else LAYER_SYMBOLS)
+            }
+            functionsKey = actionKey("Fn", COLOR_KEY_DARK) {
+                showLayer(if (layer == LAYER_FUNCTIONS) LAYER_LETTERS else LAYER_FUNCTIONS)
+            }
+            top.addView(fill(symbolsKey!!, 1f, false))
+            top.addView(fill(functionsKey!!, 1f, false))
+            top.addView(fill(makeKey("⌫", "bspace", "c", "k", 0, COLOR_KEY_DARK), 1f, false, 16f))
+        }
+        pad.addView(fillRow(top))
+
+        val layers = FrameLayout(context)
+        layers.isMotionEventSplittingEnabled = true
+        val halves = if (left) LEFT_LAYERS else RIGHT_LAYERS
+        halves.forEachIndexed { index, rows ->
+            val view = buildLayer(rows)
+            view.visibility = if (index == LAYER_LETTERS) VISIBLE else GONE
+            while (layerViews.size <= index) {
+                layerViews.add(ArrayList())
+            }
+            layerViews[index].add(view)
+            layers.addView(view, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        }
+        pad.addView(layers, LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, 0, 4f))
+
+        val thumb = LinearLayout(context)
+        thumb.orientation = LinearLayout.VERTICAL
+        thumb.isMotionEventSplittingEnabled = true
+        if (left) {
+            // The D-pad: up on top, left and right side by side, down below.
+            val middle = LinearLayout(context)
+            middle.orientation = LinearLayout.HORIZONTAL
+            middle.addView(fill(makeKey("←", "left", "c", "k", 0), 1f, false, 20f))
+            middle.addView(fill(makeKey("→", "right", "c", "k", 0), 1f, false, 20f))
+            thumb.addView(fill(makeKey("↑", "up", "c", "k", 0), 1f, true, 20f))
+            thumb.addView(fillRow(middle))
+            thumb.addView(fill(makeKey("↓", "down", "c", "k", 0), 1f, true, 20f))
+        } else {
+            // The action keys: what DOS games fire, jump, run and confirm with.
+            val upper = LinearLayout(context)
+            upper.orientation = LinearLayout.HORIZONTAL
+            upper.addView(fill(makeKey("Alt", "lalt", "c", "m", 0), 1f, false, 13f))
+            upper.addView(fill(makeKey("Ctrl", "lctrl", "c", "m", 0), 1f, false, 13f))
+            val lower = LinearLayout(context)
+            lower.orientation = LinearLayout.HORIZONTAL
+            lower.addView(fill(makeKey("Shift", "lshift", "c", "m", 0), 1f, false, 13f))
+            lower.addView(fill(makeKey("Space", "space", "c", "k", 0), 1f, false, 13f))
+            thumb.addView(fillRow(upper))
+            thumb.addView(fillRow(lower))
+            thumb.addView(fill(makeKey("Enter", "enter", "c", "k", 0, COLOR_KEY_DARK), 1f, true, 13f))
+        }
+        pad.addView(thumb, LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, 0, 3.6f))
+        return pad
+    }
+
+    /**
+     * One half of a layer. A row is a list of keys separated by blanks; a key
+     * is `label`, `label:name` or `label:name:kind` (see [makeKey]) — the name
+     * defaults to the label and the kind to an ordinary key. `_` is a gap as
+     * wide as a key.
+     */
+    private fun buildLayer(rows: Array<String>): LinearLayout {
+        val column = LinearLayout(context)
+        column.orientation = LinearLayout.VERTICAL
+        column.isMotionEventSplittingEnabled = true
+        for (spec in rows) {
+            val row = LinearLayout(context)
+            row.orientation = LinearLayout.HORIZONTAL
+            row.isMotionEventSplittingEnabled = true
+            for (item in spec.split(' ')) {
+                if (item == "_") {
+                    row.addView(View(context), LinearLayout.LayoutParams(0, 1, 1f))
+                    continue
+                }
+                // "::" would be ambiguous, so the colon key is spelled out below.
+                val parts = item.split(':')
+                val label = if (parts[0] == "colon") ":" else parts[0]
+                val name = parts.getOrElse(1) { label }
+                val kind = parts.getOrElse(2) { "k" }
+                val size = if (label.length == 1) 16f else 11f
+                row.addView(fill(makeKey(label, name, "c", kind, 0), 1f, false, size))
+            }
+            column.addView(fillRow(row))
+        }
+        return column
+    }
+
+    private fun showLayer(which: Int) {
+        layer = which
+        layerViews.forEachIndexed { index, halves ->
+            halves.forEach { it.visibility = if (index == which) VISIBLE else GONE }
+        }
+        symbolsKey?.text = if (which == LAYER_SYMBOLS) "abc" else "#+="
+        symbolsKey?.background =
+            keyBackground(if (which == LAYER_SYMBOLS) COLOR_KEY_ARMED else COLOR_KEY_DARK)
+        functionsKey?.background =
+            keyBackground(if (which == LAYER_FUNCTIONS) COLOR_KEY_ARMED else COLOR_KEY_DARK)
+    }
+
+    /**
+     * Makes [view] share its parent's space instead of having a fixed size:
+     * the height of a column when [vertical], the width of a row otherwise.
+     */
+    private fun <T : View> fill(view: T, weight: Float, vertical: Boolean, textSp: Float = 0f): T {
+        val lp = if (vertical) {
+            LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, 0, weight)
+        } else {
+            LinearLayout.LayoutParams(0, LayoutParams.MATCH_PARENT, weight)
+        }
+        val margin = dp(1)
+        lp.setMargins(margin, margin, margin, margin)
+        view.layoutParams = lp
+        if (textSp > 0f && view is TextView) {
+            view.setTextSize(TypedValue.COMPLEX_UNIT_SP, textSp)
+        }
+        return view
+    }
+
+    /** Makes a row of keys take an equal share of its column's height. */
+    private fun fillRow(row: LinearLayout): LinearLayout {
+        row.isMotionEventSplittingEnabled = true
+        row.layoutParams = LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f)
+        return row
+    }
+
+    /** A button that is not a DOS key: it runs [action] when tapped. */
+    private fun actionKey(label: String, color: Int, action: () -> Unit): TextView {
+        val view = makeButton(label, "", "c", "k", 0)
+        view.background = keyBackground(color)
+        if (color == COLOR_KEY_ACCENT) {
+            view.setTextColor(COLOR_TEXT_ON_ACCENT)
+        }
+        view.setOnClickListener { action() }
+        return view
+    }
+
+    /* -------------------------------------------------------- fold-up panel */
+
+    /**
+     * Builds the foldable full-size keyboard (a bottom-centre overlay). Only the
+     * layouts without the pads have it.
+     */
     private fun buildPanel() {
-        panel = LinearLayout(context)
+        val panel = LinearLayout(context)
+        this.panel = panel
         panel.orientation = LinearLayout.VERTICAL
         panel.setPadding(dp(4), dp(4), dp(4), dp(4))
         panel.setBackgroundColor(COLOR_PANEL)
@@ -227,7 +506,7 @@ class VirtualKeyboardView(context: Context) : FrameLayout(context) {
 
         // The shifted characters of the US layout, for the keys that a phone
         // keyboard would otherwise hide.
-        symbolScroll = scrollableRow(
+        val symbolScroll = scrollableRow(
             arrayOf(
                 arrayOf("~", "grave", "f", "s"),
                 arrayOf("!", "1", "f", "s"),
@@ -252,37 +531,43 @@ class VirtualKeyboardView(context: Context) : FrameLayout(context) {
                 arrayOf("?", "slash", "f", "s"),
             )
         )
+        this.symbolScroll = symbolScroll
         symbolScroll.visibility = GONE
         panel.addView(symbolScroll)
 
         panel.visibility = GONE
-        val lp = LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
+        // About as wide as the screen is short, so the keys do not become
+        // absurdly wide in landscape.
+        val metrics = resources.displayMetrics
+        val panelWidth = minOf(metrics.widthPixels, metrics.heightPixels) * 92 / 100
+        val lp = LayoutParams(panelWidth, LayoutParams.WRAP_CONTENT)
         lp.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
         addView(panel, lp)
     }
 
-    /* ----------------------------------------------------------- controls */
 
-    /** Keys for the left edge column (modifiers + editing). */
+    /* ------------------------------------------------- columns and the bar */
+
+    /** Keys of the left column, above the arrow cluster. */
     private val leftColumnKeys = arrayOf(
+        arrayOf("File", "", "file"),
         arrayOf("⌨", "", "toggle"),
         arrayOf("Esc", "esc", "k"),
         arrayOf("Tab", "tab", "k"),
-        arrayOf("Ctrl", "lctrl", "m"),
-        arrayOf("Alt", "lalt", "m"),
-        arrayOf("Shift", "lshift", "m"),
-        arrayOf("Bks", "bspace", "k"),
-        arrayOf("«", "", "symbols"),
     )
 
-    /** Keys for the right edge column (launcher + enter/space). */
+    /** Keys of the right column. */
     private val rightColumnKeys = arrayOf(
-        arrayOf("File", "", "file"),
-        arrayOf("Ent", "enter", "k"),
+        arrayOf("«", "", "symbols"),
+        arrayOf("Bks", "bspace", "k"),
+        arrayOf("Alt", "lalt", "m"),
+        arrayOf("Ctrl", "lctrl", "m"),
+        arrayOf("Shift", "lshift", "m"),
         arrayOf("Space", "space", "k"),
+        arrayOf("Ent", "enter", "k"),
     )
 
-    /** All keys, for the portrait bottom-bar fallback. */
+    /** All keys, for the bottom bar. */
     private val bottomBarKeys = arrayOf(
         arrayOf("⌨", "", "toggle"),
         arrayOf("File", "", "file"),
@@ -302,106 +587,45 @@ class VirtualKeyboardView(context: Context) : FrameLayout(context) {
     )
 
     /**
-     * Rebuilds the control keys for the current geometry: two vertical columns
-     * in the left/right letterbox bars when they are wide enough (landscape), or
-     * a slim bottom bar otherwise (portrait).
+     * One column of the layout without pads, centred vertically for thumb
+     * reach: the arrows on the left, the action keys on the right.
      */
-    private fun rebuildControls(w: Int, h: Int) {
-        // The DOS picture is 4:3 and fills the height in landscape, so each side
-        // bar is this wide. (Matches DOSBox's own letterbox clip.)
-        val barWidth = if (w > h) (w - h * 4 / 3) / 2 else 0
-        val sideBars = barWidth >= dp(56)
-
-        // Keep a column no wider than needed, so keys stay a comfortable size and
-        // sit at the very edge (the rest of the bar stays black).
-        val columnWidth = minOf(barWidth, dp(132))
-
-        if (usingSideBars == sideBars && controlViews.isNotEmpty()) {
-            if (sideBars) {
-                controlViews.forEach { it.layoutParams = (it.layoutParams as LayoutParams).apply { width = columnWidth } }
-            }
-            return
-        }
-
-        // Rebuild: the modifier views are about to be discarded.
-        controlViews.forEach { removeView(it) }
-        controlViews.clear()
-        modifierViews.clear()
-        armed.clear()
-        toggleButton = null
-
-        if (sideBars) {
-            val left = buildColumn(leftColumnKeys)
-            val right = buildRightColumn()
-            addView(left, LayoutParams(columnWidth, LayoutParams.MATCH_PARENT).apply {
-                gravity = Gravity.START or Gravity.CENTER_VERTICAL
-            })
-            addView(right, LayoutParams(columnWidth, LayoutParams.MATCH_PARENT).apply {
-                gravity = Gravity.END or Gravity.CENTER_VERTICAL
-            })
-            controlViews.add(left)
-            controlViews.add(right)
-        } else {
-            val bar = buildBottomBar()
-            addView(bar, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
-                gravity = Gravity.BOTTOM
-            })
-            controlViews.add(bar)
-        }
-        usingSideBars = sideBars
-    }
-
-    /** A vertical column of full-width keys, centred vertically for thumb reach. */
-    private fun buildColumn(keys: Array<Array<String>>): LinearLayout {
+    private fun buildColumn(left: Boolean): LinearLayout {
         val column = LinearLayout(context)
         column.orientation = LinearLayout.VERTICAL
         column.gravity = Gravity.CENTER_VERTICAL
         column.setPadding(dp(3), dp(3), dp(3), dp(3))
         column.setBackgroundColor(COLOR_TOOLBAR)
-        for (k in keys) {
+        for (k in if (left) leftColumnKeys else rightColumnKeys) {
             column.addView(makeControlKey(k[0], k[1], "c", k[2], DP_KEY_HEIGHT))
+        }
+        if (left) {
+            column.addView(buildArrowCluster())
         }
         return column
     }
 
-    /** The right edge column: the launcher, enter/space and the arrow cluster. */
-    private fun buildRightColumn(): LinearLayout {
-        val column = buildColumn(rightColumnKeys)
-        column.addView(buildArrowCluster())
-        return column
-    }
-
     /**
-     * The four arrow keys in the shape of a real keyboard.
-     *
-     * The up arrow sits on its own on top, left and right are side by side in
-     * the middle and the down arrow is on its own at the bottom — the
-     * inverted-T the fingers already know, instead of four keys in a line
-     * where the eye has to read each one.
+     * The four arrow keys: the up arrow on its own on top, left and right side
+     * by side in the middle and the down arrow on its own at the bottom,
+     * instead of four keys in a line where the eye has to read each one.
      */
     private fun buildArrowCluster(): LinearLayout {
         val cluster = LinearLayout(context)
         cluster.orientation = LinearLayout.VERTICAL
-        cluster.addView(arrowKey("↑", "up"))
+        cluster.addView(makeControlKey("↑", "up", "c", "k", DP_KEY_HEIGHT))
 
         val middle = LinearLayout(context)
         middle.orientation = LinearLayout.HORIZONTAL
-        middle.addView(arrowKey("←", "left", "w1"))
-        middle.addView(arrowKey("→", "right", "w1"))
+        middle.addView(makeControlKey("←", "left", "w1", "k", DP_KEY_HEIGHT))
+        middle.addView(makeControlKey("→", "right", "w1", "k", DP_KEY_HEIGHT))
         cluster.addView(middle)
 
-        cluster.addView(arrowKey("↓", "down"))
+        cluster.addView(makeControlKey("↓", "down", "c", "k", DP_KEY_HEIGHT))
         return cluster
     }
 
-    /**
-     * One arrow key of the cluster. [size] is `"c"` for a full-width key and
-     * `"w1"` for one of the two that share a row.
-     */
-    private fun arrowKey(label: String, keyName: String, size: String = "c"): TextView =
-        makeControlKey(label, keyName, size, "k", DP_KEY_HEIGHT)
-
-    /** The portrait fallback: all control keys weighted across a bottom strip. */
+    /** The portrait layout: all control keys weighted across a bottom strip. */
     private fun buildBottomBar(): LinearLayout {
         val bar = LinearLayout(context)
         bar.orientation = LinearLayout.HORIZONTAL
@@ -476,7 +700,8 @@ class VirtualKeyboardView(context: Context) : FrameLayout(context) {
      * Builds one key that reacts to touch.
      *
      * @param size `"w<weight>"` weighted, `"c"` full column width, `"f"` fixed.
-     * @param kind `"k"` ordinary, `"m"` sticky modifier, `"s"` key that needs Shift.
+     * @param kind `"k"` ordinary, `"m"` modifier, `"s"` key that needs Shift.
+     * @param color the key's resting colour.
      */
     @SuppressLint("ClickableViewAccessibility")
     private fun makeKey(
@@ -485,14 +710,27 @@ class VirtualKeyboardView(context: Context) : FrameLayout(context) {
         size: String,
         kind: String,
         heightDp: Int,
+        color: Int = COLOR_KEY,
     ): TextView {
         val kindCode = kindOf(kind)
         val view = makeButton(label, keyName, size, kind, heightDp)
+        view.background = keyBackground(color)
 
         view.setOnTouchListener { _, event ->
             when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN -> keyDown(keyName, kindCode)
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> keyUp(keyName, kindCode)
+                MotionEvent.ACTION_DOWN -> {
+                    view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                    if (kindCode != KIND_MODIFIER) {
+                        view.background = keyBackground(COLOR_KEY_PRESSED)
+                    }
+                    keyDown(keyName, kindCode)
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    if (kindCode != KIND_MODIFIER) {
+                        view.background = keyBackground(color)
+                    }
+                    keyUp(keyName, kindCode)
+                }
             }
             true
         }
@@ -538,7 +776,7 @@ class VirtualKeyboardView(context: Context) : FrameLayout(context) {
         view.layoutParams = lp
 
         if ("m" == kind) {
-            modifierViews[keyName] = view
+            modifierViews.getOrPut(keyName) { ArrayList() }.add(view)
             armed[keyName] = false
         }
         return view
@@ -558,9 +796,22 @@ class VirtualKeyboardView(context: Context) : FrameLayout(context) {
     /** A key went down. */
     private fun keyDown(keyName: String, kind: Int) {
         if (kind == KIND_MODIFIER) {
-            val now = !isArmed(keyName)
-            setArmed(keyName, now)
-            push(keyName, now)
+            if (keyName in held) {
+                // The same modifier is shown twice (column and panel) and a
+                // finger is already on the other one.
+                return
+            }
+            held.add(keyName)
+            heldSince[keyName] = SystemClock.uptimeMillis()
+            if (isArmed(keyName)) {
+                // A second tap takes an armed modifier back.
+                setArmed(keyName, false)
+                push(keyName, false)
+                disarmedByTouch.add(keyName)
+            } else {
+                setArmed(keyName, true)
+                push(keyName, true)
+            }
             refreshModifier(keyName)
             return
         }
@@ -577,17 +828,35 @@ class VirtualKeyboardView(context: Context) : FrameLayout(context) {
     /** A key went up. */
     private fun keyUp(keyName: String, kind: Int) {
         if (kind == KIND_MODIFIER) {
-            // Sticky: the modifier stays pressed until the next key is typed.
+            if (!held.remove(keyName)) {
+                return
+            }
+            val heldFor = SystemClock.uptimeMillis() - (heldSince.remove(keyName) ?: 0L)
+            val used = usedWhileHeld.remove(keyName)
+            if (disarmedByTouch.remove(keyName)) {
+                return
+            }
+            // A short tap leaves the modifier armed for the next key. Held like
+            // a real key — long, or with another key typed meanwhile — it is
+            // released with the finger.
+            if (isArmed(keyName) && (used || heldFor >= HOLD_MILLIS)) {
+                setArmed(keyName, false)
+                push(keyName, false)
+                refreshModifier(keyName)
+            }
             return
         }
         if (kind == KIND_SHIFTED) {
             push(keyName, false)
-            push(SHIFT, false)
-            return
+            // Leave Shift alone if the user is holding it down anyway.
+            if (!isArmed(SHIFT)) {
+                push(SHIFT, false)
+            }
+        } else {
+            push(keyName, false)
         }
-        push(keyName, false)
-        // A sticky modifier applies to exactly one character.
-        releaseModifiers()
+        // An armed modifier applies to exactly one key.
+        releaseModifiers(force = false)
     }
 
     private fun isArmed(keyName: String): Boolean = armed[keyName] == true
@@ -596,19 +865,28 @@ class VirtualKeyboardView(context: Context) : FrameLayout(context) {
         armed[keyName] = value
     }
 
-    private fun releaseModifiers() {
+    /**
+     * Releases the armed modifiers after a key was typed. One a finger is
+     * still holding stays pressed (and is remembered as used) unless [force]d.
+     */
+    private fun releaseModifiers(force: Boolean) {
         for (key in armed.keys.toList()) {
-            if (armed[key] == true) {
-                push(key, false)
-                armed[key] = false
-                refreshModifier(key)
+            if (armed[key] != true) {
+                continue
             }
+            if (!force && key in held) {
+                usedWhileHeld.add(key)
+                continue
+            }
+            push(key, false)
+            armed[key] = false
+            refreshModifier(key)
         }
     }
 
     private fun refreshModifier(keyName: String) {
-        modifierViews[keyName]?.background =
-            keyBackground(if (isArmed(keyName)) COLOR_KEY_ARMED else COLOR_KEY)
+        val color = if (isArmed(keyName)) COLOR_KEY_ARMED else COLOR_KEY
+        modifierViews[keyName]?.forEach { it.background = keyBackground(color) }
     }
 
     /** Pushes a key press or release into DOSBox. */
@@ -640,6 +918,7 @@ class VirtualKeyboardView(context: Context) : FrameLayout(context) {
     }
 
     private fun togglePanel() {
+        val panel = this.panel ?: return
         panelVisible = !panelVisible
         panel.visibility = if (panelVisible) VISIBLE else GONE
         toggleButton?.background = keyBackground(if (panelVisible) COLOR_KEY_ARMED else COLOR_KEY)
@@ -650,30 +929,17 @@ class VirtualKeyboardView(context: Context) : FrameLayout(context) {
     }
 
     private fun toggleSymbols() {
-        val visible = symbolScroll.visibility == VISIBLE
-        symbolScroll.visibility = if (visible) GONE else VISIBLE
+        val symbols = symbolScroll ?: return
+        symbols.visibility = if (symbols.visibility == VISIBLE) GONE else VISIBLE
     }
 
-    /**
-     * Rebuilds the edge controls for the new size, and keeps the QWERTY panel
-     * about as wide as the screen is short so its keys do not become absurdly
-     * wide in landscape.
-     */
+    /** Lays the keys out again for the new size. */
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         // Defer the hierarchy change: adding child views *during* onSizeChanged
         // (a layout pass) leaves them unmeasured and invisible. post() runs the
-        // rebuild after this pass, so the new columns are laid out normally.
-        post {
-            rebuildControls(width, height)
-            val metrics = resources.displayMetrics
-            val panelWidth = minOf(metrics.widthPixels, metrics.heightPixels) * 92 / 100
-            val lp = panel.layoutParams as LayoutParams
-            if (lp.width != panelWidth) {
-                lp.width = panelWidth
-                panel.layoutParams = lp
-            }
-        }
+        // rebuild after this pass, so the new views are laid out normally.
+        post { rebuildControls(width, height) }
     }
 
     private fun dp(value: Int): Int = TypedValue.applyDimension(
@@ -686,21 +952,87 @@ class VirtualKeyboardView(context: Context) : FrameLayout(context) {
         /** Ordinary key: pressed and released again straight away. */
         private const val KIND_KEY = 0
 
-        /** Sticky modifier: tapping it presses/releases the real modifier key. */
+        /** Modifier: a tap arms it for the next key, a hold works like a key. */
         private const val KIND_MODIFIER = 1
 
         /** Key that needs Shift, e.g. "!" — Shift is wrapped around it. */
         private const val KIND_SHIFTED = 2
 
+        /** A modifier down for at least this long was held, not tapped. */
+        private const val HOLD_MILLIS = 350L
+
+        private const val MODE_PADS = 0
+        private const val MODE_COLUMNS = 1
+        private const val MODE_BAR = 2
+
+        private const val LAYER_LETTERS = 0
+        private const val LAYER_SYMBOLS = 1
+        private const val LAYER_FUNCTIONS = 2
+
+        /**
+         * The left halves of the three layers, indexed by `LAYER_*`. The split
+         * is where a touch typist's hands split a keyboard.
+         */
+        private val LEFT_LAYERS = arrayOf(
+            arrayOf("1 2 3 4 5", "q w e r t", "a s d f g", "z x c v b"),
+            arrayOf(
+                "1 2 3 4 5",
+                "!:1:s @:2:s #:3:s $:4:s %:5:s",
+                "-:minus =:equals [:lbracket ]:rbracket `:grave",
+                "_:minus:s +:equals:s {:lbracket:s }:rbracket:s ~:grave:s",
+            ),
+            arrayOf("F1:f1 F2:f2 F3:f3", "F4:f4 F5:f5 F6:f6", "F7:f7 F8:f8 F9:f9", "F10:f10 F11:f11 F12:f12"),
+        )
+
+        /**
+         * The right halves. The letters carry `: . / \` along, so a DOS path
+         * needs no layer switch; on the symbol layer every shifted character
+         * of the last row sits right below its unshifted key.
+         */
+        private val RIGHT_LAYERS = arrayOf(
+            arrayOf(
+                "6 7 8 9 0",
+                "y u i o p",
+                "h j k l colon:semicolon:s",
+                "n m .:period /:slash \\:backslash",
+            ),
+            arrayOf(
+                "6 7 8 9 0",
+                "^:6:s &:7:s *:8:s (:9:s ):0:s",
+                ";:semicolon ':quote ,:comma \\:backslash |:backslash:s",
+                "colon:semicolon:s \":quote:s <:comma:s >:period:s ?:slash:s",
+            ),
+            arrayOf(
+                "Ins:insert Home:home PgUp:pageup",
+                "Del:delete End:end PgDn:pagedown",
+                "Caps:capslock PrtSc:printscreen Pause:pause",
+                "_",
+            ),
+        )
+
         private const val COLOR_PANEL = 0xD0202024.toInt()
         private const val COLOR_TOOLBAR = 0xC0202024.toInt()
         private const val COLOR_KEY = 0xFF3C4043.toInt()
+
+        /** Keys that are not characters (Enter, Backspace, the layer keys). */
+        private const val COLOR_KEY_DARK = 0xFF2A2D30.toInt()
+        private const val COLOR_KEY_PRESSED = 0xFF5F6368.toInt()
         private const val COLOR_KEY_ARMED = 0xFF1A73E8.toInt()
 
         /** The launcher button is an action, not a key — it gets its own colour. */
         private const val COLOR_KEY_ACCENT = 0xFF8A6D00.toInt()
         private const val COLOR_TEXT = 0xFFE8EAED.toInt()
         private const val COLOR_TEXT_ON_ACCENT = 0xFFFFF3D6.toInt()
+
+        /** Below this a bar cannot hold five keys in a row. */
+        private const val DP_MIN_PAD_WIDTH = 116
+
+        /** A pad wider than this puts its inner keys out of a thumb's reach. */
+        private const val DP_MAX_PAD_WIDTH = 210
+
+        /** Below this a bar cannot hold even a column of keys. */
+        private const val DP_MIN_COLUMN_WIDTH = 56
+        private const val DP_MAX_COLUMN_WIDTH = 132
 
         private const val DP_KEY_HEIGHT = 34
         private const val DP_TOOL_KEY_HEIGHT = 30

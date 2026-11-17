@@ -1,0 +1,125 @@
+name: CI
+
+# The green bar before a release: the native emulator is built from source
+# for all three ABIs and the app is packaged on top of it. The release itself
+# is release.yml, which runs on the version tag.
+#
+# The native build is the expensive part (SDL2 + the whole DOSBox core, three
+# times), so the ABIs are built in parallel matrix jobs and the libraries are
+# handed to the packaging job as artifacts.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  native:
+    name: libdosbox.so (${{ matrix.abi }})
+    # Pinned: `ubuntu-latest` is a moving target. Pinning keeps the toolchain
+    # identical until we deliberately bump it.
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        abi: [arm64-v8a, armeabi-v7a, x86_64]
+    steps:
+      - uses: actions/checkout@v7
+
+      # nasm assembles the x86 parts of SDL2. Without it SDL2 falls back to
+      # the C versions, which still works but is not what the local build
+      # produces - keep the two identical.
+      - name: install the build tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq nasm
+
+      - uses: android-actions/setup-android@v3
+
+      - name: install the SDK packages
+        run: |
+          yes | sdkmanager --licenses >/dev/null
+          sdkmanager "platform-tools" "platforms;android-36" \
+                     "build-tools;36.0.0" "cmake;3.22.1" "ndk;27.1.12297006"
+
+      # The SDL2 sources are not committed (100+ MB of upstream code); this
+      # script makes the dependency reproducible.
+      - name: fetch the SDL2 sources
+        run: ./third_party/fetch-sdl2.sh
+
+      - name: build libdosbox.so
+        run: |
+          # env.sh resolves the NDK and cmake from the SDK; point it at the
+          # runner's SDK instead of the WSL-local one it defaults to.
+          export WQ_ANDROID_SDK="$ANDROID_SDK_ROOT"
+          . toolchain/env.sh
+          ./android/build-android.sh "${{ matrix.abi }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: libdosbox-${{ matrix.abi }}
+          path: build/android/${{ matrix.abi }}/libdosbox.so
+          if-no-files-found: error
+
+  apk:
+    name: app (debug APK)
+    needs: native
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      # AGP 8.7 needs JDK 17.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: android-actions/setup-android@v3
+
+      - name: install the SDK packages
+        run: |
+          yes | sdkmanager --licenses >/dev/null
+          sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
+      # The Gradle module stages the libraries out of build/android/<abi>/,
+      # so they have to be in exactly that place.
+      - name: collect the native libraries
+        uses: actions/download-artifact@v4
+        with:
+          name: libdosbox-arm64-v8a
+          path: build/android/arm64-v8a
+      - uses: actions/download-artifact@v4
+        with:
+          name: libdosbox-armeabi-v7a
+          path: build/android/armeabi-v7a
+      - uses: actions/download-artifact@v4
+        with:
+          name: libdosbox-x86_64
+          path: build/android/x86_64
+
+      - name: build the debug APK
+        run: ./android/gradlew --project-dir android :app:assembleDebug --console=plain
+
+      # A debug APK is enough here: it proves the app layer compiles against
+      # the freshly built native libraries. The signed release is release.yml.
+      - name: check that all three ABIs are in the APK
+        run: |
+          apk=android/app/build/outputs/apk/debug/app-debug.apk
+          unzip -l "$apk" | grep 'lib/.*/libdosbox.so'
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            unzip -l "$apk" | grep -q "lib/$abi/libdosbox.so" \
+              || { echo "::error::$abi is missing from the APK"; exit 1; }
+          done
+          echo "all three ABIs are packaged"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: whereq-dosbox-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
