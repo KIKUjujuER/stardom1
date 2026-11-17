@@ -39,7 +39,7 @@ New in 1.0.0.10
 
 | | |
 |---|---|
-| **The sound survives a save state** | The FM chip is now snapshotted **exactly** — the envelope, the wave phase and the LFO counter all come back with the state. A note continues from the middle of its attack instead of starting its attack again, so the music does not restart when a state is loaded. The PC speaker comes back silent instead of droning on its own. |
+| **The sound survives a save state** | The FM chip is now snapshotted **exactly** — the envelope, the wave phase and the LFO counter all come back with the state. In 1.0.0.9 the chip was not in the snapshot at all: the music kept playing while the rest of the machine was rewound, and it was gone entirely when a state was restored into a fresh process. Now the sound comes back with the machine, in the middle of the note rather than at the beginning of it. The PC speaker comes back silent instead of droning on its own. |
 | **A key no longer sticks** | Rotating the phone while a key was held left that key pressed in DOSBox for ever. Every key that is down is now released when the layout is rebuilt, and a modifier that is shown in two places (the pad and the fold-up panel) counts its fingers instead of assuming there is only one. |
 | **The launcher fits on the screen** | The **Files** panel measures the space it has and caps the game list to it, so a third game no longer pushes its buttons off the bottom edge where nothing could bring them back. |
 | **The desktop build links again** | The save-state code was missing from the autotools build and the two archives had a circular dependency — the desktop baseline compiles and links again, which is what keeps the emulator core honest. |
@@ -237,8 +237,8 @@ on the phone, so it survives quitting the app and rebooting the phone.
 
 The sound chips are part of the machine as well, and they are restored
 *exactly*: the FM chip is snapshotted as it is, so a note continues from the
-middle of its envelope instead of starting its attack again, and the PC
-speaker comes back silent instead of beeping on its own.
+middle of its envelope instead of starting over, and the PC speaker comes back
+silent instead of beeping on its own.
 
 **Resume** does what it says. It brings back the game that was played last,
 restored from its newest save state — the button names the game and the slot
