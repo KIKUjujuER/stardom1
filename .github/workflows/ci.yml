@@ -41,6 +41,12 @@ jobs:
           sudo apt-get install -y -qq nasm
 
       - uses: android-actions/setup-android@v3
+        with:
+          # The action's default is "tools platform-tools", and the "tools"
+          # package was removed from the SDK repository years ago - asking for
+          # it fails the whole job. platform-tools is all the action has to
+          # install; the real packages come in the step below.
+          packages: 'platform-tools'
 
       - name: install the SDK packages
         run: |
@@ -81,6 +87,8 @@ jobs:
           java-version: 17
 
       - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
 
       - name: install the SDK packages
         run: |

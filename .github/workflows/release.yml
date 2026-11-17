@@ -13,16 +13,31 @@ name: Release
 # The certificate is checked against the known release fingerprint below, so a
 # wrong key in the secrets fails the release loudly instead of publishing an
 # APK that cannot be installed over the previous one.
+#
+# A tag push is the normal way in. workflow_dispatch exists for the case where
+# the pipeline itself is broken and the tag is already pushed: it takes the tag
+# as an input and builds that exact tag.
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "The release tag to build and publish (e.g. v1.0.0.9)"
+        required: true
+        type: string
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ github.event.inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
 permissions:
   contents: read
+
+env:
+  # The tag being released. On a tag push that is the pushed tag; on a manual
+  # run it is the tag given as the input.
+  RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
 
 jobs:
   native:
@@ -36,6 +51,8 @@ jobs:
         abi: [arm64-v8a, armeabi-v7a, x86_64]
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.RELEASE_TAG }}
 
       - name: install the build tools
         run: |
@@ -43,6 +60,12 @@ jobs:
           sudo apt-get install -y -qq nasm
 
       - uses: android-actions/setup-android@v3
+        with:
+          # The action's default is "tools platform-tools", and the "tools"
+          # package was removed from the SDK repository years ago - asking for
+          # it fails the whole job. platform-tools is all the action has to
+          # install; the real packages come in the step below.
+          packages: 'platform-tools'
 
       - name: install the SDK packages
         run: |
@@ -73,6 +96,8 @@ jobs:
       contents: write        # create the GitHub Release for the tag
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.RELEASE_TAG }}
 
       - uses: actions/setup-java@v4
         with:
@@ -80,6 +105,8 @@ jobs:
           java-version: 17
 
       - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
 
       - name: install the SDK packages
         run: |
@@ -106,9 +133,9 @@ jobs:
       - name: verify the tag matches the version
         run: |
           version="$(cat VERSION)"
-          tag_version="${GITHUB_REF_NAME#v}"
+          tag_version="${RELEASE_TAG#v}"
           if [ "$version" != "$tag_version" ]; then
-            echo "::error::Tag $GITHUB_REF_NAME does not match VERSION $version"
+            echo "::error::Tag $RELEASE_TAG does not match VERSION $version"
             exit 1
           fi
           echo "Releasing version $version"
@@ -136,7 +163,7 @@ jobs:
 
       - name: stage the APK and its checksum
         run: |
-          apk="whereq-dosbox-${GITHUB_REF_NAME}.apk"
+          apk="whereq-dosbox-${RELEASE_TAG}.apk"
           cp android/app/build/outputs/apk/release/app-release.apk "$apk"
           sha256sum "$apk" > "$apk.sha256"
           ls -la "$apk" "$apk.sha256"
@@ -146,7 +173,7 @@ jobs:
       # release, otherwise Android refuses to install it over the old one.
       - name: verify the release certificate
         run: |
-          apk="whereq-dosbox-${GITHUB_REF_NAME}.apk"
+          apk="whereq-dosbox-${RELEASE_TAG}.apk"
           expected="b16b480d5a1ff6d35baff0b15fa3fc4b0ee815e500861fbff1b062c9bf7d3933"
           "$ANDROID_SDK_ROOT/build-tools/36.0.0/apksigner" verify --print-certs "$apk" \
             | tee certificate.txt
@@ -159,7 +186,7 @@ jobs:
 
       - name: check that all three ABIs are in the APK
         run: |
-          apk="whereq-dosbox-${GITHUB_REF_NAME}.apk"
+          apk="whereq-dosbox-${RELEASE_TAG}.apk"
           for abi in arm64-v8a armeabi-v7a x86_64; do
             unzip -l "$apk" | grep -q "lib/$abi/libdosbox.so" \
               || { echo "::error::$abi is missing from the APK"; exit 1; }
@@ -170,9 +197,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          apk="whereq-dosbox-${GITHUB_REF_NAME}.apk"
+          apk="whereq-dosbox-${RELEASE_TAG}.apk"
           {
-            echo "**WhereQ-DOSBox ${GITHUB_REF_NAME}**"
+            echo "**WhereQ-DOSBox ${RELEASE_TAG}**"
             echo
             echo "The Android port of DOSBox. The APK is signed with the release key"
             echo "of this repository, so it can be installed over the previous"
@@ -191,16 +218,16 @@ jobs:
             echo '```'
           } > release-notes.md
           cat release-notes.md
-          gh release create "$GITHUB_REF_NAME" \
-            --title "$GITHUB_REF_NAME" \
+          gh release create "$RELEASE_TAG" \
+            --title "$RELEASE_TAG" \
             --notes-file release-notes.md \
             --verify-tag \
             "$apk" "$apk.sha256"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: whereq-dosbox-${{ github.ref_name }}-apk
+          name: whereq-dosbox-apk-${{ env.RELEASE_TAG }}
           path: |
-            whereq-dosbox-${{ github.ref_name }}.apk
-            whereq-dosbox-${{ github.ref_name }}.apk.sha256
+            whereq-dosbox-${{ env.RELEASE_TAG }}.apk
+            whereq-dosbox-${{ env.RELEASE_TAG }}.apk.sha256
           if-no-files-found: error
