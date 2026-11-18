@@ -217,7 +217,9 @@ jobs:
           # release still gets the machine facts below.
           notes="docs/releases/${version}.md"
           {
-            echo "**WhereQ-DOSBox ${RELEASE_TAG}**"
+            # The app on the device is called A-DOS since 1.0.0.12; the
+            # project, the package and the asset names stay whereq-dosbox.
+            echo "**A-DOS ${RELEASE_TAG}**"
             echo
             if [ -f "$notes" ]; then
               # {{TAG}} and {{VERSION}} are replaced with the tag and the
