@@ -904,10 +904,15 @@ class WhereqDosboxActivity : SDLActivity() {
         launcher?.setStatus("Unpacking…")
         val name = if (nameHint != null) stripExtension(nameHint) else "game"
         workScope.launch {
+            var installed: String? = null
             val error = installMutex.withLock {
                 withContext(Dispatchers.IO) {
                     try {
                         val bundle = source.open().use { input -> library.install(input, name) }
+                        // The display name can differ from the archive name: a
+                        // second archive with the same name is installed as
+                        // "name (2)", and that is the name the launcher shows.
+                        installed = bundle.displayName
                         mirrorGameIfDurable(bundle)
                         null
                     } catch (e: Exception) {
@@ -920,7 +925,7 @@ class WhereqDosboxActivity : SDLActivity() {
             val bundles = withContext(Dispatchers.IO) { library.list() }
             launcher.showFiles(bundles)
             launcher.setStatus(
-                if (error == null) "Installed “$name”. Tap Play to launch — it stays installed, no need to add it again."
+                if (error == null) "Installed “${installed ?: name}”. Tap Play to launch — it stays installed, no need to add it again."
                 else "Could not install $name: $error"
             )
         }

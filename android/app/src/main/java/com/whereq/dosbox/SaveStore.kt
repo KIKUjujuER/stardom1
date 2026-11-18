@@ -306,15 +306,23 @@ class SaveStore(private val context: Context) {
 
         /**
          * Makes a game name safe for a folder/file name while keeping it
-         * recognisable. Letters and digits (including CJK) are kept; everything
-         * else becomes '_'. Capped so a very long name cannot overflow a path.
+         * recognisable. Letters and digits (including CJK) are kept, and so are
+         * the parentheses of the " (2)" that tells two same-named games apart;
+         * everything else becomes '_'. Capped so a very long name cannot
+         * overflow a path — from the **front**, because the " (2)" that keeps
+         * two games apart is at the end.
          */
         private fun sanitize(name: String): String {
             val out = StringBuilder()
             for (c in name) {
-                out.append(if (c.isLetterOrDigit() || c == ' ' || c == '-' || c == '_') c else '_')
+                out.append(
+                    if (c.isLetterOrDigit() || c == ' ' || c == '-' || c == '_' ||
+                        c == '(' || c == ')'
+                    ) c else '_'
+                )
             }
-            return out.toString().trim().ifEmpty { "game" }.take(64)
+            val clean = out.toString().trim().ifEmpty { "game" }
+            return if (clean.length > 64) clean.takeLast(64) else clean
         }
     }
 }
