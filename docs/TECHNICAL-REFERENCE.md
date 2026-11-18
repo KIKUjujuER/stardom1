@@ -3088,10 +3088,10 @@ by driving the release APK on an emulator.
 |---|---|
 | Device | `emulator-5554` — `sdk_gphone64_x86_64` (Android API 37, x86_64) |
 | Build under test | the **release** APK, all three ABIs |
-| APK | the published `whereq-dosbox-1.0.0.12.apk`, 16 536 003 bytes |
-| SHA-256 | `961843c3fe0a85fda9eed94ab3bd441ca15d04fcb401031f7d6e0a1ca87baa39` |
-| Published asset | `whereq-dosbox-1.0.0.12.apk` on the [v1.0.0.12 release](https://github.com/whereq/whereq-dosbox/releases/tag/v1.0.0.12), SHA-256 `961843c3fe0a85fda9eed94ab3bd441ca15d04fcb401031f7d6e0a1ca87baa39` |
-| Previous builds | 1.0.0.12 was re-cut several times, so several different files were published under that name: 16 465 262 bytes (`4ae80a41…`), 16 465 841 bytes (`e5cd6331…`), 16 535 619 bytes (`35f954d4…`) and 16 535 622 bytes (`80e5d3af…`). Only the one above is current. Before them: `whereq-dosbox-1.0.0.11.apk` — the local build 16 465 163 bytes (`1b0b27cf…`), the published one 16 465 213 bytes (`5dd04af8…`) |
+| APK | the published `whereq-dosbox-1.0.0.12.apk`, 16 536 964 bytes |
+| SHA-256 | `67577d59e078cd2953c24ea24753068aae2a01c2cf27a9788644787e999f2fd9` |
+| Published asset | `whereq-dosbox-1.0.0.12.apk` on the [v1.0.0.12 release](https://github.com/whereq/whereq-dosbox/releases/tag/v1.0.0.12), SHA-256 `67577d59e078cd2953c24ea24753068aae2a01c2cf27a9788644787e999f2fd9` |
+| Previous builds | 1.0.0.12 was re-cut several times, so several different files were published under that name: 16 465 262 bytes (`4ae80a41…`), 16 465 841 bytes (`e5cd6331…`), 16 535 619 bytes (`35f954d4…`), 16 535 622 bytes (`80e5d3af…`) and 16 536 003 bytes (`961843c3…`). Only the one above is current. Before them: `whereq-dosbox-1.0.0.11.apk` — the local build 16 465 163 bytes (`1b0b27cf…`), the published one 16 465 213 bytes (`5dd04af8…`) |
 | Version | `versionCode` 1000012, `versionName` 1.0.0.12 |
 | Signature | release key, cert SHA-256 `b16b480d5a1ff6d35baff0b15fa3fc4b0ee815e500861fbff1b062c9bf7d3933` (§3.5) |
 | ABIs in the APK | `lib/arm64-v8a/libdosbox.so`, `lib/armeabi-v7a/libdosbox.so`, `lib/x86_64/libdosbox.so` — all three |
