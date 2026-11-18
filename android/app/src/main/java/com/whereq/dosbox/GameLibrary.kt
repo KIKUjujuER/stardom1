@@ -48,6 +48,69 @@ class GameLibrary(
 
     /* --------------------------------------------------------- the manifest */
 
+    /**
+     * Makes the display names in the manifest unique.
+     *
+     * The durable save store is keyed by the display name — the folder index
+     * (`G1`, `G2`, …) is not stable across a reinstall — so two games with the
+     * same name would share one durable folder and overwrite each other's
+     * saves. The launcher shows the name too, where two identical rows are
+     * just as confusing.
+     *
+     * The **oldest** game keeps a name that is already taken, so the saves it
+     * already mirrored stay where they are; a duplicate gets the lowest free
+     * " (n)" suffix.
+     *
+     * @return true when the manifest was rewritten.
+     */
+    fun makeNamesUnique(): Boolean {
+        val bundles = ArrayList(list())
+        if (bundles.size < 2) return false
+        // list() is newest first; the oldest keeps the plain name.
+        val taken = HashSet<String>()
+        val names = HashMap<String, String>()
+        for (bundle in bundles.reversed()) {
+            names[bundle.folder] = uniqueName(bundle.displayName, taken)
+        }
+        var changed = false
+        val renamed = ArrayList<GameBundle>(bundles.size)
+        for (bundle in bundles) {
+            val name = names[bundle.folder] ?: bundle.displayName
+            if (name == bundle.displayName) {
+                renamed.add(bundle)
+                continue
+            }
+            Log.i(TAG, "renamed '${bundle.displayName}' to '$name' - the durable save store is keyed by the name")
+            changed = true
+            renamed.add(
+                GameBundle(
+                    bundle.folder, name, bundle.entry, bundle.archiveName,
+                    bundle.installedAt, bundle.sizeBytes, bundle.hasOwnDosboxConfig,
+                    bundle.launch,
+                )
+            )
+        }
+        if (!changed) return false
+        try {
+            writeManifest(renamed)
+        } catch (e: Exception) {
+            Log.e(TAG, "could not rewrite the manifest with unique names", e)
+            return false
+        }
+        return true
+    }
+
+    /**
+     * @return [name] when nothing in [taken] carries it, otherwise the same
+     *         name with the lowest free " (n)" suffix.
+     */
+    private fun uniqueName(name: String, taken: MutableSet<String>): String {
+        if (taken.add(name)) return name
+        var n = 2
+        while (!taken.add("$name ($n)")) n++
+        return "$name ($n)"
+    }
+
     /** @return every installed bundle, newest first. */
     fun list(): List<GameBundle> {
         val bundles = ArrayList<GameBundle>()
@@ -180,8 +243,13 @@ class GameLibrary(
         // prompt to open the "Launch…" editor and add drivers deliberately.
         writeRunBat(target, folder, entryPoint, null)
 
+        // The durable save store is keyed by the display name, and the
+        // launcher shows it, so two archives with the same file name must not
+        // end up with the same one. The archive keeps its own name; the
+        // display name is the one that is made unique.
+        val taken = list().mapTo(HashSet()) { it.displayName }
         val bundle = GameBundle(
-            folder, displayName, entryPoint,
+            folder, uniqueName(displayName, taken), entryPoint,
             displayName, System.currentTimeMillis(), unpacked, ownConfig,
         )
 

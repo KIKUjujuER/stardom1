@@ -168,6 +168,11 @@ class WhereqDosboxActivity : SDLActivity() {
 
         library = GameLibrary(filesDir)
 
+        // Two games can carry the same archive name, and the durable save
+        // store is keyed by the display name, so their saves would overwrite
+        // each other. The names are made unique once, here.
+        library.makeNamesUnique()
+
         // When a game is auto-starting, keep this process alive while the player
         // switches to another app, so SDL's paused emulator survives and resumes
         // the exact state on return (DOSBox has no save-state). A clean prompt

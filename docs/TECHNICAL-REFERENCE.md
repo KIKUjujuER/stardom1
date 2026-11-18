@@ -2530,6 +2530,16 @@ name always is, so the durable side is `<sanitised display name>/`. A name with
 characters a file system will not take becomes `_` (`sanitize()`), capped at 64
 characters.
 
+▸ **The name is therefore unique.** Two archives can carry the same file name
+— the same game installed twice, or two different zips called `game.zip` — and
+one durable folder cannot hold two games' saves. So the display name is made
+unique when the bundle is installed (`GameLibrary.install()`): the second one
+becomes *game (2)*. A manifest that already holds duplicates is repaired once,
+at startup (`GameLibrary.makeNamesUnique()`), where the **oldest** game keeps
+the plain name so the saves it already mirrored stay where they are. The
+launcher shows the name too, and two identical rows there are just as
+confusing.
+
 ▸ **The storage provider may append an extension.** `createFile(mime, name)`
 lets the provider add a mime-derived extension when the name's extension does
 not match the mime — a slot asked for as `slot1.gz` with `application/gzip` can
