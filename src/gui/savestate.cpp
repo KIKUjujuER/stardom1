@@ -134,7 +134,7 @@ extern bool   MOUSE_LoadState(FILE *f);
 /* ----------------------------------------------------------------- format */
 
 static const char   SS_MAGIC[4] = { 'W', 'Q', 'S', 'S' };
-static const uint32_t SS_VERSION = 8;   /* 8: + the INT 33h mouse driver state */
+static const uint32_t SS_VERSION = 9;   /* 9: mouse state slimmed to callback+range+pos */
 
 /* Fixed header; everything after it is a fixed-order sequence of raw blocks.
  * The config fields double as a guard: a state can only be loaded into a

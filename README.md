@@ -43,8 +43,13 @@ release repairs the packaging around it.
 
 | | |
 |---|---|
+| **The save state no longer restores the mouse driver's volatile half** | 1.0.0.11 put the *whole* INT 33h driver into the snapshot, event queue and interrupt flags included. Restoring that wedged mouse-driven games — a game could hang on load. The snapshot now carries only the stable configuration: the game's event-callback registration, the cursor range and the cursor position. |
 | **The emulator knows its own version** | The version was a literal `1.0.0.1` in the Android config template, so the DOS banner and the window title said *WhereQ-DOSBox version 1.0.0.1* whatever release was installed. The native build now reads the same `VERSION` file the release script and the app read, so the two can never disagree. |
 | **A local build ships all three ABIs** | `android/build-android.sh` and `android/build-sdl2.sh` defaulted to two of them, so an APK built locally did not carry the same ABI set as the published one. Both now build `arm64-v8a`, `armeabi-v7a` and `x86_64` by default — the same set CI builds. |
+
+**Save states written by 1.0.0.11 and by the first 1.0.0.12 cannot be loaded by
+this build**: the state file grew a version when the mouse block was slimmed,
+and an older state is refused rather than misread.
 
 New in 1.0.0.11
 ---------------

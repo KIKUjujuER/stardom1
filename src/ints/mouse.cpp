@@ -129,33 +129,55 @@ static struct {
 	Bit16s gran_x,gran_y;
 } mouse;
 
-// WhereQ save-states: the INT 33h mouse driver keeps its whole state in this
-// file-static struct - including the game's event-callback registration
-// (sub_seg/sub_ofs/sub_mask), the cursor range and the button state. None of it
-// lives in guest memory, so without saving it a restored game's mouse clicks
-// stop reaching the game (the cursor still moves, because DOSBox draws it, but
-// e.g. a dialog's "confirm" button no longer responds). The struct's only host
-// pointers are the two cursor-mask pointers, which are kept live on load.
+void MOUSE_Limit_Events(Bitu val); // defined below; used by MOUSE_LoadState
+
+// WhereQ save-states: the INT 33h mouse driver keeps its state in this
+// file-static struct. The one thing the guest cannot rebuild itself after a
+// restore is the event-callback registration it installed once at startup
+// (sub_seg/sub_ofs/sub_mask, via INT 33h AX=0Ch): without it a restored game's
+// clicks stop reaching the game (the cursor still moves, because DOSBox draws
+// it, but a dialog's "confirm" button no longer responds).
+//
+// We therefore save ONLY the stable configuration - the callback, the cursor
+// range and the position - and leave all the volatile driver state (the event
+// queue, the button/click counters, the interrupt re-entrancy flags, the
+// cursor-draw backing store) at its clean post-boot values. Restoring that
+// volatile state instead wedged mouse-driven games (三国志英杰传 hung on load):
+// the stale event queue and interrupt flags fed garbage into the INT 74 handler
+// and the guest's callback. The host cursor-mask pointers are never touched.
 size_t MOUSE_StateSize(void) {
-	return sizeof(mouse);
+	return sizeof(mouse.sub_seg) + sizeof(mouse.sub_ofs) + sizeof(mouse.sub_mask) +
+	       sizeof(mouse.min_x) + sizeof(mouse.max_x) +
+	       sizeof(mouse.min_y) + sizeof(mouse.max_y) +
+	       sizeof(mouse.x) + sizeof(mouse.y);
 }
 bool MOUSE_SaveState(FILE *f) {
-	return fwrite(&mouse, sizeof(mouse), 1, f) == 1;
+	return fwrite(&mouse.sub_seg,  sizeof(mouse.sub_seg),  1, f) == 1 &&
+	       fwrite(&mouse.sub_ofs,  sizeof(mouse.sub_ofs),  1, f) == 1 &&
+	       fwrite(&mouse.sub_mask, sizeof(mouse.sub_mask), 1, f) == 1 &&
+	       fwrite(&mouse.min_x,    sizeof(mouse.min_x),    1, f) == 1 &&
+	       fwrite(&mouse.max_x,    sizeof(mouse.max_x),    1, f) == 1 &&
+	       fwrite(&mouse.min_y,    sizeof(mouse.min_y),    1, f) == 1 &&
+	       fwrite(&mouse.max_y,    sizeof(mouse.max_y),    1, f) == 1 &&
+	       fwrite(&mouse.x,        sizeof(mouse.x),        1, f) == 1 &&
+	       fwrite(&mouse.y,        sizeof(mouse.y),        1, f) == 1;
 }
 bool MOUSE_LoadState(FILE *f) {
-	Bit16u *l_screen = mouse.screenMask;
-	Bit16u *l_cursor = mouse.cursorMask;
-	if (fread(&mouse, sizeof(mouse), 1, f) != 1) return false;
-	// The two cursor-mask pointers are process-local allocations; keep the live
-	// ones (the exact cursor bitmap is cosmetic and the game redraws it).
-	mouse.screenMask = l_screen;
-	mouse.cursorMask = l_cursor;
-	// Start the drawing / re-entrancy state clean: do not blit a stale saved
-	// cursor background, and do not believe the event callback is mid-run (a
-	// stuck in_UIR would swallow every later click).
-	mouse.background = false;
+	if (fread(&mouse.sub_seg,  sizeof(mouse.sub_seg),  1, f) != 1) return false;
+	if (fread(&mouse.sub_ofs,  sizeof(mouse.sub_ofs),  1, f) != 1) return false;
+	if (fread(&mouse.sub_mask, sizeof(mouse.sub_mask), 1, f) != 1) return false;
+	if (fread(&mouse.min_x,    sizeof(mouse.min_x),    1, f) != 1) return false;
+	if (fread(&mouse.max_x,    sizeof(mouse.max_x),    1, f) != 1) return false;
+	if (fread(&mouse.min_y,    sizeof(mouse.min_y),    1, f) != 1) return false;
+	if (fread(&mouse.max_y,    sizeof(mouse.max_y),    1, f) != 1) return false;
+	if (fread(&mouse.x,        sizeof(mouse.x),        1, f) != 1) return false;
+	if (fread(&mouse.y,        sizeof(mouse.y),        1, f) != 1) return false;
+	// Drop any volatile event/interrupt state left by the boot that preceded
+	// the load, so the restored callback starts from a clean, idle driver.
+	mouse.events = 0;
 	mouse.timer_in_progress = false;
 	mouse.in_UIR = false;
+	PIC_RemoveEvents(MOUSE_Limit_Events);
 	return true;
 }
 

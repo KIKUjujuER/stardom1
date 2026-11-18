@@ -30,6 +30,15 @@ closed the Android migration phase is what 1.0.0.11 shipped, and this release
 repairs the packaging around it. The milestone marker
 `milestone/android-migration-complete` moves on to this release.
 
+* **The save state no longer restores the mouse driver's volatile half.**
+  1.0.0.11 put the *whole* INT 33h driver into the snapshot — the event
+  queue, the click counters and the interrupt re-entrancy flags included.
+  Restoring that wedged mouse-driven games: the stale queue and flags fed
+  garbage into the INT 74 handler and into the game's own callback, and a
+  game could hang on load. The snapshot now carries only the stable
+  configuration — the game's event-callback registration, the cursor range and
+  the cursor position — and the volatile state is left clean, so a restored
+  game starts from an idle driver.
 * **The emulator knows its own version.** The version was a literal `1.0.0.1`
   in the Android config template, so the DOS startup banner and the window
   title said *WhereQ-DOSBox version 1.0.0.1* no matter which release was
@@ -43,8 +52,14 @@ repairs the packaging around it. The milestone marker
   one. Both now build `arm64-v8a`, `armeabi-v7a` and `x86_64` by default — the
   same set CI builds.
 
-Save states written by 1.0.0.11 and by this release are interchangeable: the
-state format did not change.
+**Save states written by 1.0.0.11 and by the first 1.0.0.12 cannot be loaded
+by this build**: the state file grew a version when the mouse block was
+slimmed, and an older state is refused rather than misread. Save states
+written by this build load normally.
+
+One consequence of the slimmed block: the button state is no longer captured,
+so a restored game starts with the mouse released and a click that was held
+down across the save has to be pressed again.
 
 ## What changed in 1.0.0.11
 

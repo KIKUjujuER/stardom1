@@ -1444,7 +1444,8 @@ same SVGA card. A mismatch is `SAVESTATE_ERR_MISMATCH`, not a crash.
 | 5 | the open DOS file handles (milestone B2) |
 | 6 | the OPL register cache |
 | 7 | **the exact OPL chip snapshot** |
-| **8** | **the INT 33h mouse driver state** |
+| 8 | **the INT 33h mouse driver state** |
+| **9** | **the mouse block slimmed to the callback, the cursor range and the position** — 1.0.0.12 |
 
 A slot written by an older build is refused (*"that save file is damaged"*)
 rather than misread. ▸ The 1.0.0.9 slots are version 5 and the 1.0.0.10 slots
@@ -1503,42 +1504,62 @@ the PIT start times are re-based instead.
 
 **PC speaker** and **OPL** are covered in §6.
 
-**MOUSE.** The INT 33h mouse driver keeps its whole state in one file-static
-struct in `src/ints/mouse.cpp` — and none of it lives in guest memory. That
-struct holds the game's **event-callback registration** (`sub_seg`, `sub_ofs`,
-`sub_mask`), the cursor range, the button state and the two cursor masks.
-Without it a restored game's mouse clicks stop reaching the game: the cursor
-still moves (DOSBox draws it), but a dialog's *confirm* button no longer
-responds, because the callback that would have told the game about the click
-is gone.
+**MOUSE.** The INT 33h mouse driver keeps its state in one file-static struct in
+`src/ints/mouse.cpp` — and none of it lives in guest memory. The one thing the
+guest cannot rebuild itself after a restore is its **event-callback
+registration** (`sub_seg`, `sub_ofs`, `sub_mask`), installed once at startup
+via INT 33h AX=0Ch. Without it a restored game's mouse clicks stop reaching the
+game: the cursor still moves (DOSBox draws it), but a dialog's *confirm* button
+no longer responds, because the callback that would have told the game about
+the click is gone.
 
-The two cursor masks are the only host pointers in it, and they are the third
-exception to §5.6. They are process-local allocations, so the loader keeps the
-live ones and restores everything else:
+**Only the stable configuration is saved — the callback, the cursor range and
+the position.** The volatile half of the driver (the event queue, the button
+and click counters, the interrupt re-entrancy flags, the cursor-draw backing
+store) is deliberately left at its clean post-boot values. Restoring it wedged
+mouse-driven games: the stale event queue and interrupt flags fed garbage into
+the INT 74 handler and into the guest's own callback, and a game could hang on
+load. This is what changed in **1.0.0.12**; 1.0.0.11 saved the whole struct.
 
 ```c
-Bit16u *l_screen = mouse.screenMask;
-Bit16u *l_cursor = mouse.cursorMask;
-if (fread(&mouse, sizeof(mouse), 1, f) != 1) return false;
-mouse.screenMask = l_screen;      /* keep the live ones */
-mouse.cursorMask = l_cursor;
-mouse.background = false;         /* do not blit a stale saved cursor   */
-mouse.timer_in_progress = false;
-mouse.in_UIR = false;             /* a stuck in_UIR would swallow clicks */
+/* the nine fields of the block, in this order */
+sub_seg, sub_ofs, sub_mask,          /* the guest's event callback      */
+min_x, max_x, min_y, max_y,          /* the cursor range                */
+x, y                                 /* the cursor position             */
 ```
+
+`MOUSE_StateSize()` is the sum of exactly those nine `sizeof`s, and
+`MOUSE_SaveState()` writes exactly those nine fields in that order, so the
+block and the payload-size check in §5.4 cannot drift apart.
+
+The loader reads the nine fields back and then clears the volatile state, so
+the restored callback starts from a clean, idle driver:
+
+```c
+mouse.events = 0;                     /* no stale queued mouse events     */
+mouse.timer_in_progress = false;
+mouse.in_UIR = false;                 /* a stuck in_UIR would swallow clicks */
+PIC_RemoveEvents(MOUSE_Limit_Events); /* and drop the pending limit event */
+```
+
+The two cursor masks are the only host pointers the driver holds, and the
+slimmed block does not contain them at all — they are process-local
+allocations, and the snapshot never sees them. That is why the mouse is no
+longer one of the exceptions to §5.6.
 
 **DOS layer** is covered in §7.
 
 ### 5.6 ▸ The host-pointer rule
 
-Four structs in the snapshot hold pointers into the host process:
+Three structs in the snapshot hold pointers into the host process (it was four
+until 1.0.0.12 slimmed the mouse block, which no longer carries its two cursor
+masks):
 
 | Struct | Pointers |
 |---|---|
 | `vga` | `mem.linear`, `mem.linear_orgptr`, `fastmem`, `fastmem_orgptr`, `draw.linear_base`, `draw.font_tables[0..1]`, `tandy.draw_base`, `tandy.mem_base`, `lfb.handler` |
 | `cpu` | `hlt.old_decoder` (a function pointer) |
 | `DBOPL::Chip` | `volHandler`, `waveBase`, `synthHandler` (§6.2) |
-| `mouse` | `screenMask`, `cursorMask` (§5.5) |
 
 They are process-local allocations. The rule is: **read the content state from
 the file, keep the live pointers.**
@@ -2934,7 +2955,9 @@ by driving the release APK on an emulator.
 | The OPL block must be **consumed** even in the fallback | 6.6 | a fallback build mis-read the DOS block behind it | the file-cursor desync that was found and fixed |
 | A **stuck key** survives a layout rebuild | 9.6 | the key-down/up state is tracked explicitly and released on a rebuild | `VirtualKeyboardView.kt:172-180` |
 | The **mouse** is in the save state | 5.5 | a save → load round trip on the emulator with the new block in place | the OPL chip comes back field for field, the four DOS handles with it, no payload-size mismatch |
+| The mouse block is **stable configuration only** | 5.5 | the block was slimmed in 1.0.0.12 after restoring the volatile half wedged mouse-driven games | the event queue and the interrupt flags are cleared on load, not restored |
 | An **old state** is refused, not misread | 5.4 | loading a slot written by 1.0.0.10 (version 7) into the version-8 build | *"That save file is damaged"* |
+| A **version-8 slot** is refused by the version-9 build | 5.4 | loading a slot written by 1.0.0.11 / 1.0.0.12 into the re-cut 1.0.0.12 | *"That save file is damaged"* — the version is checked before the payload size |
 | The three keyboard layouts follow from the geometry | 9.2 | the width formula and the two thresholds | `VirtualKeyboardView.kt:161-167`; measured on the emulator at 420 dpi (§9.8) |
 | The bundle names are rewritten to DOS 8.3 | 8.4 | the naming function read against DOSBox's own name handling | `GameLibrary.kt:551` vs `localDrive.cpp` |
 | A **relaunch** is needed, not a typed command | 8.7 | DOSBox caches the drive listing at mount time | `localDrive.cpp:184`, quoted in `WhereqDosboxActivity.kt:130-136` |
@@ -3148,9 +3171,14 @@ repository** — the import was taken verbatim and the changes to `src/` and
 | The **directory listing caches** of the mounted drives | a bundle installed after the boot is invisible until a relaunch (§8.7) |
 | The **EMS/XMS handle tables** and the **RTC** | a restore that lands in the Ultima VIII extender still ends in `Exit to error: RET from illegal descriptor type 13` about a second later — the guest diverges because host state it depends on is still missing. The same abort happens with a build from before the DOS-handles milestone, so it is **not** caused by the handles that *are* captured |
 
-▸ The **mouse** left this list in 1.0.0.11: the whole INT 33h driver state is
-now in the snapshot — the cursor position, the button state and the game's
-event-callback registration included (§5.5).
+▸ The **mouse** left this list in 1.0.0.11: the INT 33h driver's state is now
+in the snapshot — the cursor position and the game's event-callback
+registration included (§5.5). **1.0.0.12 slimmed that block** to the stable
+configuration only, because restoring the volatile half (the event queue and
+the interrupt flags) wedged mouse-driven games on load. The button state and
+the click counters are therefore *not* captured: a restored game starts with
+the mouse released, and a click that was held down across the save has to be
+pressed again.
 
 ### 11.3 The open items
 
@@ -3418,11 +3446,15 @@ case — §6.6.
 | 4 | `paging.firstmb` | — |
 | 5 | the open DOS file handles | the 1.0.0.9 release |
 | 6 | the OPL register cache | — |
-| **7** | **the exact OPL chip snapshot** | this build |
+| **7** | **the exact OPL chip snapshot** | — |
+| 8 | the whole INT 33h mouse driver state | the 1.0.0.11 release |
+| **9** | **the mouse block slimmed to callback + range + position** | this build |
 
 A slot written by an older build is **refused** (`SAVESTATE_ERR_FORMAT`) rather
 than misread. ▸ The 1.0.0.9 slots are version 5 and cannot be loaded by this
-build.
+build; the version-8 slots of 1.0.0.11 and 1.0.0.12 cannot either. The
+version is checked **before** the payload size, so an old file is rejected
+whole rather than half-read.
 
 ### B.4 The DOS block
 
