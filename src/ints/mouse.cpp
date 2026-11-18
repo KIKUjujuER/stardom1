@@ -131,52 +131,115 @@ static struct {
 
 void MOUSE_Limit_Events(Bitu val); // defined below; used by MOUSE_LoadState
 
-// WhereQ save-states: the INT 33h mouse driver keeps its state in this
-// file-static struct. The one thing the guest cannot rebuild itself after a
-// restore is the event-callback registration it installed once at startup
-// (sub_seg/sub_ofs/sub_mask, via INT 33h AX=0Ch): without it a restored game's
-// clicks stop reaching the game (the cursor still moves, because DOSBox draws
-// it, but a dialog's "confirm" button no longer responds).
+// WhereQ save-states: restore the INT 33h mouse driver's CONFIGURATION and
+// leave its volatile run-time state reset to clean post-boot values.
 //
-// We therefore save ONLY the stable configuration - the callback, the cursor
-// range and the position - and leave all the volatile driver state (the event
-// queue, the button/click counters, the interrupt re-entrancy flags, the
-// cursor-draw backing store) at its clean post-boot values. Restoring that
-// volatile state instead wedged mouse-driven games (三国志英杰传 hung on load):
-// the stale event queue and interrupt flags fed garbage into the INT 74 handler
-// and the guest's callback. The host cursor-mask pointers are never touched.
-size_t MOUSE_StateSize(void) {
-	return sizeof(mouse.sub_seg) + sizeof(mouse.sub_ofs) + sizeof(mouse.sub_mask) +
-	       sizeof(mouse.min_x) + sizeof(mouse.max_x) +
-	       sizeof(mouse.min_y) + sizeof(mouse.max_y) +
-	       sizeof(mouse.x) + sizeof(mouse.y);
+// The guest configures the mouse once at startup and never re-issues it, so the
+// driver cannot rebuild these after a restore:
+//   * the event callback it installed (sub_seg/sub_ofs/sub_mask, AX=0Ch) -
+//     without it a restored game's clicks never reach the game;
+//   * its custom graphics cursor and hotspot (AX=09) - without them the cursor
+//     reverts to the default white block drawn with a zero hotspot, so the
+//     VISIBLE cursor no longer lines up with the real click point (POS_X/POS_Y):
+//     taps land up-and-left of the target and selections miss (三国志英杰传: you
+//     must drag the cursor onto an NPC instead of tapping it);
+//   * the cursor range, position, visibility and motion sensitivity.
+//
+// We save only this stable configuration. All the VOLATILE driver state - the
+// event queue, button/click counters, interrupt re-entrancy flags (in_UIR) and
+// the cursor-draw backing store - is reset on load, never restored: feeding the
+// stale queue and in_UIR flag back into the INT 74 handler wedged mouse-driven
+// games (三国志英杰传 hung on load, or stopped responding to clicks after a
+// minute once the queue filled behind a stuck in_UIR). The host cursor-mask
+// pointers are re-derived from the saved cursor type, never written to disk.
+namespace {
+struct MouseStateBlock {
+	Bit16u sub_seg, sub_ofs, sub_mask;
+	Bit16s min_x, max_x, min_y, max_y;
+	float  x, y;
+	Bit16s hotx, hoty;
+	Bit16u cursorType, textAndMask, textXorMask;
+	Bit16s gran_x, gran_y;
+	Bit8u  mode, page;
+	bool   enabled;
+	Bit16u hidden, oldhidden, language, doubleSpeedThreshold;
+	float  mickeysPerPixel_x, mickeysPerPixel_y;
+	float  pixelPerMickey_x, pixelPerMickey_y;
+	Bit16u senv_x_val, senv_y_val, dspeed_val;
+	float  senv_x, senv_y;
+	Bit16u userScreenMask[CURSORY];
+	Bit16u userCursorMask[CURSORY];
+};
 }
+
+size_t MOUSE_StateSize(void) { return sizeof(MouseStateBlock); }
+
 bool MOUSE_SaveState(FILE *f) {
-	return fwrite(&mouse.sub_seg,  sizeof(mouse.sub_seg),  1, f) == 1 &&
-	       fwrite(&mouse.sub_ofs,  sizeof(mouse.sub_ofs),  1, f) == 1 &&
-	       fwrite(&mouse.sub_mask, sizeof(mouse.sub_mask), 1, f) == 1 &&
-	       fwrite(&mouse.min_x,    sizeof(mouse.min_x),    1, f) == 1 &&
-	       fwrite(&mouse.max_x,    sizeof(mouse.max_x),    1, f) == 1 &&
-	       fwrite(&mouse.min_y,    sizeof(mouse.min_y),    1, f) == 1 &&
-	       fwrite(&mouse.max_y,    sizeof(mouse.max_y),    1, f) == 1 &&
-	       fwrite(&mouse.x,        sizeof(mouse.x),        1, f) == 1 &&
-	       fwrite(&mouse.y,        sizeof(mouse.y),        1, f) == 1;
+	MouseStateBlock b;
+	memset(&b, 0, sizeof(b));
+	b.sub_seg = mouse.sub_seg; b.sub_ofs = mouse.sub_ofs; b.sub_mask = mouse.sub_mask;
+	b.min_x = mouse.min_x; b.max_x = mouse.max_x;
+	b.min_y = mouse.min_y; b.max_y = mouse.max_y;
+	b.x = mouse.x; b.y = mouse.y;
+	b.hotx = mouse.hotx; b.hoty = mouse.hoty;
+	b.cursorType = mouse.cursorType;
+	b.textAndMask = mouse.textAndMask; b.textXorMask = mouse.textXorMask;
+	b.gran_x = mouse.gran_x; b.gran_y = mouse.gran_y;
+	b.mode = mouse.mode; b.page = mouse.page; b.enabled = mouse.enabled;
+	b.hidden = mouse.hidden; b.oldhidden = mouse.oldhidden;
+	b.language = mouse.language; b.doubleSpeedThreshold = mouse.doubleSpeedThreshold;
+	b.mickeysPerPixel_x = mouse.mickeysPerPixel_x; b.mickeysPerPixel_y = mouse.mickeysPerPixel_y;
+	b.pixelPerMickey_x = mouse.pixelPerMickey_x; b.pixelPerMickey_y = mouse.pixelPerMickey_y;
+	b.senv_x_val = mouse.senv_x_val; b.senv_y_val = mouse.senv_y_val; b.dspeed_val = mouse.dspeed_val;
+	b.senv_x = mouse.senv_x; b.senv_y = mouse.senv_y;
+	memcpy(b.userScreenMask, userdefScreenMask, sizeof(b.userScreenMask));
+	memcpy(b.userCursorMask, userdefCursorMask, sizeof(b.userCursorMask));
+	return fwrite(&b, sizeof(b), 1, f) == 1;
 }
+
 bool MOUSE_LoadState(FILE *f) {
-	if (fread(&mouse.sub_seg,  sizeof(mouse.sub_seg),  1, f) != 1) return false;
-	if (fread(&mouse.sub_ofs,  sizeof(mouse.sub_ofs),  1, f) != 1) return false;
-	if (fread(&mouse.sub_mask, sizeof(mouse.sub_mask), 1, f) != 1) return false;
-	if (fread(&mouse.min_x,    sizeof(mouse.min_x),    1, f) != 1) return false;
-	if (fread(&mouse.max_x,    sizeof(mouse.max_x),    1, f) != 1) return false;
-	if (fread(&mouse.min_y,    sizeof(mouse.min_y),    1, f) != 1) return false;
-	if (fread(&mouse.max_y,    sizeof(mouse.max_y),    1, f) != 1) return false;
-	if (fread(&mouse.x,        sizeof(mouse.x),        1, f) != 1) return false;
-	if (fread(&mouse.y,        sizeof(mouse.y),        1, f) != 1) return false;
-	// Drop any volatile event/interrupt state left by the boot that preceded
-	// the load, so the restored callback starts from a clean, idle driver.
+	MouseStateBlock b;
+	if (fread(&b, sizeof(b), 1, f) != 1) return false;
+	mouse.sub_seg = b.sub_seg; mouse.sub_ofs = b.sub_ofs; mouse.sub_mask = b.sub_mask;
+	mouse.min_x = b.min_x; mouse.max_x = b.max_x;
+	mouse.min_y = b.min_y; mouse.max_y = b.max_y;
+	mouse.x = b.x; mouse.y = b.y;
+	mouse.hotx = b.hotx; mouse.hoty = b.hoty;
+	mouse.cursorType = b.cursorType;
+	mouse.textAndMask = b.textAndMask; mouse.textXorMask = b.textXorMask;
+	mouse.gran_x = b.gran_x; mouse.gran_y = b.gran_y;
+	mouse.mode = b.mode; mouse.page = b.page; mouse.enabled = b.enabled;
+	mouse.hidden = b.hidden; mouse.oldhidden = b.oldhidden;
+	mouse.language = b.language; mouse.doubleSpeedThreshold = b.doubleSpeedThreshold;
+	mouse.mickeysPerPixel_x = b.mickeysPerPixel_x; mouse.mickeysPerPixel_y = b.mickeysPerPixel_y;
+	mouse.pixelPerMickey_x = b.pixelPerMickey_x; mouse.pixelPerMickey_y = b.pixelPerMickey_y;
+	mouse.senv_x_val = b.senv_x_val; mouse.senv_y_val = b.senv_y_val; mouse.dspeed_val = b.dspeed_val;
+	mouse.senv_x = b.senv_x; mouse.senv_y = b.senv_y;
+	memcpy(userdefScreenMask, b.userScreenMask, sizeof(userdefScreenMask));
+	memcpy(userdefCursorMask, b.userCursorMask, sizeof(userdefCursorMask));
+	// Re-derive the host cursor-mask pointers from the saved cursor type: a
+	// user-defined graphics cursor (AX=09 -> type 2) uses the userdef masks we
+	// just restored; anything else uses the built-in default arrow.
+	if (mouse.cursorType == 2) {
+		mouse.screenMask = userdefScreenMask;
+		mouse.cursorMask = userdefCursorMask;
+	} else {
+		mouse.screenMask = defaultScreenMask;
+		mouse.cursorMask = defaultCursorMask;
+	}
+	// Drop all volatile event/interrupt state from the boot that preceded the
+	// load, so the restored callback starts from a clean, idle driver.
 	mouse.events = 0;
+	memset(mouse.event_queue, 0, sizeof(mouse.event_queue));
+	mouse.buttons = 0;
+	mouse.mickey_x = mouse.mickey_y = 0;
+	mouse.add_x = mouse.add_y = 0;
+	mouse.background = false;
 	mouse.timer_in_progress = false;
 	mouse.in_UIR = false;
+	for (int i = 0; i < MOUSE_BUTTONS; i++) {
+		mouse.times_pressed[i] = mouse.times_released[i] = 0;
+	}
 	PIC_RemoveEvents(MOUSE_Limit_Events);
 	return true;
 }

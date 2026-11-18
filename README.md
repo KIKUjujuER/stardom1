@@ -48,15 +48,13 @@ out of the app's own storage.
 |---|---|
 | **The app is called A-DOS** | The launcher name, the notification and the launcher icons now carry the new name and mark — DOS across Android and Apple. The repository, the package and the download file names still say `whereq-dosbox`. |
 | **Your saves survive a reinstall** | The save-state slots lived inside the app's private storage, so uninstalling the app deleted them. Pick a folder on the phone (**Config → Saves folder**) and every slot is mirrored there, gzipped, next to the game itself — so a reinstall, a new phone or a lost app all come back. Two archives with the same file name are told apart by name (*game* and *game (2)*), so their saves never end up in the same place. |
-| **The save state no longer restores the mouse driver's volatile half** | 1.0.0.11 put the *whole* INT 33h driver into the snapshot, event queue and interrupt flags included. Restoring that wedged mouse-driven games — a game could hang on load. The snapshot now carries only the stable configuration: the game's event-callback registration, the cursor range and the cursor position. |
+| **The save state keeps the mouse driver's configuration, not its run-time state** | 1.0.0.11 put the *whole* INT 33h driver into the snapshot, event queue and interrupt flags included. Restoring that wedged mouse-driven games — a game could hang on load. The snapshot now carries only the configuration the guest cannot rebuild itself: the game's event-callback registration, the cursor range and position, the cursor shape and hotspot, the granularity and the sensitivity. The visible cursor therefore still lines up with the click point after a restore. |
 | **The emulator knows its own version** | The version was a literal `1.0.0.1` in the Android config template, so the DOS banner and the window title said *WhereQ-DOSBox version 1.0.0.1* whatever release was installed. The native build now reads the same `VERSION` file the release script and the app read, so the two can never disagree. |
 | **A local build ships all three ABIs** | `android/build-android.sh` and `android/build-sdl2.sh` defaulted to two of them, so an APK built locally did not carry the same ABI set as the published one. Both now build `arm64-v8a`, `armeabi-v7a` and `x86_64` by default — the same set CI builds. |
 
-**Save states written by 1.0.0.11 and by the first 1.0.0.12 cannot be loaded by
-this build**: the state file grew a version when the mouse block was slimmed,
-and an older state is refused rather than misread. Save states written by the
-previous 1.0.0.12 and by this build load normally — the format did not change
-again.
+**Save states written by 1.0.0.11 and by the earlier 1.0.0.12 cuts cannot be
+loaded by this build**: the state file grew a version when the mouse block
+changed, and an older state is refused rather than misread.
 
 **This release was re-cut.** The tag still reads `v1.0.0.12`, but the file
 behind the download link is a different build than the one first published

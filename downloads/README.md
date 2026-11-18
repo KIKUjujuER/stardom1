@@ -44,15 +44,18 @@ the app's own storage. The milestone marker
   are offered for restore by name, with their save states already there. Two
   archives with the same file name are told apart by name — *game* and *game
   (2)* — so their saves never end up in the same place.
-* **The save state no longer restores the mouse driver's volatile half.**
-  1.0.0.11 put the *whole* INT 33h driver into the snapshot — the event
-  queue, the click counters and the interrupt re-entrancy flags included.
-  Restoring that wedged mouse-driven games: the stale queue and flags fed
-  garbage into the INT 74 handler and into the game's own callback, and a
-  game could hang on load. The snapshot now carries only the stable
-  configuration — the game's event-callback registration, the cursor range and
-  the cursor position — and the volatile state is left clean, so a restored
-  game starts from an idle driver.
+* **The save state keeps the mouse driver's configuration and none of its
+  run-time state.** 1.0.0.11 put the *whole* INT 33h driver into the snapshot
+  — the event queue, the click counters and the interrupt re-entrancy flags
+  included. Restoring that wedged mouse-driven games: the stale queue and
+  flags fed garbage into the INT 74 handler and into the game's own callback,
+  and a game could hang on load. The snapshot now carries only the
+  configuration the guest cannot rebuild itself — the game's event-callback
+  registration, the cursor range and position, the cursor shape and hotspot,
+  the granularity and the sensitivity — and the volatile state is left clean,
+  so a restored game starts from an idle driver. The cursor shape matters too:
+  without it the visible cursor reverts to the default block and no longer
+  lines up with the real click point.
 * **The emulator knows its own version.** The version was a literal `1.0.0.1`
   in the Android config template, so the DOS startup banner and the window
   title said *WhereQ-DOSBox version 1.0.0.1* no matter which release was
@@ -66,11 +69,14 @@ the app's own storage. The milestone marker
   one. Both now build `arm64-v8a`, `armeabi-v7a` and `x86_64` by default — the
   same set CI builds.
 
-**Save states written by 1.0.0.11 and by the first 1.0.0.12 cannot be loaded
-by this build**: the state file grew a version when the mouse block was
-slimmed, and an older state is refused rather than misread. Save states
-written by the previous 1.0.0.12 and by this build load normally — the format
-did not change again.
+**Save states written by 1.0.0.11 and by the earlier 1.0.0.12 cuts cannot be
+loaded by this build**: the state file grew a version when the mouse block
+changed, and an older state is refused rather than misread. Save states
+written by this build load normally.
+
+One consequence of the volatile half staying out: the button state is not
+captured, so a restored game starts with the mouse released and a click that
+was held down across the save has to be pressed again.
 
 **This release was re-cut.** The tag still reads `v1.0.0.12`, but the file
 behind the download link is a different build than the one first published
