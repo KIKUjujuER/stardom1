@@ -34,6 +34,18 @@ The Android migration is complete: the emulator core, the app layer, the
 bundle launcher, the save states and the build pipeline are all in place and
 verified. What follows is maintenance — bug fixes and documentation.
 
+New in 1.0.0.12
+---------------
+
+A **patch** release on top of the `android-migration-complete` milestone. The
+mouse work that closed the migration phase is what 1.0.0.11 shipped; this
+release repairs the packaging around it.
+
+| | |
+|---|---|
+| **The emulator knows its own version** | The version was a literal `1.0.0.1` in the Android config template, so the DOS banner and the window title said *WhereQ-DOSBox version 1.0.0.1* whatever release was installed. The native build now reads the same `VERSION` file the release script and the app read, so the two can never disagree. |
+| **A local build ships all three ABIs** | `android/build-android.sh` and `android/build-sdl2.sh` defaulted to two of them, so an APK built locally did not carry the same ABI set as the published one. Both now build `arm64-v8a`, `armeabi-v7a` and `x86_64` by default — the same set CI builds. |
+
 New in 1.0.0.11
 ---------------
 
@@ -392,7 +404,7 @@ A **milestone tag** marks a phase rather than a release: `milestone/<name>`,
 annotated, and deliberately outside the `vX.Y.Z.A` scheme so the release
 script never picks it up. `milestone/android-migration-complete` marks the end
 of the Android migration phase — from there the project is in maintenance. It
-rides on the current release, `v1.0.0.11`.
+rides on the current release, `v1.0.0.12`.
 
 The production APK is signed with the release key, which is never committed:
 

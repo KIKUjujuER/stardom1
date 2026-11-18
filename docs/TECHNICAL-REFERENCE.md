@@ -17,7 +17,7 @@ migration diary that came before it.
 
 **Status:** the Android migration phase is **complete** — the milestone tag
 `milestone/android-migration-complete` marks it, and it rides on the current
-release, `v1.0.0.11` (the phase itself ended with `v1.0.0.10`). From there the
+release, `v1.0.0.12` (the phase itself ended with `v1.0.0.10`). From there the
 project is in **maintenance**: bug fixes and documentation polish, no new
 features. §11 is therefore a list of known gaps, not a roadmap.
 
@@ -367,12 +367,13 @@ Deliberately **not** defined, and why:
 | `C_DYNAMIC_X86` | the x86-specific dynrec needs a GCC plugin. |
 | `C_DIRECTSERIAL`, `C_MODEM`, `C_IPX` | no usable RS-232, modem or IPX on Android. |
 
-▸ **Known defect:** the `PACKAGE_VERSION` / `VERSION` macros in
-`config-android.h.in:31-35` are **hardcoded literals** (`"1.0.0.1"`), not
-`@VAR@` substitutions, so `configure_file(… @ONLY)` never replaces them. The
-generated `config.h` therefore reports `1.0.0.1` while the app ships
-`1.0.0.9`. It is cosmetic — the app-facing version comes from the `VERSION`
-file (§3.3) — but it is wrong and should be templated.
+▸ The `PACKAGE_VERSION` / `PACKAGE_STRING` / `VERSION` macros in
+`config-android.h.in` are `@VAR@` substitutions, filled in by
+`android/CMakeLists.txt` from the `VERSION` file at the repo root (§3.3). They
+were **hardcoded literals** (`"1.0.0.1"`) until 1.0.0.12, so the generated
+`config.h` reported `1.0.0.1` whatever release was built — and `VERSION` is
+read at run time, in the DOS startup banner, in the window title, in the BIOS
+machine string and in the name of the mapper file.
 
 ### 2.7 ▸ The JIT cache and Android's W^X
 
@@ -475,9 +476,11 @@ Two of these are load-bearing:
    `llvm-strip --strip-unneeded`.
 4. **stage** — copy into `android/app/src/main/jniLibs/<abi>/`.
 
-▸ The default ABI list is **two** (`arm64-v8a armeabi-v7a`), not three. A
-local `./android/build-android.sh` produces a two-ABI APK; `x86_64` is only
-built when it is named explicitly or by the CI matrix.
+▸ The default ABI list is **three** (`arm64-v8a armeabi-v7a x86_64`) — the
+same set CI builds and the same set the released APK carries. It used to be
+two, so an APK built from a plain `./android/build-android.sh` was missing an
+ABI the published one has. `bin/build.sh` always passes the list explicitly,
+so this only matters for a direct call of the script.
 
 ▸ **The `jniLibs` staging is vestigial for the Gradle path.** The Gradle
 module stages the libraries out of `build/android/<abi>/libdosbox.so` into
@@ -695,6 +698,8 @@ secrets**; only the release workflow does.
 | `if-no-files-found: error` on every upload | a missing artifact must fail the job, not silently produce an empty download. |
 | the **ABI verification** step | the APK is unzipped and grepped for `lib/<abi>/libdosbox.so` for each ABI; a missing one fails with `::error::<abi> is missing from the APK`. This is the guard against the "1.8 MB APK with no `lib/`" failure of §2.10. |
 | the released file is named after the **version**, not the tag | `whereq-dosbox-<version>.apk` — the tag's "v" is dropped (`${RELEASE_TAG#v}`), so the release asset and the download link in `downloads/` carry the same name. One file, one name: a release asset called `whereq-dosbox-v1.0.0.11.apk` next to a link to `whereq-dosbox-1.0.0.11.apk` is a support question waiting to happen. |
+| the **release prose** comes from `docs/releases/<version>.md` | the body of the GitHub Release is read from the repository, so it is reviewed, versioned and changed in the same commit as the code it describes. `{{TAG}}` and `{{VERSION}}` are substituted before it is published, which is how a screenshot can be pinned to the release it belongs to. A release without such a file still gets published — it just gets the machine facts (file name, SHA-256, certificate) and no prose. See [docs/releases/README.md](releases/README.md). |
+| the **native version** comes from the `VERSION` file | `android/CMakeLists.txt` reads the same `VERSION` file the release script writes and the Gradle build reads, and substitutes it into `config-android.h.in`. It used to be a literal `1.0.0.1`, so the emulator said *version 1.0.0.1* in the DOS banner and in the window title whatever release was installed. |
 
 ### 3.3 Versioning
 
@@ -702,8 +707,8 @@ secrets**; only the release workflow does.
 |---|---|
 | **`VERSION`** (repo root) | the single source of truth, written by `bin/release.sh` from the git tag |
 | `android/app/build.gradle` | reads `VERSION`, falls back to `1.0.0.1` if the file is missing |
-| `AndroidManifest.xml` | a fallback literal (`versionCode="1000009"`, `versionName="1.0.0.9"`) |
-| `android/cmake/config-android.h.in` | ▸ hardcoded literals that are **stale** (§2.6) |
+| `AndroidManifest.xml` | a fallback literal (`versionCode="1000011"`, `versionName="1.0.0.11"`), kept in step by the release script |
+| `android/cmake/config-android.h.in` | reads `VERSION` too — `android/CMakeLists.txt` substitutes it into the template (it was a stale literal, see §11.1) |
 
 The encoding is `versionCode = major*1e6 + minor*1e4 + patch*1e2 + build`,
 implemented identically in three places (`bin/release.sh:219-225`,
@@ -3107,12 +3112,22 @@ visible in the UI.
 
 | # | What | Where | Effect |
 |---|---|---|---|
-| 1 | The package version in the native config template is hardcoded to `1.0.0.1` and never updated | `android/cmake/config-android.h.in:31-35` | the native `PACKAGE_VERSION` disagrees with the Gradle `versionName`. Nothing reads it at runtime, but it is misleading |
-| 2 | `android/build-android.sh` defaults to **two** ABIs while the documentation and the CI build three | `android/build-android.sh` | a local script run produces an APK without `armeabi-v7a` unless the flag is passed |
-| 3 | The `src/main/jniLibs` staging directory is vestigial | `android/app/src/main/` | the Gradle path stages the `.so` files from `build/android/<abi>/`; the old directory is only a leftover |
-| 4 | The shipped asset sets `nosound=false` in the `[dosbox]` section | `android/app/src/main/assets/dosbox.conf` | DOSBox registers `nosound` in `[mixer]`, so the setting in `[dosbox]` is ignored and the mixer runs with its default. The line is harmless but does nothing |
-| 5 | A bundle's own `dosbox.conf` is ignored | §8.10 | the app regenerates its configuration from its own asset on every boot; the launcher reports *"ships its own dosbox.conf"* instead of pretending to use it |
-| 6 | `DosboxTyper.kt` is dead code | `android/app/src/main/java/com/whereq/dosbox/DosboxTyper.kt` | the real launch mechanism is the `[autoexec]` line in the generated configuration (§8.6). The typer is left in the tree but is not referenced |
+| 1 | The `src/main/jniLibs` staging directory is vestigial | `android/app/src/main/` | the Gradle path stages the `.so` files from `build/android/<abi>/`; the old directory is only a leftover |
+| 2 | The shipped asset sets `nosound=false` in the `[dosbox]` section | `android/app/src/main/assets/dosbox.conf` | DOSBox registers `nosound` in `[mixer]`, so the setting in `[dosbox]` is ignored and the mixer runs with its default. The line is harmless but does nothing |
+| 3 | A bundle's own `dosbox.conf` is ignored | §8.10 | the app regenerates its configuration from its own asset on every boot; the launcher reports *"ships its own dosbox.conf"* instead of pretending to use it |
+| 4 | `DosboxTyper.kt` is dead code | `android/app/src/main/java/com/whereq/dosbox/DosboxTyper.kt` | the real launch mechanism is the `[autoexec]` line in the generated configuration (§8.6). The typer is left in the tree but is not referenced |
+
+Two defects that used to be listed here were fixed in **1.0.0.12**:
+
+* The **native version** was a literal `1.0.0.1` in
+  `android/cmake/config-android.h.in`, so the emulator reported *WhereQ-DOSBox
+  version 1.0.0.1* in the DOS startup banner and in the window title whatever
+  release was installed, the BIOS machine string said 1.0.0.1, and the mapper
+  file was always `mapper-1.0.0.1.map`. It is now substituted from the
+  `VERSION` file at the repo root — the same file the release script writes and
+  the Gradle build reads.
+* The **default ABI list** of `android/build-android.sh` (and of
+  `android/build-sdl2.sh`) was two instead of three.
 
 ▸ **The baseline is the em-dosbox fork of DOSBox r4305**, not plain DOSBox
 0.74. A fork-versus-plain diff is therefore **not available in this
@@ -3139,7 +3154,6 @@ event-callback registration included (§5.5).
 | Item | Note |
 |---|---|
 | A **fork-versus-plain** diff | needs the plain 0.74 tree next to this one (§11.1) |
-| The **version template** | the hardcoded `1.0.0.1` should be generated from the Gradle version |
 | The **bundle `dosbox.conf`** | using it would need a configuration that is not regenerated on every boot — a different design, not a patch |
 | **More ABIs on a device** | the `arm64` and `armeabi-v7a` builds are untested on real hardware |
 | A **frozen** guest | `SAVESTATE` does not restore the "frozen" flag; a frozen machine that is saved and loaded continues running |

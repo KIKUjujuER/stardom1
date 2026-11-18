@@ -209,9 +209,26 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           apk="whereq-dosbox-${RELEASE_TAG#v}.apk"
+          version="${RELEASE_TAG#v}"
+          # The prose of the release lives in the repository, in
+          # docs/releases/<version>.md, so it is reviewed, versioned and
+          # changed in the same commit as the code it describes. When the file
+          # is there its text is the body of the release; when it is not, the
+          # release still gets the machine facts below.
+          notes="docs/releases/${version}.md"
           {
             echo "**WhereQ-DOSBox ${RELEASE_TAG}**"
             echo
+            if [ -f "$notes" ]; then
+              # {{TAG}} and {{VERSION}} are replaced with the tag and the
+              # version, so the notes can point at a screenshot that is
+              # pinned to this tag and can never drift from it.
+              sed -e "s|{{TAG}}|${RELEASE_TAG}|g" \
+                  -e "s|{{VERSION}}|${version}|g" "$notes"
+              echo
+              echo "---"
+              echo
+            fi
             echo "The Android port of DOSBox. The APK is signed with the release key"
             echo "of this repository, so it can be installed over the previous"
             echo "version without uninstalling it first."

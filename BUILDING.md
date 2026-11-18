@@ -470,7 +470,7 @@ fixes and documentation polish, no new features.
 
 A milestone tag points at one commit, so it is **moved on** when a later
 release carries the same state — the migration marker was placed at
-`v1.0.0.10` and moved to `v1.0.0.11`:
+`v1.0.0.10` and moved to `v1.0.0.12`:
 
 ```sh
 git tag -f -a milestone/<name> -m "What the milestone means" <release commit>
@@ -488,6 +488,15 @@ git tag -a v1.0.0.7 -m "..."
 git push origin HEAD:refs/heads main
 git push origin refs/tags/v1.0.0.7
 ```
+
+**The release prose lives in the repository.** The body of the GitHub Release
+is read from `docs/releases/<version>.md` — the file is named after the
+version, `1.0.0.12.md`, and it has to be committed before the tag is pushed,
+because the release workflow reads it from the checkout of the tag. It may
+use `{{TAG}}` and `{{VERSION}}`, which are substituted before the notes are
+published; that is how a screenshot is pinned to the release it belongs to.
+A release without such a file is still published, with the machine facts only.
+See [docs/releases/README.md](docs/releases/README.md).
 
 **The APK is not committed and not built here.** Pushing the tag starts the
 release workflow: CI builds the native libraries for all three ABIs, assembles

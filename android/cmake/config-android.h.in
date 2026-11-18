@@ -25,14 +25,19 @@
 #define DOSBOX_CONFIG_ANDROID_H
 
 /* ---------------------------------------------------------------- package */
+/* The version is substituted from the VERSION file at the repo root by
+   android/CMakeLists.txt. It must never be a literal here: VERSION is used
+   in the DOS startup banner, in the window title, in the BIOS machine string
+   and in the name of the mapper file, so a stale literal makes the native
+   library claim to be an old release. */
 #define PACKAGE "whereq-dosbox"
 #define PACKAGE_NAME "WhereQ-DOSBox"
 #define PACKAGE_TARNAME "whereq-dosbox"
-#define PACKAGE_VERSION "1.0.0.1"
-#define PACKAGE_STRING "WhereQ-DOSBox 1.0.0.1"
+#define PACKAGE_VERSION "@DOSBOX_VERSION@"
+#define PACKAGE_STRING "@DOSBOX_PACKAGE_STRING@"
 #define PACKAGE_BUGREPORT ""
 #define PACKAGE_URL ""
-#define VERSION "1.0.0.1"
+#define VERSION "@DOSBOX_VERSION@"
 
 /* -------------------------------------------------------------- platform */
 #define STDC_HEADERS 1

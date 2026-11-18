@@ -23,6 +23,28 @@ repository's history, at their own tag — for example
 * Signing certificate (SHA-256):
   `b16b480d5a1ff6d35baff0b15fa3fc4b0ee815e500861fbff1b062c9bf7d3933`
 
+## What changed in 1.0.0.12
+
+A **patch** on the `android-migration-complete` milestone: the mouse work that
+closed the Android migration phase is what 1.0.0.11 shipped, and this release
+repairs the packaging around it.
+
+* **The emulator knows its own version.** The version was a literal `1.0.0.1`
+  in the Android config template, so the DOS startup banner and the window
+  title said *WhereQ-DOSBox version 1.0.0.1* no matter which release was
+  installed, the BIOS machine string said 1.0.0.1, and the mapper file was
+  always `mapper-1.0.0.1.map`. The native build now reads the same `VERSION`
+  file that the release script writes and the app reads, so the version in the
+  banner and the version on this page cannot disagree.
+* **A local build ships all three ABIs.** `android/build-android.sh` and
+  `android/build-sdl2.sh` defaulted to two of them, so an APK built from a
+  plain `./bin/build.sh apk` did not carry the same ABI set as the published
+  one. Both now build `arm64-v8a`, `armeabi-v7a` and `x86_64` by default — the
+  same set CI builds.
+
+Save states written by 1.0.0.11 and by this release are interchangeable: the
+state format did not change.
+
 ## What changed in 1.0.0.11
 
 * **The mouse has a right button.** A DOS mouse has two buttons and a
@@ -45,9 +67,9 @@ repository's history, at their own tag — for example
 file grew a version when the mouse driver joined the snapshot, and an older
 state is refused rather than misread.
 
-This release carries the **milestone tag** for the end of the Android
+This release carried the **milestone tag** for the end of the Android
 migration phase — `milestone/android-migration-complete`, the same marker that
-was placed at 1.0.0.10 and has been moved on to this release.
+was placed at 1.0.0.10 and has since been moved on to 1.0.0.12.
 
 The rest of the emulator core is unchanged — this release is the app layer and
 the mouse driver.
@@ -84,7 +106,7 @@ file grew a version when the sound chips became part of the snapshot, and an
 older state is refused rather than misread.
 
 This release carried the **milestone tag** for the end of the Android
-migration phase; the marker has since moved on to 1.0.0.11, which carries the
+migration phase; the marker has since moved on to 1.0.0.12, which carries the
 same state. What follows is maintenance: bug fixes and documentation.
 
 ## What changed in 1.0.0.9

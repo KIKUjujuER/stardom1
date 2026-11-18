@@ -1,7 +1,11 @@
 #!/bin/bash
 # build-android.sh - build libdosbox.so for Android (all ABIs).
 #
-#   ./android/build-android.sh [abi ...]     (default: arm64-v8a armeabi-v7a)
+#   ./android/build-android.sh [abi ...]
+#
+# With no argument all three ABIs are built - the same set CI builds and the
+# same set the released APK carries. Naming only two of them produced an APK
+# that was missing an ABI the published one has.
 #
 # Steps per ABI:
 #   1. SDL2 as a static PIC archive (skipped if already present)
@@ -15,7 +19,7 @@ ROOT="$(cd "$HERE/.." && pwd)"
 . "$ROOT/toolchain/env.sh"
 
 ABIS=("$@")
-[ ${#ABIS[@]} -eq 0 ] && ABIS=(arm64-v8a armeabi-v7a)
+[ ${#ABIS[@]} -eq 0 ] && ABIS=(arm64-v8a armeabi-v7a x86_64)
 
 for ABI in "${ABIS[@]}"; do
   SDL_PREFIX="$ROOT/build/sdl2/$ABI"

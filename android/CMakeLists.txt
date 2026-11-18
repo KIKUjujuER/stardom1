@@ -53,6 +53,23 @@ if(NOT DOSBOX_SIZEOF_UNSIGNED_LONG OR NOT DOSBOX_SIZEOF_UNSIGNED_LONG_LONG)
 endif()
 message(STATUS "long = ${DOSBOX_SIZEOF_UNSIGNED_LONG} bytes, long long = ${DOSBOX_SIZEOF_UNSIGNED_LONG_LONG} bytes, int* = ${DOSBOX_SIZEOF_INT_P} bytes")
 
+# --------------------------------------------------------------- version --
+# The version comes from the VERSION file at the repo root - the one file
+# the release script writes and the Gradle build reads. It used to be a
+# literal in config-android.h.in ("1.0.0.1"), so the native library claimed
+# to be 1.0.0.1 in every release: in the DOS startup banner, in the window
+# title, in the BIOS machine string and in the name of the mapper file.
+set(DOSBOX_VERSION "unknown")
+if(EXISTS "${DOSBOX_ROOT}/VERSION")
+    file(READ "${DOSBOX_ROOT}/VERSION" _wq_version)
+    string(STRIP "${_wq_version}" DOSBOX_VERSION)
+endif()
+if(DOSBOX_VERSION STREQUAL "")
+    set(DOSBOX_VERSION "unknown")
+endif()
+set(DOSBOX_PACKAGE_STRING "WhereQ-DOSBox ${DOSBOX_VERSION}")
+message(STATUS "whereq-dosbox: version ${DOSBOX_VERSION}")
+
 configure_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/cmake/config-android.h.in"
     "${DOSBOX_GENERATED}/config.h"

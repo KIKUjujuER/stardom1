@@ -5,7 +5,10 @@
 # .so. SDL_STATIC_PIC is required because a static archive linked into a
 # shared object must be compiled position independent.
 #
-#   ./android/build-sdl2.sh [abi ...]      (default: arm64-v8a armeabi-v7a)
+#   ./android/build-sdl2.sh [abi ...]
+#
+# With no argument all three ABIs are built, the same set build-android.sh
+# builds and the same set the released APK carries.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -35,7 +38,7 @@ if [ ! -d "$NDK" ]; then
 fi
 
 ABIS=("$@")
-[ ${#ABIS[@]} -eq 0 ] && ABIS=(arm64-v8a armeabi-v7a)
+[ ${#ABIS[@]} -eq 0 ] && ABIS=(arm64-v8a armeabi-v7a x86_64)
 
 for ABI in "${ABIS[@]}"; do
   BUILD="$ROOT/build/sdl2-build/$ABI"
