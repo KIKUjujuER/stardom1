@@ -198,9 +198,10 @@ The **#+=** layer, with the punctuation — the key is lit while the layer is on
 Files on the phone
 ------------------
 
-> **Want to try the app without building it?** The release APK is in
-> [`downloads/`](downloads/) — see [downloads/README.md](downloads/README.md)
-> for the install steps.
+> **Want to try the app without building it?** The release APK is published on
+> the [releases page](https://github.com/whereq/whereq-dosbox/releases) —
+> [`downloads/README.md`](downloads/README.md) has the current link, the
+> checksum and the install steps.
 
 The **File** button in the on-screen keyboard opens the bundle launcher. It
 installs a DOS bundle (a `.zip` archive) on the phone and starts it. The
@@ -323,7 +324,7 @@ resources/            the logo and the screenshot
 docs/                 the technical reference and the screenshot gallery
                        (and DOSBox's own man page and porting guide)
 examples/             the example bundle (STARFALL)
-downloads/            the release APK, for people who want to try the app
+downloads/            the link to the published release APK
 bin/                  build.sh (every build scenario), release.sh
 ```
 

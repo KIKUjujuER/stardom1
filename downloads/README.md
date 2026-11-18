@@ -3,17 +3,21 @@
 The release APK of **WhereQ-DOSBox**, for people who want to try the app
 without building it.
 
-| file | version | size |
+**The APK is not in this repository.** CI builds it from the release tag and
+publishes it as a release asset, so the file you download is the file that was
+built, signed and verified — one artifact, one checksum, one place. Older
+versions are on the [releases page](https://github.com/whereq/whereq-dosbox/releases).
+
+## The current release
+
+| version | file | size |
 |---|---|---|
-| [whereq-dosbox-1.0.0.11.apk](whereq-dosbox-1.0.0.11.apk) | 1.0.0.11 | 15.7 MB |
-| [whereq-dosbox-1.0.0.10.apk](whereq-dosbox-1.0.0.10.apk) | 1.0.0.10 | 15.7 MB |
-| [whereq-dosbox-1.0.0.9.apk](whereq-dosbox-1.0.0.9.apk) | 1.0.0.9 | 15.7 MB |
-| [whereq-dosbox-1.0.0.8.apk](whereq-dosbox-1.0.0.8.apk) | 1.0.0.8 | 15.5 MB |
-| [whereq-dosbox-1.0.0.7.apk](whereq-dosbox-1.0.0.7.apk) | 1.0.0.7 | 15.5 MB |
-| [whereq-dosbox-1.0.0.6.apk](whereq-dosbox-1.0.0.6.apk) | 1.0.0.6 | 15.5 MB |
-| [whereq-dosbox-1.0.0.5.apk](whereq-dosbox-1.0.0.5.apk) | 1.0.0.5 | 15.5 MB |
-| [whereq-dosbox-1.0.0.4.apk](whereq-dosbox-1.0.0.4.apk) | 1.0.0.4 | 5.0 MB |
-| [whereq-dosbox-1.0.0.3.apk](whereq-dosbox-1.0.0.3.apk) | 1.0.0.3 | 5.0 MB |
+| 1.0.0.11 | [`whereq-dosbox-1.0.0.11.apk`](https://github.com/whereq/whereq-dosbox/releases/download/v1.0.0.11/whereq-dosbox-1.0.0.11.apk) | 15.7 MB |
+
+* SHA-256 of the 1.0.0.11 APK:
+  `5dd04af8dbb0ef739eed57de3bf8a61eb070dcf6f63c0fe003cf69bcecd54854`
+* Signing certificate (SHA-256):
+  `b16b480d5a1ff6d35baff0b15fa3fc4b0ee815e500861fbff1b062c9bf7d3933`
 
 ## What changed in 1.0.0.11
 
@@ -159,22 +163,9 @@ from 1.0.0.7 on it can be picked in the app, see above.
 The APK is signed with the release key of this repository, so it can be
 updated in place: a later version replaces it without uninstalling first.
 
-* SHA-256 of the 1.0.0.11 APK:
-  `1b0b27cfd1e36ee820dc8c0b9b03000a24c48181f6c6f1a3b8640b9a816d905d`
-* SHA-256 of the 1.0.0.10 APK:
-  `80bdce1b4bdeba809159310441e450e704f6c322e2a3ff98bcc822ed50077018`
-* SHA-256 of the 1.0.0.9 APK:
-  `cd6d0bdafd0f84c7324936c89a6cab14ed87a21e4211ed8909078b4a7a51ac02`
-* SHA-256 of the 1.0.0.8 APK:
-  `ed17f39bddeb9e871485df390f772f19c5a43abdbf3b5845c7abd4afbb602ca3`
-* SHA-256 of the 1.0.0.7 APK:
-  `2e97f12f3901acbdc23f62395316df25aa51f4a081d941a950b2d7dfa36910a1`
-* SHA-256 of the 1.0.0.6 APK:
-  `a41d76eeb2c79eccf5afb4f77dcff8d7525d8c9c55c2fad982707520feed369a`
-* SHA-256 of the 1.0.0.5 APK:
-  `562598cdf2ca9214f50af94604843acba8af90c292eeb7e06320532b313e4ac4`
-* Signing certificate (SHA-256):
-  `b16b480d5a1ff6d35baff0b15fa3fc4b0ee815e500861fbff1b062c9bf7d3933`
+The SHA-256 of the current release is at the top of this file; every release
+carries its own `.sha256` sidecar next to the APK on the [releases
+page](https://github.com/whereq/whereq-dosbox/releases).
 
 ## What to try first
 
@@ -207,4 +198,7 @@ Without the release key the Gradle build falls back to the debug key, and the
 resulting APK is *debuggable* — it cannot be installed over a release-signed
 one (Android refuses it with `INSTALL_FAILED_UPDATE_INCOMPATIBLE`).
 
-See [docs/TECHNICAL-REFERENCE.md](../docs/TECHNICAL-REFERENCE.md) for the details.
+A local build is for your own phone. The APK people download is built by CI
+from the release tag, so the published file is the one that was signed,
+verified and announced — see [docs/TECHNICAL-REFERENCE.md](../docs/TECHNICAL-REFERENCE.md)
+for the details.

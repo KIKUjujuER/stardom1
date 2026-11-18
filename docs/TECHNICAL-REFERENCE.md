@@ -211,7 +211,7 @@ whereq-dosbox/
 ├── docs/                      this document + the screenshot gallery, next to
 │                              DOSBox's own man page and porting guide
 ├── bin/release.sh            the release script (tag → VERSION → APK)
-├── downloads/                the published APKs
+├── downloads/                the link to the published release APK
 └── build/                    gitignored: the native build, SDL2, the APK
 ```
 
@@ -693,7 +693,7 @@ secrets**; only the release workflow does.
 | `actions/setup-java@v6`, `temurin`, `java-version: 17` | AGP 8.7 needs JDK 17. (Fix commit `1ee9487` — the workflows were on `setup-java` v5.) |
 | `if-no-files-found: error` on every upload | a missing artifact must fail the job, not silently produce an empty download. |
 | the **ABI verification** step | the APK is unzipped and grepped for `lib/<abi>/libdosbox.so` for each ABI; a missing one fails with `::error::<abi> is missing from the APK`. This is the guard against the "1.8 MB APK with no `lib/`" failure of §2.10. |
-| the released file is named after the **version**, not the tag | `whereq-dosbox-<version>.apk` — the tag's "v" is dropped (`${RELEASE_TAG#v}`), so the release asset and the APK in `downloads/` carry the same name. One file, one name: a release asset called `whereq-dosbox-v1.0.0.11.apk` next to a repository copy called `whereq-dosbox-1.0.0.11.apk` is a support question waiting to happen. |
+| the released file is named after the **version**, not the tag | `whereq-dosbox-<version>.apk` — the tag's "v" is dropped (`${RELEASE_TAG#v}`), so the release asset and the download link in `downloads/` carry the same name. One file, one name: a release asset called `whereq-dosbox-v1.0.0.11.apk` next to a link to `whereq-dosbox-1.0.0.11.apk` is a support question waiting to happen. |
 
 ### 3.3 Versioning
 
@@ -2943,6 +2943,7 @@ by driving the release APK on an emulator.
 | Build under test | the **release** APK, all three ABIs |
 | APK | `android/app/build/outputs/apk/release/app-release.apk`, 16 465 163 bytes |
 | SHA-256 | `1b0b27cfd1e36ee820dc8c0b9b03000a24c48181f6c6f1a3b8640b9a816d905d` |
+| Published asset | `whereq-dosbox-1.0.0.11.apk` on the [v1.0.0.11 release](https://github.com/whereq/whereq-dosbox/releases/tag/v1.0.0.11), SHA-256 `5dd04af8dbb0ef739eed57de3bf8a61eb070dcf6f63c0fe003cf69bcecd54854` |
 | Signature | release key, cert SHA-256 `b16b480d5a1ff6d35baff0b15fa3fc4b0ee815e500861fbff1b062c9bf7d3933` (§3.5) |
 | ABIs in the APK | `lib/arm64-v8a/libdosbox.so`, `lib/armeabi-v7a/libdosbox.so`, `lib/x86_64/libdosbox.so` — all three |
 

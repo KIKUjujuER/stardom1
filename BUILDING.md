@@ -474,14 +474,18 @@ bump. The release order is therefore:
 ```sh
 git add <the release's files>
 bin/release.sh --skip-commit --skip-push -m "..."   # bump VERSION + manifest
-bin/build.sh apk --release                         # the APK, now 1.0.0.7
-cp android/app/build/outputs/apk/release/app-release.apk downloads/whereq-dosbox-1.0.0.7.apk
-git add downloads/whereq-dosbox-1.0.0.7.apk
 git commit -m "..."
 git tag -a v1.0.0.7 -m "..."
 git push origin HEAD:refs/heads main
 git push origin refs/tags/v1.0.0.7
 ```
+
+**The APK is not committed and not built here.** Pushing the tag starts the
+release workflow: CI builds the native libraries for all three ABIs, assembles
+and signs the APK, and publishes it as a release asset next to the tag. The
+download link in `downloads/README.md` points at that asset, so the file people
+download is the one CI built and verified. A local build
+(`bin/build.sh apk --release`) is for testing on your own phone.
 
 The release build needs the release key; without it the APK falls back to the
 debug key and cannot be installed over a release-signed app:

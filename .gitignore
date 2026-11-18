@@ -88,6 +88,12 @@ Makefile
 *.keystore
 *.jks
 
+# The published APKs live in the GitHub releases, not in the repository: CI
+# builds them from the release tag and publishes them there. A local build
+# dropped into downloads/ is build output - do not commit it.
+/downloads/*.apk
+/downloads/*.apk.sha256
+
 # Python bytecode
 __pycache__/
 *.pyc

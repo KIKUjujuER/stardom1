@@ -164,9 +164,10 @@ jobs:
       - name: stage the APK and its checksum
         id: stage
         run: |
-          # The published file is named after the *version*, not the tag: the
-          # APK in downloads/ is "whereq-dosbox-1.0.0.12.apk", so the release
-          # asset has to carry the same name for the two to be the same file.
+          # The published file is named after the *version*, not the tag:
+          # "whereq-dosbox-1.0.0.12.apk", the same name the download link in
+          # downloads/ points at. The APK is built here and nowhere else, so
+          # the file people download is the one that was signed and verified.
           apk="whereq-dosbox-${RELEASE_TAG#v}.apk"
           cp android/app/build/outputs/apk/release/app-release.apk "$apk"
           sha256sum "$apk" > "$apk.sha256"
