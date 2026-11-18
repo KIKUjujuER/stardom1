@@ -498,6 +498,27 @@ published; that is how a screenshot is pinned to the release it belongs to.
 A release without such a file is still published, with the machine facts only.
 See [docs/releases/README.md](docs/releases/README.md).
 
+### Re-cutting a tag
+
+A published tag can be **re-cut**: the tag is moved to a new commit and the
+release is published again over the same version. The workflow does this by
+itself — if the release for the tag already exists, the notes and the assets
+are replaced in place instead of the step failing on *"already exists"*.
+
+```sh
+git tag -f -a v1.0.0.12 -m "..." <new commit>
+git push --force origin refs/tags/v1.0.0.12
+```
+
+The push starts the release workflow again, and it builds the tag as it is
+now. The version and the `versionCode` do not change, so the new APK still
+installs over the one it replaces.
+
+Re-cutting is not free: the file behind the download link changes, so its
+SHA-256 changes, and **save states written by the old build do not load in the
+new one** if the state format changed. Say so in the release notes, and move
+the milestone tag only after the release is out.
+
 **The APK is not committed and not built here.** Pushing the tag starts the
 release workflow: CI builds the native libraries for all three ABIs, assembles
 and signs the APK, and publishes it as a release asset next to the tag. The

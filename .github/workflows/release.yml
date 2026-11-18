@@ -204,7 +204,7 @@ jobs:
           done
           echo "all three ABIs are packaged"
 
-      - name: create the GitHub Release
+      - name: publish the GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -246,11 +246,23 @@ jobs:
             echo '```'
           } > release-notes.md
           cat release-notes.md
-          gh release create "$RELEASE_TAG" \
-            --title "$RELEASE_TAG" \
-            --notes-file release-notes.md \
-            --verify-tag \
-            "$apk" "$apk.sha256"
+          # A tag can be re-cut: the release may already exist, and then the
+          # notes and the assets are replaced in place instead of the step
+          # failing on "already exists". A re-cut keeps the version and the
+          # versionCode, so the APK still installs over the one it replaces.
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "the release $RELEASE_TAG exists already - updating it in place"
+            gh release edit "$RELEASE_TAG" \
+              --title "$RELEASE_TAG" \
+              --notes-file release-notes.md
+            gh release upload "$RELEASE_TAG" "$apk" "$apk.sha256" --clobber
+          else
+            gh release create "$RELEASE_TAG" \
+              --title "$RELEASE_TAG" \
+              --notes-file release-notes.md \
+              --verify-tag \
+              "$apk" "$apk.sha256"
+          fi
 
       - uses: actions/upload-artifact@v4
         with:
