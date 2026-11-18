@@ -342,3 +342,46 @@ Java_com_whereq_dosbox_DosboxNative_nativeLoadState(JNIEnv *env, jclass clazz,
     (void)clazz;
     return savestate_request(env, path, 2 /* load */);
 }
+
+/* ------------------------------------------------------------------- mouse */
+
+/*
+ * Injects a mouse button press/release into DOSBox's SDL event queue.
+ *
+ * Touch has no right button, so the on-screen "RMB" key uses this to send a
+ * real right-click (button == SDL_BUTTON_RIGHT). The event is routed through
+ * GFX_Events() -> HandleMouseButton() on the DOSBox thread; the button acts at
+ * the current cursor position (DOSBox ignores the event's x/y), which is what a
+ * cancel/back right-click wants. SDL_PushEvent() is thread safe, so this may be
+ * called from the Java UI thread.
+ */
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_whereq_dosbox_DosboxNative_nativePushMouseButton(JNIEnv *env,
+                                                          jclass clazz,
+                                                          jint button,
+                                                          jboolean pressed)
+{
+    (void)env;
+    (void)clazz;
+
+    if ((SDL_WasInit(SDL_INIT_VIDEO) & SDL_INIT_VIDEO) == 0) {
+        return JNI_FALSE;
+    }
+
+    SDL_Event ev;
+    SDL_zero(ev);
+    ev.type = pressed ? SDL_MOUSEBUTTONDOWN : SDL_MOUSEBUTTONUP;
+    ev.button.state = pressed ? SDL_PRESSED : SDL_RELEASED;
+    ev.button.button = (Uint8)button;
+    ev.button.clicks = 1;
+    ev.button.which = 0;
+    ev.button.x = 0;
+    ev.button.y = 0;
+    ev.button.timestamp = SDL_GetTicks();
+
+    if (SDL_PushEvent(&ev) < 0) {
+        DOSBOX_LOG("could not push mouse button event: %s", SDL_GetError());
+        return JNI_FALSE;
+    }
+    return JNI_TRUE;
+}

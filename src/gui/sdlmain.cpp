@@ -2630,22 +2630,27 @@ void GFX_HandleVideoResize(int width, int height) {
  * SDL's synthesis is switched off (SDL_HINT_TOUCH_MOUSE_EVENTS) in
  * GUI_StartUp(), otherwise the mouse would be moved twice.
  */
-static void android_handle_touch(SDL_TouchFingerEvent *finger) {
-	/* Only the first finger drives the mouse - a second finger would
-	   otherwise fight with the first one over the mouse position. */
-	static bool tracking = false;
-	static SDL_FingerID tracked = 0;
+/* Move the DOS cursor to a finger position (window px), through the letterbox
+ * clip rectangle, exactly like HandleMouseMotion() does for a real mouse. */
+static void android_touch_cursor(float px, float py) {
+	const float rx = (px - (float)sdl.clip.x) / (float)(sdl.clip.w > 1 ? sdl.clip.w - 1 : 1);
+	const float ry = (py - (float)sdl.clip.y) / (float)(sdl.clip.h > 1 ? sdl.clip.h - 1 : 1);
+	Mouse_CursorMoved(0.0f, 0.0f, rx, ry, sdl.mouse.locked);
+}
 
-	if (finger->type == SDL_FINGERDOWN) {
-		if (tracking) return;
-		tracking = true;
-		tracked = finger->fingerId;
-	} else {
-		if (!tracking || finger->fingerId != tracked) return;
-		if (finger->type == SDL_FINGERUP) {
-			tracking = false;
-		}
-	}
+static void android_handle_touch(SDL_TouchFingerEvent *finger) {
+	/* The first finger drives the cursor and the LEFT button, held for exactly
+	 * as long as the finger is down - a tap is a real held-then-released click
+	 * and a drag keeps the button down while it moves. This matters: many games
+	 * (e.g. 三国志英杰传's battle UI) read the *live* button state (INT 33h
+	 * AX=3), so an instantaneous click would be missed. A second finger that
+	 * joins the first is a RIGHT click (cancel/back in most DOS games); the
+	 * on-screen RMB key does the same at the current cursor. */
+	static bool         tracking = false;   // a first finger is down
+	static SDL_FingerID tracked = 0;        // its id
+	static bool         leftDown = false;   // the LEFT button is pressed
+	static bool         rightActive = false;// a second finger is right-clicking
+	static SDL_FingerID rightId = 0;        // its id
 
 	int winw = 0, winh = 0;
 	SDL_GetWindowSize(sdl.window, &winw, &winh);
@@ -2655,31 +2660,44 @@ static void android_handle_touch(SDL_TouchFingerEvent *finger) {
 	const float px = finger->x * (float)winw;
 	const float py = finger->y * (float)winh;
 
-	/* Map through the letterboxed clip rectangle, exactly like
-	   HandleMouseMotion() does for the real mouse. */
-	const float rx = (px - (float)sdl.clip.x) / (float)(sdl.clip.w > 1 ? sdl.clip.w - 1 : 1);
-	const float ry = (py - (float)sdl.clip.y) / (float)(sdl.clip.h > 1 ? sdl.clip.h - 1 : 1);
-
-	Mouse_CursorMoved(0.0f, 0.0f, rx, ry, sdl.mouse.locked);
-
 	switch (finger->type) {
 	case SDL_FINGERDOWN:
-		Mouse_ButtonPressed(0);
+		if (!tracking) {
+			tracking = true;
+			tracked = finger->fingerId;
+			android_touch_cursor(px, py);
+			Mouse_ButtonPressed(0);   // LEFT down, held until this finger lifts
+			leftDown = true;
+		} else if (!rightActive && finger->fingerId != tracked) {
+			// A second finger: a right-click. End the left click first so the
+			// two do not overlap, then hold RIGHT until this finger lifts.
+			rightActive = true;
+			rightId = finger->fingerId;
+			if (leftDown) { Mouse_ButtonReleased(0); leftDown = false; }
+			Mouse_ButtonPressed(1);
+		}
 		break;
+
+	case SDL_FINGERMOTION:
+		// Only the first finger moves the cursor (dragging with the button held).
+		if (tracking && finger->fingerId == tracked)
+			android_touch_cursor(px, py);
+		break;
+
 	case SDL_FINGERUP:
-		Mouse_ButtonReleased(0);
+		if (rightActive && finger->fingerId == rightId) {
+			Mouse_ButtonReleased(1);
+			rightActive = false;
+			break;
+		}
+		if (tracking && finger->fingerId == tracked) {
+			if (leftDown) { Mouse_ButtonReleased(0); leftDown = false; }
+			tracking = false;
+		}
 		break;
+
 	default:
 		break;
-	}
-
-	static int logged = 0;
-	if (logged < 20) {
-		logged++;
-		int mdx = -1, mdy = -1;
-		Mouse_GetPosition(&mdx, &mdy);
-		LOG_MSG("Android touch: type=%d id=%lld px=%.0f,%.0f dos=%.3f,%.3f -> mouse=%d,%d",
-			(int)finger->type, (long long)finger->fingerId, px, py, rx, ry, mdx, mdy);
 	}
 }
 #endif

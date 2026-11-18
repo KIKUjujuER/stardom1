@@ -5,6 +5,7 @@ without building it.
 
 | file | version | size |
 |---|---|---|
+| [whereq-dosbox-1.0.0.11.apk](whereq-dosbox-1.0.0.11.apk) | 1.0.0.11 | 15.7 MB |
 | [whereq-dosbox-1.0.0.10.apk](whereq-dosbox-1.0.0.10.apk) | 1.0.0.10 | 15.7 MB |
 | [whereq-dosbox-1.0.0.9.apk](whereq-dosbox-1.0.0.9.apk) | 1.0.0.9 | 15.7 MB |
 | [whereq-dosbox-1.0.0.8.apk](whereq-dosbox-1.0.0.8.apk) | 1.0.0.8 | 15.5 MB |
@@ -13,6 +14,31 @@ without building it.
 | [whereq-dosbox-1.0.0.5.apk](whereq-dosbox-1.0.0.5.apk) | 1.0.0.5 | 15.5 MB |
 | [whereq-dosbox-1.0.0.4.apk](whereq-dosbox-1.0.0.4.apk) | 1.0.0.4 | 5.0 MB |
 | [whereq-dosbox-1.0.0.3.apk](whereq-dosbox-1.0.0.3.apk) | 1.0.0.3 | 5.0 MB |
+
+## What changed in 1.0.0.11
+
+* **The mouse has a right button.** A DOS mouse has two buttons and a
+  touchscreen has one, so there was no way to send a right click — and in most
+  DOS games the right button is *cancel* or *back*. The on-screen keyboard now
+  has an **RMB** key on the left pad, next to **Tab**, and a **second finger**
+  on the picture does the same at that finger's own position.
+* **A click is a held button, not a tap.** The first finger holds the **left**
+  button for as long as it is down, so a drag still drags, and the right button
+  is held the same way. This is what a game that reads the mouse *live* needs:
+  the button state at INT 33h AX=3. A click that was over in a millisecond
+  could fall between two polls and be missed altogether.
+* **The mouse survives a save state.** The INT 33h driver keeps its state
+  outside the guest's memory — the game's event-callback registration, the
+  cursor range and the button state. It was not in the snapshot, so after a
+  restore the cursor still moved but the game's clicks stopped reaching it: a
+  dialog's *confirm* button did nothing. The driver is now part of the state.
+
+**Save states written by 1.0.0.10 cannot be loaded by this build.** The state
+file grew a version when the mouse driver joined the snapshot, and an older
+state is refused rather than misread.
+
+The rest of the emulator core is unchanged — this release is the app layer and
+the mouse driver.
 
 ## What changed in 1.0.0.10
 
@@ -133,6 +159,8 @@ from 1.0.0.7 on it can be picked in the app, see above.
 The APK is signed with the release key of this repository, so it can be
 updated in place: a later version replaces it without uninstalling first.
 
+* SHA-256 of the 1.0.0.11 APK:
+  `1b0b27cfd1e36ee820dc8c0b9b03000a24c48181f6c6f1a3b8640b9a816d905d`
 * SHA-256 of the 1.0.0.10 APK:
   `80bdce1b4bdeba809159310441e450e704f6c322e2a3ff98bcc822ed50077018`
 * SHA-256 of the 1.0.0.9 APK:

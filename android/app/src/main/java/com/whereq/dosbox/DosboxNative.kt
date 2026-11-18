@@ -73,6 +73,22 @@ object DosboxNative {
     external fun nativePushKey(scancode: Int, pressed: Boolean): Boolean
 
     /**
+     * Injects a mouse button press or release into DOSBox's SDL event queue.
+     *
+     * Touch has no right button, so the on-screen right-click key uses this to
+     * send a real right-click. The button acts at the current cursor position.
+     *
+     * @param button  SDL button number ([SDL_BUTTON_RIGHT] = 3).
+     * @param pressed true for a press, false for a release.
+     * @return true if the event was queued.
+     */
+    @JvmStatic
+    external fun nativePushMouseButton(button: Int, pressed: Boolean): Boolean
+
+    /** SDL's right mouse button number (SDL_BUTTON_RIGHT). */
+    const val SDL_BUTTON_RIGHT = 3
+
+    /**
      * Writes a full snapshot of the running machine (CPU + guest RAM + paging +
      * VGA) to [path]. The call is handed to the DOSBox thread and performed at
      * an instruction boundary, then blocks until it is done.

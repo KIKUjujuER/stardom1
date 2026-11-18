@@ -19,6 +19,7 @@
 
 #include <string.h>
 #include <math.h>
+#include <stdio.h>
 
 
 #include "dosbox.h"
@@ -127,6 +128,36 @@ static struct {
 	Bit8u mode;
 	Bit16s gran_x,gran_y;
 } mouse;
+
+// WhereQ save-states: the INT 33h mouse driver keeps its whole state in this
+// file-static struct - including the game's event-callback registration
+// (sub_seg/sub_ofs/sub_mask), the cursor range and the button state. None of it
+// lives in guest memory, so without saving it a restored game's mouse clicks
+// stop reaching the game (the cursor still moves, because DOSBox draws it, but
+// e.g. a dialog's "confirm" button no longer responds). The struct's only host
+// pointers are the two cursor-mask pointers, which are kept live on load.
+size_t MOUSE_StateSize(void) {
+	return sizeof(mouse);
+}
+bool MOUSE_SaveState(FILE *f) {
+	return fwrite(&mouse, sizeof(mouse), 1, f) == 1;
+}
+bool MOUSE_LoadState(FILE *f) {
+	Bit16u *l_screen = mouse.screenMask;
+	Bit16u *l_cursor = mouse.cursorMask;
+	if (fread(&mouse, sizeof(mouse), 1, f) != 1) return false;
+	// The two cursor-mask pointers are process-local allocations; keep the live
+	// ones (the exact cursor bitmap is cosmetic and the game redraws it).
+	mouse.screenMask = l_screen;
+	mouse.cursorMask = l_cursor;
+	// Start the drawing / re-entrancy state clean: do not blit a stale saved
+	// cursor background, and do not believe the event callback is mid-run (a
+	// stuck in_UIR would swallow every later click).
+	mouse.background = false;
+	mouse.timer_in_progress = false;
+	mouse.in_UIR = false;
+	return true;
+}
 
 #if defined(__ANDROID__)
 /* Android: the touch -> mouse mapping is done in GFX_Events()

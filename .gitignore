@@ -81,6 +81,7 @@ Makefile
 /android/app/build/
 /android/local.properties
 /android/.gradle/
+/android/.kotlin/
 
 # Signing material - never commit these
 /android/keystore.properties

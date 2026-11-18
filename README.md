@@ -34,6 +34,19 @@ The Android migration is complete: the emulator core, the app layer, the
 bundle launcher, the save states and the build pipeline are all in place and
 verified. What follows is maintenance — bug fixes and documentation.
 
+New in 1.0.0.11
+---------------
+
+| | |
+|---|---|
+| **The mouse has a right button** | A DOS mouse has two buttons and a touchscreen has one, so there was no way to send a right click — and in most DOS games the right button is *cancel* or *back*. The on-screen keyboard now has an **RMB** key on the left pad, next to **Tab**, and a **second finger** on the picture does the same at that finger's own position. |
+| **A click is a held button, not a tap** | The first finger holds the **left** button for as long as it is down, so a drag still drags, and the right button is held the same way. This is what a game that reads the mouse *live* needs — the button state at INT 33h AX=3. A click that was over in a millisecond could fall between two polls and be missed altogether. |
+| **The mouse survives a save state** | The INT 33h driver keeps its state outside the guest's memory — the game's event-callback registration, the cursor range and the button state. It was not in the snapshot, so after a restore the cursor still moved but the game's clicks stopped reaching it: a dialog's *confirm* button did nothing. The driver is now part of the state. |
+
+**Save states written by 1.0.0.10 cannot be loaded by this build**: the state
+file grew a version when the mouse driver joined the snapshot, and an older
+state is refused rather than misread.
+
 New in 1.0.0.10
 ---------------
 
@@ -146,7 +159,7 @@ the picture.
 
 * **The left pad** — the arrow keys as a D-pad under the left thumb (up on
   top, left and right side by side, down below); above it the left half of a
-  split QWERTY, and **File**, **Esc** and **Tab** along the top.
+  split QWERTY, and **File**, **Esc**, **Tab** and **RMB** along the top.
 * **The right pad** — the action keys under the right thumb: **Alt**,
   **Ctrl**, **Shift**, **Space** and **Enter**; above them the right half of
   the QWERTY, and **#+=**, **Fn** and Backspace along the top.
@@ -159,10 +172,18 @@ Ctrl, Alt and Shift work both ways: *tap* one and it stays pressed for the next
 key (Ctrl, then C), or *hold* it like a real key while the other thumb steers —
 which is what a game expects from its fire and strafe keys.
 
+The DOS mouse has two buttons and a touchscreen has one. **RMB** sends a right
+click where the DOS cursor stands, and a second finger on the picture does the
+same at that finger's own position. Both are *held* while the finger is down
+rather than tapped, because a game that reads the mouse live — the button
+state at INT 33h AX=3 — misses an instantaneous click. The first finger holds
+the **left** button for as long as it is down, so a drag still drags.
+
 On a 16:9 screen the bars are too narrow for half a keyboard, so each side is
-a single column — the arrows left, the action keys right — and the full QWERTY
-folds up from the bottom with **⌨**. In portrait the keys are a slim strip
-along the bottom, with the same fold-up QWERTY.
+a single column — the arrows left, the action keys right, with **RMB** above
+the arrows — and the full QWERTY folds up from the bottom with **⌨**. In
+portrait the keys are a slim strip along the bottom, with the same fold-up
+QWERTY and an **RMB** key of its own.
 
 The pads are tight on an 18:9 screen: the letter keys come to about 24 dp
 wide there, against 33 dp on a 20:9 one. The D-pad and the action keys keep

@@ -1120,12 +1120,12 @@ So the conversion is done inside DOSBox instead —
 `#if defined(__ANDROID__)`:
 
 ```
-  SDL_FINGERDOWN / SDL_FINGERUP
+  SDL_FINGERDOWN / SDL_FINGERMOTION / SDL_FINGERUP
         │
         ▼
-  android_handle_touch(finger)              src/gui/sdlmain.cpp:2633
-        │  only the FIRST finger drives the mouse — a second one would fight
-        │  with the first over the mouse position
+  android_handle_touch(finger)              src/gui/sdlmain.cpp:2641
+        │  the FIRST finger drives the cursor and holds the LEFT button for as
+        │  long as it is down; a SECOND finger is a RIGHT click
         ▼
   px = finger.x * windowWidth               SDL normalises touches to 0..1
   py = finger.y * windowHeight
@@ -1137,6 +1137,22 @@ So the conversion is done inside DOSBox instead —
         ▼
   Mouse_CursorMoved(0, 0, rx, ry, sdl.mouse.locked)
 ```
+
+▸ **A click is a held button, not a tap.** The first finger presses the LEFT
+button on `SDL_FINGERDOWN` and releases it on `SDL_FINGERUP`, so the button is
+down for the whole gesture and a drag keeps it down while it moves. This is
+what a game that reads the mouse *live* needs — the button state at INT 33h
+AX=3 — because an instantaneous click can fall between two polls and be missed
+entirely. The RIGHT button is held the same way: a second finger that joins
+the first one is a right click (cancel or back in most DOS games), held until
+that finger lifts. The left button is released first, so the two clicks never
+overlap.
+
+The on-screen **RMB** key sends the same right click at the *current* cursor
+position, through `DosboxNative.nativePushMouseButton()`
+(`android/jni/dosbox_android.cpp:359` → `Mouse_ButtonPressed()` /
+`Mouse_ButtonReleased()`). It is a held button as well: the finger down
+presses it, the finger up releases it.
 
 SDL's own synthesis is switched off with
 `SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0")` (`sdlmain.cpp:3383`), otherwise
@@ -1345,7 +1361,7 @@ exactly that.
 ┌──────────────────────────────────────────────────────────────────────────┐
 │ SSHeader  (24 bytes)                                                     │
 │   char     magic[4]      "WQSS"                                          │
-│   uint32_t version        7                                               │
+│   uint32_t version        8                                               │
 │   uint32_t machine        ::machine                                       │
 │   uint32_t mem_pages      MEM_TotalPages()                                │
 │   uint32_t vmemsize       vga.vmemsize                                    │
@@ -1366,6 +1382,7 @@ exactly that.
 │ fpu             the x87 register file and the control word               │
 │ SPKR            the PC speaker                                           │
 │ OPL             the OPL/AdLib FM chip  (register cache + exact snapshot)  │
+│ MOUSE           the INT 33h mouse driver (callback, range, buttons)       │
 │ DOS             the DOS layer (handles, drive, code page, current dirs)   │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
@@ -1387,6 +1404,7 @@ static size_t expected_payload_size(uint32_t mem_pages, uint32_t vmemsize) {
            sizeof(fpu) +
            SPKR_StateSize() +
            OPL_StateSize() +                 /* the OPL/AdLib FM chip   */
+           MOUSE_StateSize() +               /* the INT 33h mouse       */
            DOS_StateSize();                  /* the DOS layer           */
 }
 ```
@@ -1418,11 +1436,12 @@ same SVGA card. A mismatch is `SAVESTATE_ERR_MISMATCH`, not a crash.
 | 4 | `paging.firstmb` |
 | 5 | the open DOS file handles (milestone B2) |
 | 6 | the OPL register cache |
-| **7** | **the exact OPL chip snapshot** |
+| 7 | **the exact OPL chip snapshot** |
+| **8** | **the INT 33h mouse driver state** |
 
 A slot written by an older build is refused (*"that save file is damaged"*)
-rather than misread. ▸ The 1.0.0.9 slots are version 5 and **cannot** be
-loaded by this build.
+rather than misread. ▸ The 1.0.0.9 slots are version 5 and the 1.0.0.10 slots
+are version 7 — **neither can be loaded by this build**.
 
 ### 5.5 The blocks in detail
 
@@ -1477,17 +1496,42 @@ the PIT start times are re-based instead.
 
 **PC speaker** and **OPL** are covered in §6.
 
+**MOUSE.** The INT 33h mouse driver keeps its whole state in one file-static
+struct in `src/ints/mouse.cpp` — and none of it lives in guest memory. That
+struct holds the game's **event-callback registration** (`sub_seg`, `sub_ofs`,
+`sub_mask`), the cursor range, the button state and the two cursor masks.
+Without it a restored game's mouse clicks stop reaching the game: the cursor
+still moves (DOSBox draws it), but a dialog's *confirm* button no longer
+responds, because the callback that would have told the game about the click
+is gone.
+
+The two cursor masks are the only host pointers in it, and they are the third
+exception to §5.6. They are process-local allocations, so the loader keeps the
+live ones and restores everything else:
+
+```c
+Bit16u *l_screen = mouse.screenMask;
+Bit16u *l_cursor = mouse.cursorMask;
+if (fread(&mouse, sizeof(mouse), 1, f) != 1) return false;
+mouse.screenMask = l_screen;      /* keep the live ones */
+mouse.cursorMask = l_cursor;
+mouse.background = false;         /* do not blit a stale saved cursor   */
+mouse.timer_in_progress = false;
+mouse.in_UIR = false;             /* a stuck in_UIR would swallow clicks */
+```
+
 **DOS layer** is covered in §7.
 
 ### 5.6 ▸ The host-pointer rule
 
-Two structs in the snapshot hold pointers into the host process:
+Four structs in the snapshot hold pointers into the host process:
 
 | Struct | Pointers |
 |---|---|
 | `vga` | `mem.linear`, `mem.linear_orgptr`, `fastmem`, `fastmem_orgptr`, `draw.linear_base`, `draw.font_tables[0..1]`, `tandy.draw_base`, `tandy.mem_base`, `lfb.handler` |
 | `cpu` | `hlt.old_decoder` (a function pointer) |
 | `DBOPL::Chip` | `volHandler`, `waveBase`, `synthHandler` (§6.2) |
+| `mouse` | `screenMask`, `cursorMask` (§5.5) |
 
 They are process-local allocations. The rule is: **read the content state from
 the file, keep the live pointers.**
@@ -2569,19 +2613,19 @@ and the layout follows from it:
 
 ```
  MODE_PADS — the left pad                    the right pad
- ┌────────────────────┐                     ┌────────────────────┐
- │ File  Esc  Tab     │                     │ #+=  Fn            │
- ├────────────────────┤                     ├────────────────────┤
- │ 1  2  3  4  5      │                     │ 6  7  8  9  0      │
- │ q  w  e  r  t      │                     │ y  u  i  o  p      │
- │ a  s  d  f  g      │                     │ h  j  k  l  ;      │
- │ z  x  c  v  b      │                     │ n  m  .  /  \      │
- ├────────────────────┤                     ├────────────────────┤
- │                    │                     │                    │
- │  ←   ↑   ↓   →     │                     │ Ctrl   Alt  Shift  │
- │        ⊕           │                     │ Space  Enter        │
- └────────────────────┘                     └────────────────────┘
-          ▲──── the DOS picture sits between the two pads ────▲
+ ┌───────────────────────┐                     ┌───────────────────────┐
+ │ File  Esc  Tab  RMB   │                     │ #+=  Fn               │
+ ├───────────────────────┤                     ├───────────────────────┤
+ │ 1  2  3  4  5         │                     │ 6  7  8  9  0         │
+ │ q  w  e  r  t         │                     │ y  u  i  o  p         │
+ │ a  s  d  f  g         │                     │ h  j  k  l  ;         │
+ │ z  x  c  v  b         │                     │ n  m  .  /  \         │
+ ├───────────────────────┤                     ├───────────────────────┤
+ │                       │                     │                       │
+ │  ←   ↑   ↓   →        │                     │ Ctrl   Alt  Shift     │
+ │        ⊕              │                     │ Space  Enter          │
+ └───────────────────────┘                     └───────────────────────┘
+             ▲──── the DOS picture sits between the two pads ───────▲
 
 
  MODE_BAR (portrait, or a 4:3 tablet)
@@ -2589,8 +2633,8 @@ and the layout follows from it:
  │                    the DOS picture                       │
  └──────────────────────────────────────────────────────────┘
  ┌──────────────────────────────────────────────────────────┐
- │  ←  ↑  ↓  →      Ctrl  Alt   Space   Enter              │
- │  Esc  Tab         ⌨  (folds the full QWERTY up)          │
+ │  ←  ↑  ↓  →      Ctrl  Alt   Space   Enter               │
+ │  Esc  Tab  RMB     ⌨  (folds the full QWERTY up)         │
  └──────────────────────────────────────────────────────────┘
 
 
@@ -2603,6 +2647,10 @@ and the layout follows from it:
  │      │                      │Enter│
  └──────┴──────────────────────┴──────┘
 ```
+
+The left column carries **File**, **⌨**, **Esc**, **Tab** and **RMB** above the
+arrows; the right one carries the action keys. **RMB** is in all three layouts,
+so a right click is always one tap away.
 
 The rebuild happens **only when the mode or the bar width actually changed**
 (`if (newMode == mode && barWidth == builtBarWidth) return`), so a rotation
@@ -2625,6 +2673,10 @@ A key is described by a string, `label:keyName:kind`:
 | `k` | `KIND_KEY` | an ordinary key: down on touch, up on release |
 | `m` | `KIND_MODIFIER` | Shift / Ctrl / Alt — the armed/held model of §9.5 |
 | `s` | `KIND_SHIFTED` | a key whose character is shifted — Shift is wrapped around it |
+
+Three control keys sit outside that model, because they are not keys at all:
+**File** opens the launcher, **⌨** folds the QWERTY up, and **RMB** is a mouse
+button — RIGHT down on touch, up on release, at the current DOS cursor (§4.7).
 
 The three layers are the two halves of a split QWERTY:
 
@@ -2703,6 +2755,12 @@ express "pressed and held", which is what a game's Ctrl-fire needs. The
 trade-off is that these keys are not exposed to TalkBack; the *action* buttons
 (File, the layer keys, the panel toggle) use click listeners and stay
 accessible.
+
+▸ **The RMB key is not a key.** It takes the *mouse* path, not the scancode
+path: `attachMouseButton()` → `DosboxNative.nativePushMouseButton()` →
+`Mouse_ButtonPressed()` / `Mouse_ButtonReleased()` (§4.7). No scancode is
+involved — a right mouse button is not a keyboard key, and the DOS side learns
+about it through the INT 33h driver instead.
 
 ### 9.5 ▸ The modifier model
 
@@ -2837,11 +2895,15 @@ not a bigger key.
 
 The three layers, as they run:
 
-| | 20:9 | 18:9 |
+| | a wide screen | 18:9 |
 |---|---|---|
 | Letters | [`android-n7-pads-letters.png`](screenshots/android-n7-pads-letters.png) | [`android-n7-pads-18x9-letters.png`](screenshots/android-n7-pads-18x9-letters.png) |
 | Symbols (**#+=**) | [`android-n7-pads-symbols.png`](screenshots/android-n7-pads-symbols.png) | [`android-n7-pads-18x9-symbols.png`](screenshots/android-n7-pads-18x9-symbols.png) |
 | Functions (**Fn**) | [`android-n7-pads-functions.png`](screenshots/android-n7-pads-functions.png) | [`android-n7-pads-18x9-functions.png`](screenshots/android-n7-pads-18x9-functions.png) |
+
+The letter layer is captured on a real phone (22:9, 2376×1080); the symbol and
+function layers are emulator captures at 20:9 (2400×1080). The 18:9 column is
+the emulator with the display resized to 2160×1080.
 
 ---
 
@@ -2864,6 +2926,8 @@ by driving the release APK on an emulator.
 | The restore is a **dependency order**, not an arbitrary one | 7.4 | the DOS block re-opens files through the drive it restores | `src/dos/dos_state.cpp` |
 | The OPL block must be **consumed** even in the fallback | 6.6 | a fallback build mis-read the DOS block behind it | the file-cursor desync that was found and fixed |
 | A **stuck key** survives a layout rebuild | 9.6 | the key-down/up state is tracked explicitly and released on a rebuild | `VirtualKeyboardView.kt:172-180` |
+| The **mouse** is in the save state | 5.5 | a save → load round trip on the emulator with the new block in place | the OPL chip comes back field for field, the four DOS handles with it, no payload-size mismatch |
+| An **old state** is refused, not misread | 5.4 | loading a slot written by 1.0.0.10 (version 7) into the version-8 build | *"That save file is damaged"* |
 | The three keyboard layouts follow from the geometry | 9.2 | the width formula and the two thresholds | `VirtualKeyboardView.kt:161-167`; measured on the emulator at 420 dpi (§9.8) |
 | The bundle names are rewritten to DOS 8.3 | 8.4 | the naming function read against DOSBox's own name handling | `GameLibrary.kt:551` vs `localDrive.cpp` |
 | A **relaunch** is needed, not a typed command | 8.7 | DOSBox caches the drive listing at mount time | `localDrive.cpp:184`, quoted in `WhereqDosboxActivity.kt:130-136` |
@@ -2876,8 +2940,8 @@ by driving the release APK on an emulator.
 |---|---|
 | Device | `emulator-5554` — `sdk_gphone64_x86_64` (Android API 37, x86_64) |
 | Build under test | the **release** APK, all three ABIs |
-| APK | `android/app/build/outputs/apk/release/app-release.apk`, 16 447 740 bytes |
-| SHA-256 | `cb1c1994ac4ca4ade0a732c63efd622805ecc6d1057b46daac9ba85990840a4d` |
+| APK | `android/app/build/outputs/apk/release/app-release.apk`, 16 465 163 bytes |
+| SHA-256 | `1b0b27cfd1e36ee820dc8c0b9b03000a24c48181f6c6f1a3b8640b9a816d905d` |
 | Signature | release key, cert SHA-256 `b16b480d5a1ff6d35baff0b15fa3fc4b0ee815e500861fbff1b062c9bf7d3933` (§3.5) |
 | ABIs in the APK | `lib/arm64-v8a/libdosbox.so`, `lib/armeabi-v7a/libdosbox.so`, `lib/x86_64/libdosbox.so` — all three |
 
@@ -2898,6 +2962,9 @@ signed with a different key has to be uninstalled first).
 | Save → load → the log lines are identical | ✓ (§10.3) |
 | The DOS layer is restored (the open handles come back) | ✓ |
 | The keyboard survives a rotation | ✓ — no stuck key |
+| The **RMB** key is in all three layouts | ✓ — the left pad, the key column and the bottom bar |
+| A **save → load** round trip works with the mouse block | ✓ — the OPL chip comes back field for field, the four DOS handles with it, no payload-size mismatch |
+| A state written by **1.0.0.10** is refused | ✓ — *"That save file is damaged"*, the version guard (§5.4) |
 
 ### 10.3 ▸ The OPL test: the proof in two lines
 
@@ -3057,9 +3124,12 @@ repository** — the import was taken verbatim and the changes to `src/` and
 | The **event queue** of the VGA draw pipeline | the rebuild drops the stale events and restarts the frame timer (§5.7) |
 | The **PIC event queue** | the same: the pending events are dropped and the timing is re-based |
 | The **mixer** state | the mixer's own buffers are not snapshotted; the guest's sound state is (the OPL chip, the speaker), the mixer's are not |
-| The mouse | a captured mouse position is not restored |
 | The **directory listing caches** of the mounted drives | a bundle installed after the boot is invisible until a relaunch (§8.7) |
 | The **EMS/XMS handle tables** and the **RTC** | a restore that lands in the Ultima VIII extender still ends in `Exit to error: RET from illegal descriptor type 13` about a second later — the guest diverges because host state it depends on is still missing. The same abort happens with a build from before the DOS-handles milestone, so it is **not** caused by the handles that *are* captured |
+
+▸ The **mouse** left this list in 1.0.0.11: the whole INT 33h driver state is
+now in the snapshot — the cursor position, the button state and the game's
+event-callback registration included (§5.5).
 
 ### 11.3 The open items
 
@@ -3516,7 +3586,7 @@ evidence, not of the app (§10.6).
 | [`android-n6-starfall-gameover.png`](screenshots/android-n6-starfall-gameover.png) | the game-over screen |
 | [`android-n6-f1-running.png`](screenshots/android-n6-f1-running.png) | F1 Formula One |
 | [`android-n6-ultima8-running.png`](screenshots/android-n6-ultima8-running.png) | Ultima VIII — the extender whose abort is §11.2 |
-| [`android-n7-pads-letters.png`](screenshots/android-n7-pads-letters.png) | the console pads, **letter layer**, 20:9 |
+| [`android-n7-pads-letters.png`](screenshots/android-n7-pads-letters.png) | the console pads, **letter layer**, on a 22:9 phone |
 | [`android-n7-pads-symbols.png`](screenshots/android-n7-pads-symbols.png) | the console pads, **symbol layer** (`#+=`), 20:9 |
 | [`android-n7-pads-functions.png`](screenshots/android-n7-pads-functions.png) | the console pads, **function layer** (`Fn`), 20:9 |
 | [`android-n7-pads-18x9-letters.png`](screenshots/android-n7-pads-18x9-letters.png) | the same, on an **18:9** screen — the 23.6 dp keys of §9.8 |

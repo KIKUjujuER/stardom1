@@ -11,6 +11,7 @@
  *   - the FPU:      the x87 register file and control word
  *   - the PC speaker
  *   - the OPL/AdLib FM chip (its exact state, envelope and LFO included)
+ *   - the INT 33h mouse driver (callback registration, range, button state)
  *   - hardware timing: the two PIC controllers and the three PIT channels
  *   - the clock:    the PIC timestamp the state was taken at
  *   - the paging map of the first megabyte (paging.firstmb)
@@ -123,10 +124,17 @@ extern size_t OPL_StateSize(void);
 extern bool   OPL_SaveState(FILE *f);
 extern bool   OPL_LoadState(FILE *f);
 
+/* Defined in src/ints/mouse.cpp: the INT 33h mouse driver state (the game's
+ * event-callback registration, the cursor range, the button state). Without it
+ * a restored game's mouse clicks stop reaching the game. */
+extern size_t MOUSE_StateSize(void);
+extern bool   MOUSE_SaveState(FILE *f);
+extern bool   MOUSE_LoadState(FILE *f);
+
 /* ----------------------------------------------------------------- format */
 
 static const char   SS_MAGIC[4] = { 'W', 'Q', 'S', 'S' };
-static const uint32_t SS_VERSION = 7;   /* 7: + the exact OPL chip snapshot */
+static const uint32_t SS_VERSION = 8;   /* 8: + the INT 33h mouse driver state */
 
 /* Fixed header; everything after it is a fixed-order sequence of raw blocks.
  * The config fields double as a guard: a state can only be loaded into a
@@ -160,6 +168,7 @@ static size_t expected_payload_size(uint32_t mem_pages, uint32_t vmemsize) {
 	       sizeof(fpu) +
 	       SPKR_StateSize() +
 	       OPL_StateSize() +                 /* the OPL/AdLib FM chip   */
+	       MOUSE_StateSize() +               /* the INT 33h mouse       */
 	       DOS_StateSize();                  /* the DOS layer           */
 }
 
@@ -294,6 +303,7 @@ static int do_save(const char *path) {
 	ok = ok && wr(f, &fpu, sizeof(fpu));
 	ok = ok && SPKR_SaveState(f);
 	ok = ok && OPL_SaveState(f);
+	ok = ok && MOUSE_SaveState(f);
 	/* the DOS layer: the open file handles and the rest of its state */
 	ok = ok && DOS_SaveState(f);
 
@@ -432,6 +442,8 @@ static int do_load(const char *path) {
 	if (rc == SAVESTATE_OK && !SPKR_LoadState(f))
 		rc = SAVESTATE_ERR_IO;
 	if (rc == SAVESTATE_OK && !OPL_LoadState(f))
+		rc = SAVESTATE_ERR_IO;
+	if (rc == SAVESTATE_OK && !MOUSE_LoadState(f))
 		rc = SAVESTATE_ERR_IO;
 	/* the DOS layer: the open file handles and the rest of its state.
 	 *

@@ -250,6 +250,10 @@ class VirtualKeyboardView(context: Context) : FrameLayout(context) {
             top.addView(fill(actionKey("File", COLOR_KEY_ACCENT) { launcherListener?.onFilesRequested() }, 1f, false))
             top.addView(fill(makeKey("Esc", "esc", "c", "k", 0, COLOR_KEY_DARK), 1f, false))
             top.addView(fill(makeKey("Tab", "tab", "c", "k", 0, COLOR_KEY_DARK), 1f, false))
+            // Right mouse button: touch has no right click, so a dedicated key
+            // sends one (cancel/back in most DOS games). Two-finger tap on the
+            // picture does the same, at the finger's position (see sdlmain.cpp).
+            top.addView(fill(mouseKey("RMB", DosboxNative.SDL_BUTTON_RIGHT), 1f, false, 13f))
         } else {
             symbolsKey = actionKey("#+=", COLOR_KEY_DARK) {
                 showLayer(if (layer == LAYER_SYMBOLS) LAYER_LETTERS else LAYER_SYMBOLS)
@@ -385,6 +389,37 @@ class VirtualKeyboardView(context: Context) : FrameLayout(context) {
             view.setTextColor(COLOR_TEXT_ON_ACCENT)
         }
         view.setOnClickListener { action() }
+        return view
+    }
+
+    /**
+     * Turns [view] into a mouse-button key: the button is pressed while the
+     * finger is down and released when it lifts, so a tap is a click and a hold
+     * holds the button. The button acts at the current DOS cursor position.
+     */
+    @SuppressLint("ClickableViewAccessibility")
+    private fun attachMouseButton(view: TextView, button: Int, color: Int) {
+        view.background = keyBackground(color)
+        view.setOnTouchListener { _, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                    view.background = keyBackground(COLOR_KEY_PRESSED)
+                    DosboxNative.nativePushMouseButton(button, true)
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    view.background = keyBackground(color)
+                    DosboxNative.nativePushMouseButton(button, false)
+                }
+            }
+            true
+        }
+    }
+
+    /** A column-width mouse-button key (the pads layout). */
+    private fun mouseKey(label: String, button: Int, color: Int = COLOR_KEY_DARK): TextView {
+        val view = makeButton(label, "", "c", "k", 0)
+        attachMouseButton(view, button, color)
         return view
     }
 
@@ -574,6 +609,7 @@ class VirtualKeyboardView(context: Context) : FrameLayout(context) {
         arrayOf("⌨", "", "toggle"),
         arrayOf("Esc", "esc", "k"),
         arrayOf("Tab", "tab", "k"),
+        arrayOf("RMB", "", "rmb"),
     )
 
     /** Keys of the right column. */
@@ -603,6 +639,7 @@ class VirtualKeyboardView(context: Context) : FrameLayout(context) {
         arrayOf("↓", "down", "k"),
         arrayOf("→", "right", "k"),
         arrayOf("↑", "up", "k"),
+        arrayOf("RMB", "", "rmb"),
         arrayOf("«", "", "symbols"),
     )
 
@@ -681,6 +718,9 @@ class VirtualKeyboardView(context: Context) : FrameLayout(context) {
                 it.setTextColor(COLOR_TEXT_ON_ACCENT)
                 it.background = keyBackground(COLOR_KEY_ACCENT)
                 it.setOnClickListener { launcherListener?.onFilesRequested() }
+            }
+            "rmb" -> makeButton(label, "", size, "k", heightDp).also {
+                attachMouseButton(it, DosboxNative.SDL_BUTTON_RIGHT, COLOR_KEY_DARK)
             }
             else -> makeKey(label, keyName, size, kind, heightDp)
         }
