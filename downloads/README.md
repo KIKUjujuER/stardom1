@@ -16,10 +16,10 @@ repository's history, at their own tag — for example
 
 | version | file | size |
 |---|---|---|
-| 1.0.0.11 | [`whereq-dosbox-1.0.0.11.apk`](https://github.com/whereq/whereq-dosbox/releases/download/v1.0.0.11/whereq-dosbox-1.0.0.11.apk) | 15.7 MB |
+| 1.0.0.12 | [`whereq-dosbox-1.0.0.12.apk`](https://github.com/whereq/whereq-dosbox/releases/download/v1.0.0.12/whereq-dosbox-1.0.0.12.apk) | 15.7 MB |
 
-* SHA-256 of the 1.0.0.11 APK:
-  `5dd04af8dbb0ef739eed57de3bf8a61eb070dcf6f63c0fe003cf69bcecd54854`
+* SHA-256 of the 1.0.0.12 APK:
+  `4ae80a416dd245d0712ee0ea2294a8131b82c9fd2c93aa0df5ccc2259f290a7b`
 * Signing certificate (SHA-256):
   `b16b480d5a1ff6d35baff0b15fa3fc4b0ee815e500861fbff1b062c9bf7d3933`
 
@@ -27,7 +27,8 @@ repository's history, at their own tag — for example
 
 A **patch** on the `android-migration-complete` milestone: the mouse work that
 closed the Android migration phase is what 1.0.0.11 shipped, and this release
-repairs the packaging around it.
+repairs the packaging around it. The milestone marker
+`milestone/android-migration-complete` moves on to this release.
 
 * **The emulator knows its own version.** The version was a literal `1.0.0.1`
   in the Android config template, so the DOS startup banner and the window

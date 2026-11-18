@@ -2947,9 +2947,11 @@ by driving the release APK on an emulator.
 |---|---|
 | Device | `emulator-5554` — `sdk_gphone64_x86_64` (Android API 37, x86_64) |
 | Build under test | the **release** APK, all three ABIs |
-| APK | `android/app/build/outputs/apk/release/app-release.apk`, 16 465 163 bytes |
-| SHA-256 | `1b0b27cfd1e36ee820dc8c0b9b03000a24c48181f6c6f1a3b8640b9a816d905d` |
-| Published asset | `whereq-dosbox-1.0.0.11.apk` on the [v1.0.0.11 release](https://github.com/whereq/whereq-dosbox/releases/tag/v1.0.0.11), SHA-256 `5dd04af8dbb0ef739eed57de3bf8a61eb070dcf6f63c0fe003cf69bcecd54854` |
+| APK | the published `whereq-dosbox-1.0.0.12.apk`, 16 465 262 bytes |
+| SHA-256 | `4ae80a416dd245d0712ee0ea2294a8131b82c9fd2c93aa0df5ccc2259f290a7b` |
+| Published asset | `whereq-dosbox-1.0.0.12.apk` on the [v1.0.0.12 release](https://github.com/whereq/whereq-dosbox/releases/tag/v1.0.0.12), SHA-256 `4ae80a416dd245d0712ee0ea2294a8131b82c9fd2c93aa0df5ccc2259f290a7b` |
+| Previous build | `whereq-dosbox-1.0.0.11.apk` — the local build 16 465 163 bytes (`1b0b27cf…`), the published one 16 465 213 bytes (`5dd04af8…`) |
+| Version | `versionCode` 1000012, `versionName` 1.0.0.12 |
 | Signature | release key, cert SHA-256 `b16b480d5a1ff6d35baff0b15fa3fc4b0ee815e500861fbff1b062c9bf7d3933` (§3.5) |
 | ABIs in the APK | `lib/arm64-v8a/libdosbox.so`, `lib/armeabi-v7a/libdosbox.so`, `lib/x86_64/libdosbox.so` — all three |
 
@@ -2971,6 +2973,7 @@ signed with a different key has to be uninstalled first).
 | The DOS layer is restored (the open handles come back) | ✓ |
 | The keyboard survives a rotation | ✓ — no stuck key |
 | The **RMB** key is in all three layouts | ✓ — the left pad, the key column and the bottom bar |
+| The **native version** is the release version | ✓ — `config -get sdl mapperfile` answers `mapper-1.0.0.12.map`. Until 1.0.0.12 the macro was a literal `1.0.0.1`, so every release answered `mapper-1.0.0.1.map` |
 | A **save → load** round trip works with the mouse block | ✓ — the OPL chip comes back field for field, the four DOS handles with it, no payload-size mismatch |
 | A state written by **1.0.0.10** is refused | ✓ — *"That save file is damaged"*, the version guard (§5.4) |
 
