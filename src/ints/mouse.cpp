@@ -174,6 +174,28 @@ struct MouseStateBlock {
 
 size_t MOUSE_StateSize(void) { return sizeof(MouseStateBlock); }
 
+// Diagnostic: a fingerprint of the cursor state, so a save and the matching
+// load can be compared in logcat (`adb logcat | grep "savestate mouse"`). If
+// the two lines agree the restore is faithful and any remaining cursor problem
+// is downstream; if they differ the state never reached the load.
+static Bit32u mouse_mask_sum(void) {
+	Bit32u s = 2166136261u;
+	for (int i = 0; i < CURSORY; i++) {
+		s = (s ^ userdefScreenMask[i]) * 16777619u;
+		s = (s ^ userdefCursorMask[i]) * 16777619u;
+	}
+	return s;
+}
+static void mouse_log_state(const char *tag) {
+	LOG_MSG("savestate mouse %s: type=%u hidden=%u hot=%d,%d mask=%08x "
+	        "cb=%04x:%04x/%04x rng=%d..%d,%d..%d pos=%d,%d",
+	        tag, (unsigned)mouse.cursorType, (unsigned)mouse.hidden,
+	        (int)mouse.hotx, (int)mouse.hoty, (unsigned)mouse_mask_sum(),
+	        (unsigned)mouse.sub_seg, (unsigned)mouse.sub_ofs, (unsigned)mouse.sub_mask,
+	        (int)mouse.min_x, (int)mouse.max_x, (int)mouse.min_y, (int)mouse.max_y,
+	        (int)mouse.x, (int)mouse.y);
+}
+
 bool MOUSE_SaveState(FILE *f) {
 	MouseStateBlock b;
 	memset(&b, 0, sizeof(b));
@@ -194,6 +216,7 @@ bool MOUSE_SaveState(FILE *f) {
 	b.senv_x = mouse.senv_x; b.senv_y = mouse.senv_y;
 	memcpy(b.userScreenMask, userdefScreenMask, sizeof(b.userScreenMask));
 	memcpy(b.userCursorMask, userdefCursorMask, sizeof(b.userCursorMask));
+	mouse_log_state("save");
 	return fwrite(&b, sizeof(b), 1, f) == 1;
 }
 
@@ -241,6 +264,7 @@ bool MOUSE_LoadState(FILE *f) {
 		mouse.times_pressed[i] = mouse.times_released[i] = 0;
 	}
 	PIC_RemoveEvents(MOUSE_Limit_Events);
+	mouse_log_state("load");
 	return true;
 }
 
