@@ -39,11 +39,4 @@ void Mouse_AutoLock(bool enable);
 void Mouse_BeforeNewVideoMode(bool setmode);
 void Mouse_AfterNewVideoMode(bool setmode);
 
-#if defined(__ANDROID__)
-/* Android: the touch -> mouse mapping lives in GFX_Events() (src/gui/
-   sdlmain.cpp), which has no access to the mouse state. This returns the
-   mouse position in DOS pixels, for the diagnostic log there. */
-void Mouse_GetPosition(int *x, int *y);
-#endif
-
 #endif

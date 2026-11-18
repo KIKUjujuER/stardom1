@@ -159,6 +159,9 @@ class SaveStore(private val context: Context) {
                 }
                 true
             } ?: false
+            // Keep the original SAVE time: restoring rewrites the local file, so
+            // without this the slot would show "just now" after every load.
+            if (ok) doc.lastModified().takeIf { it > 0L }?.let { local.setLastModified(it) }
             if (!ok) local.delete()
             ok
         } catch (e: Exception) {
@@ -170,18 +173,7 @@ class SaveStore(private val context: Context) {
 
     /** @return the durable mirror's last-modified time for a slot, or null. */
     fun durableTimestamp(displayName: String, slot: Int): Long? {
-        val doc = durableSlot(displayName, slot, create = false)?.takeIf { it.exists() }
-        if (doc == null) {
-            if (slot == 1 && hasFolder()) {
-                // Diagnostic: show what is actually in the game's folder, to tell a
-                // name/structure mismatch from a genuinely empty slot.
-                val dir = gameDir(displayName, create = false)
-                Log.i(TAG, "durable: no slot $slot for '$displayName'; " +
-                    "dirName='${sanitize(displayName)}' found=${dir != null} " +
-                    "children=${dir?.listFiles()?.mapNotNull { it.name }}")
-            }
-            return null
-        }
+        val doc = durableSlot(displayName, slot, create = false)?.takeIf { it.exists() } ?: return null
         val t = doc.lastModified()
         return if (t > 0L) t else null
     }

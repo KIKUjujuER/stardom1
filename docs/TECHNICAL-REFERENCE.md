@@ -1585,20 +1585,6 @@ pointers are re-derived from the saved cursor type: a user-defined graphics
 cursor (type 2) uses the restored masks, anything else uses the built-in
 arrow. That is why the mouse is not one of the exceptions to §5.6.
 
-▸ **The mouse state is logged on both ends.** Every save and every load
-writes one line with the cursor type, the hotspot, a checksum of the two masks
-and the callback registration:
-
-```
-savestate mouse save: type=2 hidden=0 hot=4,4 mask=8f3a21c7 cb=0192:1234/00ff ...
-savestate mouse load: type=2 hidden=0 hot=4,4 mask=8f3a21c7 cb=0192:1234/00ff ...
-```
-
-If the two lines agree, the restore was faithful and any cursor problem that
-remains is downstream of the snapshot; if they differ, the state never
-reached the load. It is a diagnostic, so it stays in the release — it is how
-the mouse fix is checked on a real device.
-
 **DOS layer** is covered in §7.
 
 ### 5.6 ▸ The host-pointer rule
