@@ -468,6 +468,15 @@ The first one is `milestone/android-migration-complete` — the end of the
 Android migration phase. From there on the project is in maintenance: bug
 fixes and documentation polish, no new features.
 
+A milestone tag points at one commit, so it is **moved on** when a later
+release carries the same state — the migration marker was placed at
+`v1.0.0.10` and moved to `v1.0.0.11`:
+
+```sh
+git tag -f -a milestone/<name> -m "What the milestone means" <release commit>
+git push --force origin refs/tags/milestone/<name>
+```
+
 The APK is built from the `VERSION` file, so it has to be built **after** the
 bump. The release order is therefore:
 

@@ -16,10 +16,10 @@ measured, what is still open, and what the screenshots show. It supersedes the
 migration diary that came before it.
 
 **Status:** the Android migration phase is **complete** — the milestone tag
-`milestone/android-migration-complete` marks it, and the first release carrying
-it is `v1.0.0.10`. From there the project is in **maintenance**: bug fixes and
-documentation polish, no new features. §11 is therefore a list of known gaps,
-not a roadmap.
+`milestone/android-migration-complete` marks it, and it rides on the current
+release, `v1.0.0.11` (the phase itself ended with `v1.0.0.10`). From there the
+project is in **maintenance**: bug fixes and documentation polish, no new
+features. §11 is therefore a list of known gaps, not a roadmap.
 
 **Reading conventions.**
 

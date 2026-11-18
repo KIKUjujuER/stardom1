@@ -45,6 +45,10 @@ repository's history, at their own tag — for example
 file grew a version when the mouse driver joined the snapshot, and an older
 state is refused rather than misread.
 
+This release carries the **milestone tag** for the end of the Android
+migration phase — `milestone/android-migration-complete`, the same marker that
+was placed at 1.0.0.10 and has been moved on to this release.
+
 The rest of the emulator core is unchanged — this release is the app layer and
 the mouse driver.
 
@@ -79,8 +83,9 @@ the mouse driver.
 file grew a version when the sound chips became part of the snapshot, and an
 older state is refused rather than misread.
 
-This release also carries the **milestone tag** for the end of the Android
-migration phase. What follows is maintenance: bug fixes and documentation.
+This release carried the **milestone tag** for the end of the Android
+migration phase; the marker has since moved on to 1.0.0.11, which carries the
+same state. What follows is maintenance: bug fixes and documentation.
 
 ## What changed in 1.0.0.9
 
