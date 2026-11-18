@@ -1,6 +1,6 @@
 # Downloads
 
-The release APK of **WhereQ-DOSBox**, for people who want to try the app
+The release APK of **A-DOS**, for people who want to try the app
 without building it.
 
 **The APK is not in this repository.** CI builds it from the release tag and
@@ -27,9 +27,21 @@ repository's history, at their own tag — for example
 
 A **patch** on the `android-migration-complete` milestone: the mouse work that
 closed the Android migration phase is what 1.0.0.11 shipped, and this release
-repairs the packaging around it. The milestone marker
+repairs the packaging around it, renames the app and moves the saves out of
+the app's own storage. The milestone marker
 `milestone/android-migration-complete` moves on to this release.
 
+* **The app is now called A-DOS.** The launcher name, the notification and the
+  launcher icons all carry the new name and mark — DOS across Android and
+  Apple. The repository, the package name and the download file names stay
+  `whereq-dosbox`.
+* **Your saves survive a reinstall.** The save-state slots lived in the app's
+  private storage, and Android deletes that when the app is uninstalled — so
+  reinstalling used to mean losing every save. Pick a folder on the phone
+  (**Config → Saves folder**, or the offer that appears after the first save)
+  and every slot is mirrored there, gzipped, next to the game itself. A
+  reinstall, a new phone or a deleted app therefore all come back: the games
+  are offered for restore by name, with their save states already there.
 * **The save state no longer restores the mouse driver's volatile half.**
   1.0.0.11 put the *whole* INT 33h driver into the snapshot — the event
   queue, the click counters and the interrupt re-entrancy flags included.
@@ -55,7 +67,13 @@ repairs the packaging around it. The milestone marker
 **Save states written by 1.0.0.11 and by the first 1.0.0.12 cannot be loaded
 by this build**: the state file grew a version when the mouse block was
 slimmed, and an older state is refused rather than misread. Save states
-written by this build load normally.
+written by the previous 1.0.0.12 and by this build load normally — the format
+did not change again.
+
+**This release was re-cut.** The tag still reads `v1.0.0.12`, but the file
+behind the download link is a different build than the one first published
+under that name, so its checksum is a different one. The checksum at the top of
+this page is the current one.
 
 One consequence of the slimmed block: the button state is no longer captured,
 so a restored game starts with the mouse released and a click that was held
@@ -205,7 +223,7 @@ from 1.0.0.7 on it can be picked in the app, see above.
 1. Copy the apk to the phone (cable, cloud drive, whatever is at hand).
 2. Open it with the Files app.  Android asks whether to allow installing
    unknown apps from that app — allow it.
-3. Install, then open **WhereQ-DOSBox**.
+3. Install, then open **A-DOS**.
 
 The APK is signed with the release key of this repository, so it can be
 updated in place: a later version replaces it without uninstalling first.

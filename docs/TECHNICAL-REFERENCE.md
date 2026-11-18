@@ -1,13 +1,20 @@
-# WhereQ-DOSBox — technical reference
+# A-DOS — technical reference
 
 **Audience:** senior software engineers who have to read, review or modify this
 codebase. It assumes familiarity with emulators, C/C++, the JVM/Android and
 build systems; it does not assume familiarity with *this* port.
 
-**Scope:** the technical implementation of WhereQ-DOSBox — the Android native
+**Scope:** the technical implementation of A-DOS — the Android native
 port of DOSBox, the disk save-state machine, the sound-chip snapshots, the
 bundle launcher, the on-screen keyboard, the build pipeline and the release
 process.
+
+> **On the name.** The app on the device is called **A-DOS** since 1.0.0.12 —
+> DOS across Android and Apple. The project, the repository, the package name
+> (`com.whereq.dosbox`) and the published file names (`whereq-dosbox-*.apk`)
+> still carry the older **WhereQ-DOSBox** name, and the DOS banner inside the
+> emulator still prints it. A rename of the native product string would change
+> the mapper file name, so it is left alone for now.
 
 **Not scope:** the product pitch — that is the top-level
 [`README.md`](../README.md) (what the app is and how to use it). This document
@@ -1101,7 +1108,7 @@ documentation:
 | Detail | Value |
 |---|---|
 | channel | `"dosbox_running"`, `IMPORTANCE_LOW`, `setShowBadge(false)` |
-| notification | `"WhereQ-DOSBox"` / *"Playing `<game>` — tap to return"*, `setOngoing(true)` |
+| notification | `"A-DOS"` / *"Playing `<game>` — tap to return"*, `setOngoing(true)` |
 | type | `foregroundServiceType="specialUse"` with a `PROPERTY_SPECIAL_USE_FGS_SUBTYPE` description |
 | return value | `START_NOT_STICKY` — the OS must **not** resurrect the service on its own; a game launch restarts the whole process |
 
@@ -2361,7 +2368,7 @@ file deeper in the tree is data, not the entry point.
 installer or the driver drops straight back to the prompt, and auto-loading a
 driver TSR that is really a `CONFIG.SYS` device **hangs** instead of exiting
 cleanly. The port therefore ships the game alone and lets the user add drivers
-deliberately through the "Launch…" editor (§8.9).
+deliberately through the "Launch…" editor (§8.10).
 
 The same reasoning is why the app does **not** auto-load driver TSRs at install
 time: `writeRunBat(target, folder, entryPoint, null)` writes a `RUN.BAT` with
@@ -2471,12 +2478,13 @@ clean `C:\>` prompt instead of looping into the game forever.
 
 | | |
 |---|---|
-| Directory | `noBackupFilesDir/states/<folder>/` (`WhereqDosboxActivity.kt:385`) |
+| Directory | `noBackupFilesDir/states/<folder>/` (`SaveStore.localSlot()`) |
 | File | `slot<n>.sav`, n = 1..3 (`STATE_SLOTS = 3`) |
 | Written by | `DosboxNative.nativeSaveState(path)` — the §5 machine |
 | Read by | `DosboxNative.nativeLoadState(path)` |
 | "newest" | the slot with the greatest `lastModified()`; missing and zero-length files are skipped (`newestSlot()`, `WhereqDosboxActivity.kt:361`) |
 | label | *"just now"* under a minute, otherwise a relative span |
+| durable mirror | the same slot, gzipped, in the folder the user picked — §8.9 |
 
 ▸ **Save is only offered for the game this process is actually running.**
 `GameLauncherView.setCurrentGame(folder)` holds the folder the current boot
@@ -2488,7 +2496,62 @@ prompt, say — and the slot would silently become useless.
 (`"Overwrite slot 2?"`), because a slot is the only copy of that moment in the
 game.
 
-### 8.9 The launch editor
+### 8.9 ▸ The durable saves folder
+
+The save-state slots of §8.8 live in the app's private storage. Android deletes
+that when the app is uninstalled, so "reinstall the app" used to mean "lose
+every save". `SaveStore` (`SaveStore.kt`) adds a second layer outside the
+sandbox: a folder the **user** picks on their phone, reached through the
+Storage Access Framework.
+
+```
+  the app                        the phone's own storage
+  ──────                        ─────────────────────
+  noBackupFilesDir/states/G4/    <the folder the user picked>/
+    slot1.sav   ── gzip ──▶        whereq-opl-test-bundle/
+    slot2.sav                        slot1.gz
+                                     slot2.gz
+                                     bundle.zip      (the game itself)
+```
+
+| | |
+|---|---|
+| The local copy | `noBackupFilesDir/states/<folder>/slot<n>.sav` — the file the native engine reads and writes (`DosboxNative` works with plain paths) |
+| The durable mirror | `<the picked folder>/<game name>/slot<n>.gz` — gzip-compressed; a 16 MB RAM snapshot is mostly zeros and shrinks to a few MB |
+| The game bundle | `<the picked folder>/<game name>/bundle.zip` — the unpacked game, re-zipped, with `__meta.json` as its first entry |
+| Who chooses the folder | the user, through `ACTION_OPEN_DOCUMENT_TREE`; the URI is kept in the shared preferences and the permission is taken persistently |
+| When it is written | after every successful save (`mirrorToDurable`), after every install (`mirrorGame`), and once for every existing slot when the folder is first connected (`backUpAllSlotsToDurable`) |
+| When it is read | when a slot's local copy is missing — on load (`restoreFromDurable`) and on the boot-time auto-restore (`restoreAfterBoot`) |
+
+▸ **The mirror is keyed by the game's *name*, not by its folder.** The folder
+index (`G1`, `G2`, …) is handed out at install time and is **not** stable across
+a reinstall: the same game installed again becomes `G3` where it was `G1`. The
+name always is, so the durable side is `<sanitised display name>/`. A name with
+characters a file system will not take becomes `_` (`sanitize()`), capped at 64
+characters.
+
+▸ **The storage provider may append an extension.** `createFile(mime, name)`
+lets the provider add a mime-derived extension when the name's extension does
+not match the mime — a slot asked for as `slot1.gz` with `application/gzip` can
+land as `slot1.gz.gz`. So a child is found tolerantly: `<base>` or
+`<base>.<anything>`, but not `slot10` for the base `slot1` (`findChild()`).
+That is why the slot is *created* with the extension already matching the mime
+and *found* tolerantly.
+
+▸ **A restored bundle is written verbatim.** The files inside `bundle.zip` are
+already in DOS 8.3 form — they were unpacked that way the first time — so
+`GameLibrary.restore()` writes them as they are, with no renaming. That
+reproduces the exact working game, `RUN.BAT` included, and sidesteps the
+install-time path mangling of §8.4. Every entry still goes through
+`resolveSafely()` (the §8.3 guard against `..` and absolute paths), because the
+zip comes from the user's storage and not from the app's own installer.
+
+▸ **The offer is asked once.** The first successful save shows *"Keep your
+saves safe?"*; the answer is remembered in `saves_folder_offered`, so the app
+does not nag. The choice stays reachable from **Config → Saves folder**, which
+also shows whether a folder is set.
+
+### 8.10 The launch editor
 
 Some DOS games need several resident drivers before the main program (the
 graphics and font TSRs of the Chinese and KOEI releases). The "Launch…" editor
@@ -2529,7 +2592,7 @@ MAIN
 ▸ Picking a single start file again (`setEntryPoint()`) clears the custom
 script — the two are alternatives, and the entry point wins.
 
-### 8.10 The manifest
+### 8.11 The manifest
 
 `games.json` sits next to the games directory, so `GAMES/` holds nothing but
 games:
@@ -3142,7 +3205,7 @@ visible in the UI.
 |---|---|---|---|
 | 1 | The `src/main/jniLibs` staging directory is vestigial | `android/app/src/main/` | the Gradle path stages the `.so` files from `build/android/<abi>/`; the old directory is only a leftover |
 | 2 | The shipped asset sets `nosound=false` in the `[dosbox]` section | `android/app/src/main/assets/dosbox.conf` | DOSBox registers `nosound` in `[mixer]`, so the setting in `[dosbox]` is ignored and the mixer runs with its default. The line is harmless but does nothing |
-| 3 | A bundle's own `dosbox.conf` is ignored | §8.10 | the app regenerates its configuration from its own asset on every boot; the launcher reports *"ships its own dosbox.conf"* instead of pretending to use it |
+| 3 | A bundle's own `dosbox.conf` is ignored | §8.11 | the app regenerates its configuration from its own asset on every boot; the launcher reports *"ships its own dosbox.conf"* instead of pretending to use it |
 | 4 | `DosboxTyper.kt` is dead code | `android/app/src/main/java/com/whereq/dosbox/DosboxTyper.kt` | the real launch mechanism is the `[autoexec]` line in the generated configuration (§8.6). The typer is left in the tree but is not referenced |
 
 Two defects that used to be listed here were fixed in **1.0.0.12**:

@@ -1,11 +1,8 @@
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="resources/whereq-dosbox-logo-transparent.png">
-    <img src="resources/whereq-dosbox-logo.png" alt="WhereQ-DOSBox" width="320">
-  </picture>
+  <img src="resources/A-DOS-mark.png" alt="A-DOS" width="280">
 </p>
 
-<h1 align="center">WhereQ-DOSBox</h1>
+<h1 align="center">A-DOS</h1>
 
 <p align="center">
   A native <b>Android</b> port of DOSBox — the emulator core runs as
@@ -13,7 +10,12 @@
 </p>
 
 <p align="center">
-  <img src="resources/screenshot-phone.jpg" alt="WhereQ-DOSBox running on an Android phone" width="760">
+  <sub>The app was called <b>WhereQ-DOSBox</b> until 1.0.0.12. The repository, the
+  package and the download file names still carry that name.</sub>
+</p>
+
+<p align="center">
+  <img src="resources/screenshot-phone.jpg" alt="A-DOS running on an Android phone" width="760">
 </p>
 
 <p align="center">
@@ -39,17 +41,27 @@ New in 1.0.0.12
 
 A **patch** release on top of the `android-migration-complete` milestone. The
 mouse work that closed the migration phase is what 1.0.0.11 shipped; this
-release repairs the packaging around it.
+release repairs the packaging around it, renames the app, and moves the saves
+out of the app's own storage.
 
 | | |
 |---|---|
+| **The app is called A-DOS** | The launcher name, the notification and the launcher icons now carry the new name and mark — DOS across Android and Apple. The repository, the package and the download file names still say `whereq-dosbox`. |
+| **Your saves survive a reinstall** | The save-state slots lived inside the app's private storage, so uninstalling the app deleted them. Pick a folder on the phone (**Config → Saves folder**) and every slot is mirrored there, gzipped, next to the game itself — so a reinstall, a new phone or a lost app all come back. |
 | **The save state no longer restores the mouse driver's volatile half** | 1.0.0.11 put the *whole* INT 33h driver into the snapshot, event queue and interrupt flags included. Restoring that wedged mouse-driven games — a game could hang on load. The snapshot now carries only the stable configuration: the game's event-callback registration, the cursor range and the cursor position. |
 | **The emulator knows its own version** | The version was a literal `1.0.0.1` in the Android config template, so the DOS banner and the window title said *WhereQ-DOSBox version 1.0.0.1* whatever release was installed. The native build now reads the same `VERSION` file the release script and the app read, so the two can never disagree. |
 | **A local build ships all three ABIs** | `android/build-android.sh` and `android/build-sdl2.sh` defaulted to two of them, so an APK built locally did not carry the same ABI set as the published one. Both now build `arm64-v8a`, `armeabi-v7a` and `x86_64` by default — the same set CI builds. |
 
 **Save states written by 1.0.0.11 and by the first 1.0.0.12 cannot be loaded by
 this build**: the state file grew a version when the mouse block was slimmed,
-and an older state is refused rather than misread.
+and an older state is refused rather than misread. Save states written by the
+previous 1.0.0.12 and by this build load normally — the format did not change
+again.
+
+**This release was re-cut.** The tag still reads `v1.0.0.12`, but the file
+behind the download link is a different build than the one first published
+under that name, so its checksum is a different one too. The release page
+carries the current checksum.
 
 New in 1.0.0.11
 ---------------
@@ -119,7 +131,7 @@ The port touches the core in a handful of places, all of them small and local:
 | `src/hardware/pic.cpp`, `src/hardware/timer.cpp` | the interrupt controllers and the PIT, so their phase is part of the snapshot |
 | `src/hardware/vga_dac.cpp`, `src/hardware/vga_draw.cpp`, `src/cpu/core_dynrec.cpp` | the state that is *rebuilt* after a restore instead of restored |
 | `src/Makefile.am`, `src/dos/Makefile.am`, `src/gui/Makefile.am`, `include/Makefile.am` | the build files, so the desktop baseline stays in sync with the Android one |
-| the product name | the upstream product name → **WhereQ-DOSBox** in the banner, the version string, the config and the generated headers |
+| the product name | the upstream product name → **WhereQ-DOSBox** in the banner, the version string, the config and the generated headers (the app around it is called **A-DOS** since 1.0.0.12) |
 
 Everything else in `src/` and `include/` is the imported upstream code. The
 technical reference lists every change with the reason for it.
@@ -245,7 +257,7 @@ There are three ways to get a bundle onto the phone:
 |---|---|
 | **Install a bundle (.zip)** | the system file picker; it opens in the download folder, where a bundle usually is |
 | **Install all bundles from a folder** | the system folder picker; every `.zip` in the chosen folder is unpacked at once |
-| **Open with WhereQ-DOSBox** | a `.zip` that is tapped in a file manager can be opened with WhereQ-DOSBox directly |
+| **Open with A-DOS** | a `.zip` that is tapped in a file manager can be opened with A-DOS directly |
 
 No storage permission is needed for any of them — the system picker hands
 out the access, and the app only ever sees what the user picked.
@@ -284,6 +296,28 @@ restored from its newest save state — the button names the game and the slot
 it will restore, e.g. *Resume STARFALL · slot 1 · 5 min ago*. If that game
 has no save state yet, the game simply starts from the beginning.
 
+### Your saves, outside the app
+
+A slot is a file in the app's own storage, and Android deletes that when the
+app is uninstalled. Since 1.0.0.12 the app can keep a copy somewhere that is
+yours: pick a folder on the phone — **Config → Saves folder**, or the offer
+that appears after the first save — and every slot is mirrored there,
+gzipped, next to the game itself.
+
+```
+  the app                          the folder you picked
+  ──────                          ────────────────────
+  the slot   ── gzip ──▶             STARFALL/
+                                     slot1.gz
+                                     slot2.gz
+                                     bundle.zip      (the game)
+```
+
+So a reinstall, a new phone or an app that was deleted by accident all come
+back: the games are offered for restore by name, and their save states are
+already there. The folder is an ordinary folder in the phone's storage, so it
+can be copied, synced or moved like any other file.
+
 > Some old DOS programs do not survive a restore — the extender of Ultima
 > VIII, for example, still aborts on it. That is a limitation of the DOS
 > internals that the snapshot does not capture yet (the DMA controller, the
@@ -310,7 +344,7 @@ cd examples/game-bundle
 ```
 
 The bundle zip is committed as well, so it can be taken straight from the
-repository. Copy it to the phone and open it with WhereQ-DOSBox (or pick it
+repository. Copy it to the phone and open it with A-DOS (or pick it
 with *Install a bundle (.zip)* in the **Files** screen). The launcher
 finds `PLAY.BAT` as the entry point and the game starts with one tap.
 

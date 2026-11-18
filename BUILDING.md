@@ -378,17 +378,16 @@ bin/build.sh icons
 ```
 
 ```
-==> Launcher icons
-logo: resources/WD-logo-4K-4096x4096.png
-size: 4096x4096
-adaptive background: #0D0D1F
-mark: 2425x1369
-wrote 16 assets + colors.xml
+logo: resources/A-DOS-mark.png
+background: #0D0D1F (transparent logo)
+icons written to android/app/src/main/res
 ```
 
-It writes the legacy square and round icons, the adaptive foreground (the
-`>_` mark inside the 72/108 safe zone), the adaptive background colour and
-the logo the README shows. Do not edit the generated PNGs by hand.
+It takes the single logo image in `resources/` — the **A-DOS** mark, which is
+preferred by name — fits it (aspect preserved) and centres it, then writes the
+legacy square and round icons, the adaptive foreground (the logo inside the
+72/108 safe zone), the adaptive background colour and the logo the README
+shows. Do not edit the generated PNGs by hand.
 
 Check that the assets are in sync without writing anything (exit code 1 when
 they are not):
