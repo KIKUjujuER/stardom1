@@ -693,6 +693,7 @@ secrets**; only the release workflow does.
 | `actions/setup-java@v6`, `temurin`, `java-version: 17` | AGP 8.7 needs JDK 17. (Fix commit `1ee9487` — the workflows were on `setup-java` v5.) |
 | `if-no-files-found: error` on every upload | a missing artifact must fail the job, not silently produce an empty download. |
 | the **ABI verification** step | the APK is unzipped and grepped for `lib/<abi>/libdosbox.so` for each ABI; a missing one fails with `::error::<abi> is missing from the APK`. This is the guard against the "1.8 MB APK with no `lib/`" failure of §2.10. |
+| the released file is named after the **version**, not the tag | `whereq-dosbox-<version>.apk` — the tag's "v" is dropped (`${RELEASE_TAG#v}`), so the release asset and the APK in `downloads/` carry the same name. One file, one name: a release asset called `whereq-dosbox-v1.0.0.11.apk` next to a repository copy called `whereq-dosbox-1.0.0.11.apk` is a support question waiting to happen. |
 
 ### 3.3 Versioning
 

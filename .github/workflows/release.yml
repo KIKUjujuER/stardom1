@@ -162,18 +162,23 @@ jobs:
         run: ./android/gradlew --project-dir android :app:assembleRelease --console=plain
 
       - name: stage the APK and its checksum
+        id: stage
         run: |
-          apk="whereq-dosbox-${RELEASE_TAG}.apk"
+          # The published file is named after the *version*, not the tag: the
+          # APK in downloads/ is "whereq-dosbox-1.0.0.12.apk", so the release
+          # asset has to carry the same name for the two to be the same file.
+          apk="whereq-dosbox-${RELEASE_TAG#v}.apk"
           cp android/app/build/outputs/apk/release/app-release.apk "$apk"
           sha256sum "$apk" > "$apk.sha256"
           ls -la "$apk" "$apk.sha256"
           cat "$apk.sha256"
+          echo "file=$apk" >> "$GITHUB_OUTPUT"
 
       # A release-signed APK has to carry the certificate of every previous
       # release, otherwise Android refuses to install it over the old one.
       - name: verify the release certificate
         run: |
-          apk="whereq-dosbox-${RELEASE_TAG}.apk"
+          apk="whereq-dosbox-${RELEASE_TAG#v}.apk"
           expected="b16b480d5a1ff6d35baff0b15fa3fc4b0ee815e500861fbff1b062c9bf7d3933"
           "$ANDROID_SDK_ROOT/build-tools/36.0.0/apksigner" verify --print-certs "$apk" \
             | tee certificate.txt
@@ -186,7 +191,7 @@ jobs:
 
       - name: check that all three ABIs are in the APK
         run: |
-          apk="whereq-dosbox-${RELEASE_TAG}.apk"
+          apk="whereq-dosbox-${RELEASE_TAG#v}.apk"
           for abi in arm64-v8a armeabi-v7a x86_64; do
             unzip -l "$apk" | grep -q "lib/$abi/libdosbox.so" \
               || { echo "::error::$abi is missing from the APK"; exit 1; }
@@ -197,7 +202,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          apk="whereq-dosbox-${RELEASE_TAG}.apk"
+          apk="whereq-dosbox-${RELEASE_TAG#v}.apk"
           {
             echo "**WhereQ-DOSBox ${RELEASE_TAG}**"
             echo
@@ -228,6 +233,6 @@ jobs:
         with:
           name: whereq-dosbox-apk-${{ env.RELEASE_TAG }}
           path: |
-            whereq-dosbox-${{ env.RELEASE_TAG }}.apk
-            whereq-dosbox-${{ env.RELEASE_TAG }}.apk.sha256
+            ${{ steps.stage.outputs.file }}
+            ${{ steps.stage.outputs.file }}.sha256
           if-no-files-found: error
