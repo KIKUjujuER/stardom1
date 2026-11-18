@@ -62,6 +62,12 @@ class GameLauncherView(context: Context, private val listener: Listener) : Frame
         /** @return a short label for a saved slot (e.g. "5 min ago"), or null when empty. */
         fun stateSlotLabel(bundle: GameBundle, slot: Int): String?
 
+        /** @return true when a durable saves folder is connected. */
+        fun hasSavesFolder(): Boolean
+
+        /** Connect a saves folder (to surface saves from a previous install). */
+        fun onConnectSavesFolderRequested(bundle: GameBundle)
+
         /** Close the panel. */
         fun onCloseRequested()
     }
@@ -442,6 +448,10 @@ class GameLauncherView(context: Context, private val listener: Listener) : Frame
      * running ([currentGame]) — loading another game's slot is always allowed
      * because it simply becomes that game.
      */
+    /** Opens the save-states dialog for a game (used to reopen it after a
+     *  saves folder is connected). */
+    fun openStates(bundle: GameBundle) = showStatesDialog(bundle)
+
     private fun showStatesDialog(bundle: GameBundle) {
         val isRunning = currentGame != null && currentGame == bundle.folder
         var dialog: AlertDialog? = null
@@ -514,6 +524,24 @@ class GameLauncherView(context: Context, private val listener: Listener) : Frame
             row.addView(load)
 
             column.addView(row)
+        }
+
+        // After a reinstall the durable folder link is gone, so saved slots show
+        // as empty. Offer to reconnect it right here, where the user is looking
+        // to load.
+        if (!listener.hasSavesFolder()) {
+            val connect = makeButton("📁  Load saves from a folder…")
+            connect.setTextColor(COLOR_ACCENT)
+            connect.setOnClickListener {
+                dialog?.dismiss()
+                listener.onConnectSavesFolderRequested(bundle)
+            }
+            val lp = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+            lp.topMargin = dp(8)
+            connect.layoutParams = lp
+            column.addView(connect)
         }
 
         dialog = AlertDialog.Builder(context)

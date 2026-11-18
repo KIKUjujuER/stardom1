@@ -77,6 +77,14 @@ class WhereqDosboxActivity : SDLActivity() {
     /** The installed bundles. */
     private lateinit var library: GameLibrary
 
+    /** Save-state storage: the local working copy + the durable folder mirror. */
+    private val saveStore by lazy { SaveStore(this) }
+
+    /** When the user connects a saves folder from a game's States dialog, the
+     *  game to reopen that dialog for once the folder is set (its saves then
+     *  show). */
+    private var pendingStatesGame: GameBundle? = null
+
     /**
      * The folder of the game this process actually booted into (null at a clean
      * prompt). Set once in [onCreate] from the pending launch. Used so "Save
@@ -299,6 +307,11 @@ class WhereqDosboxActivity : SDLActivity() {
                 override fun stateSlotLabel(bundle: GameBundle, slot: Int): String? =
                     slotLabel(bundle, slot)
 
+                override fun hasSavesFolder(): Boolean = saveStore.hasFolder()
+
+                override fun onConnectSavesFolderRequested(bundle: GameBundle) =
+                    connectSavesFolder(bundle)
+
                 override fun onCloseRequested() = closeLauncher()
             })
 
@@ -362,9 +375,12 @@ class WhereqDosboxActivity : SDLActivity() {
         var newest: Int? = null
         var newestTime = 0L
         for (slot in 1..STATE_SLOTS) {
-            val file = slotFile(bundle, slot)
-            if (!file.exists() || file.length() == 0L) continue
-            val time = file.lastModified()
+            val local = saveStore.localSlot(bundle.folder, slot)
+            val time = if (local.exists() && local.length() > 0L) {
+                local.lastModified()
+            } else {
+                saveStore.durableTimestamp(bundle.displayName, slot) ?: continue
+            }
             if (time > newestTime) {
                 newestTime = time
                 newest = slot
@@ -379,67 +395,72 @@ class WhereqDosboxActivity : SDLActivity() {
 
     /* ------------------------------------------------------------ save states */
 
-    /** @return the directory that holds a game's save-state slots. It lives
-     *  outside the C: mount (filesDir), so the slots never show up inside DOS
-     *  and are not swept into cloud backup (each is 16 MB+). */
-    private fun stateDir(bundle: GameBundle): File =
-        File(File(noBackupFilesDir, STATES_DIR), bundle.folder)
-
-    private fun slotFile(bundle: GameBundle, slot: Int): File =
-        File(stateDir(bundle), "slot$slot.sav")
-
-    /** @return a short "time ago" label for a saved slot, or null when empty. */
+    /** @return a short "time ago" label for a saved slot (local or the durable
+     *  mirror), or null when the slot is empty everywhere. */
     private fun slotLabel(bundle: GameBundle, slot: Int): String? {
-        val file = slotFile(bundle, slot)
-        if (!file.exists() || file.length() == 0L) {
-            return null
+        val local = saveStore.localSlot(bundle.folder, slot)
+        val time = if (local.exists() && local.length() > 0L) {
+            local.lastModified()
+        } else {
+            saveStore.durableTimestamp(bundle.displayName, slot) ?: return null
         }
         val now = System.currentTimeMillis()
-        // A slot that was just written would read "0 minutes ago".
-        if (now - file.lastModified() < DateUtils.MINUTE_IN_MILLIS) {
+        if (now - time < DateUtils.MINUTE_IN_MILLIS) {
             return "just now"
         }
         return DateUtils.getRelativeTimeSpanString(
-            file.lastModified(), now, DateUtils.MINUTE_IN_MILLIS
+            time, now, DateUtils.MINUTE_IN_MILLIS
         ).toString()
     }
 
     /**
      * Snapshots the running machine into a slot. The native call hands the work
      * to the DOSBox thread and blocks until it is done, so it runs off the UI
-     * thread.
+     * thread. If a durable saves folder is set, the slot is also mirrored there
+     * (gzip-compressed) so it survives a reinstall.
      */
     private fun saveState(bundle: GameBundle, slot: Int) {
         launcher?.setStatus("Saving slot $slot…")
-        val target = slotFile(bundle, slot)
+        val target = saveStore.localSlot(bundle.folder, slot)
         workScope.launch {
             val rc = withContext(Dispatchers.IO) {
                 target.parentFile?.mkdirs()
                 DosboxNative.nativeSaveState(target.absolutePath)
+            }
+            if (rc == DosboxNative.SAVESTATE_OK && saveStore.hasFolder()) {
+                launcher?.setStatus("Saved slot $slot · backing up…")
+                withContext(Dispatchers.IO) {
+                    saveStore.mirrorToDurable(bundle.displayName, bundle.folder, slot)
+                }
             }
             launcher?.setStatus(saveStateMessage(rc, slot))
             // The slot that was just written is the newest one, so the "Resume"
             // button has to say so - otherwise it still names the slot it would
             // have used before.
             refreshResumeButton()
+            // Offer, once, to keep saves across reinstalls.
+            if (rc == DosboxNative.SAVESTATE_OK) {
+                maybeOfferSavesFolder()
+            }
         }
     }
 
     /**
      * Restores a slot, replacing the running machine (so it works from within a
      * game or from a fresh prompt). On success the launcher closes so the player
-     * sees the restored game.
+     * sees the restored game. If the local copy is gone (after a reinstall) it is
+     * first pulled back from the durable mirror.
      */
     private fun loadState(bundle: GameBundle, slot: Int) {
-        val target = slotFile(bundle, slot)
-        if (!target.exists()) {
-            launcher?.setStatus("Slot $slot is empty")
-            return
-        }
         launcher?.setStatus("Loading slot $slot…")
+        val target = saveStore.localSlot(bundle.folder, slot)
         workScope.launch {
             val rc = withContext(Dispatchers.IO) {
-                DosboxNative.nativeLoadState(target.absolutePath)
+                if (!target.exists()) {
+                    saveStore.restoreFromDurable(bundle.displayName, bundle.folder, slot)
+                }
+                if (!target.exists()) SAVESTATE_NO_SLOT
+                else DosboxNative.nativeLoadState(target.absolutePath)
             }
             if (rc == DosboxNative.SAVESTATE_OK) {
                 // The restored machine *is* that game now, so the launcher must
@@ -453,6 +474,8 @@ class WhereqDosboxActivity : SDLActivity() {
                     .edit().putString(KEY_LAST_GAME, bundle.folder).apply()
                 refreshResumeButton()
                 closeLauncher()
+            } else if (rc == SAVESTATE_NO_SLOT) {
+                launcher?.setStatus("Slot $slot is empty")
             } else {
                 launcher?.setStatus(loadStateMessage(rc))
             }
@@ -472,14 +495,20 @@ class WhereqDosboxActivity : SDLActivity() {
      * is never left staring at a bare DOS prompt.
      */
     private fun restoreAfterBoot(folder: String, slot: Int) {
-        val target = File(File(noBackupFilesDir, STATES_DIR), folder)
-            .let { File(it, "slot$slot.sav") }
-        if (!target.exists()) {
-            Log.w(TAG, "auto-restore: $target is gone - starting the game instead")
-            relaunch(folder, null)
-            return
-        }
+        val name = library.list().firstOrNull { it.folder == folder }?.displayName
         workScope.launch {
+            val target = saveStore.localSlot(folder, slot)
+            val ready = withContext(Dispatchers.IO) {
+                if (!target.exists() && name != null) {
+                    saveStore.restoreFromDurable(name, folder, slot)
+                }
+                target.exists()
+            }
+            if (!ready) {
+                Log.w(TAG, "auto-restore: slot $slot of $folder is gone - starting the game instead")
+                relaunch(folder, null)
+                return@launch
+            }
             val rc = withContext(Dispatchers.IO) {
                 DosboxNative.nativeLoadState(target.absolutePath)
             }
@@ -491,6 +520,149 @@ class WhereqDosboxActivity : SDLActivity() {
                 relaunch(folder, null)
             }
         }
+    }
+
+    /* ------------------------------------------------- the durable folder */
+
+    /**
+     * Offers, once, to set a durable saves folder the first time a save
+     * succeeds. If the user declines it is not asked again (the choice is
+     * reachable from Config → Saves folder).
+     */
+    private fun maybeOfferSavesFolder() {
+        if (saveStore.hasFolder()) return
+        val prefs = getSharedPreferences(LAUNCH_PREFS, MODE_PRIVATE)
+        if (prefs.getBoolean(KEY_SAVES_FOLDER_OFFERED, false)) return
+        prefs.edit().putBoolean(KEY_SAVES_FOLDER_OFFERED, true).apply()
+        AlertDialog.Builder(this)
+            .setTitle("Keep your saves safe?")
+            .setMessage(
+                "Pick a folder on your phone and A-DOS will also store your " +
+                    "save-states there, compressed. They then survive " +
+                    "reinstalling the app or moving to a new phone. You can set " +
+                    "this later from Config → Saves folder."
+            )
+            .setPositiveButton("Choose folder") { _, _ -> pickSavesFolder() }
+            .setNegativeButton("Not now", null)
+            .show()
+    }
+
+    /** Connect a saves folder from a game's States dialog, then reopen it so the
+     *  game's saves (from a previous install) show up. */
+    private fun connectSavesFolder(bundle: GameBundle) {
+        pendingStatesGame = bundle
+        pickSavesFolder()
+    }
+
+    /** Opens the system folder picker to choose the durable saves folder. */
+    private fun pickSavesFolder() {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
+        intent.addFlags(
+            Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                Intent.FLAG_GRANT_WRITE_URI_PERMISSION or
+                Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
+        )
+        intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, downloadRootUri())
+        try {
+            startActivityForResult(intent, REQUEST_PICK_SAVES_FOLDER)
+        } catch (e: Exception) {
+            Log.w(TAG, "could not open the folder picker", e)
+            Toast.makeText(this, "No folder picker available", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    /** Mirrors every existing local slot into the (just chosen) durable folder. */
+    private fun backUpAllSlotsToDurable() {
+        val bundles = library.list()
+        workScope.launch(Dispatchers.IO) {
+            for (bundle in bundles) {
+                for (slot in 1..STATE_SLOTS) {
+                    if (saveStore.localSlot(bundle.folder, slot).exists()) {
+                        saveStore.mirrorToDurable(bundle.displayName, bundle.folder, slot)
+                    }
+                }
+                saveStore.mirrorGame(bundle, library.folderOf(bundle))
+            }
+        }
+    }
+
+    /** Mirrors a freshly installed game to the durable folder (called on the IO
+     *  thread from the install paths). No-op when no folder is set. */
+    private fun mirrorGameIfDurable(bundle: GameBundle) {
+        if (saveStore.hasFolder()) {
+            saveStore.mirrorGame(bundle, library.folderOf(bundle))
+        }
+    }
+
+    /**
+     * After a saves folder is chosen, offers to re-install any games that live
+     * in it but are not installed locally (the one-tap recovery after a
+     * reinstall). Matched by game name.
+     */
+    private fun offerRestoreGames() {
+        workScope.launch {
+            val durable = withContext(Dispatchers.IO) { saveStore.durableGames() }
+            val have = library.list().mapTo(HashSet()) { it.displayName }
+            val missing = durable.filter { it.name.isNotEmpty() && it.name !in have }
+            if (missing.isEmpty()) {
+                return@launch
+            }
+            val n = missing.size
+            AlertDialog.Builder(this@WhereqDosboxActivity)
+                .setTitle("Restore games?")
+                .setMessage(
+                    "This folder has $n game${if (n == 1) "" else "s"} that " +
+                        (if (n == 1) "is" else "are") + " not installed. Restore " +
+                        (if (n == 1) "it" else "them") + " now? Your saves for " +
+                        (if (n == 1) "it" else "them") + " will work again too."
+                )
+                .setPositiveButton("Restore") { _, _ -> restoreGames(missing) }
+                .setNegativeButton("Not now", null)
+                .show()
+        }
+    }
+
+    private fun restoreGames(games: List<SaveStore.DurableGame>) {
+        launcher?.setStatus("Restoring ${games.size} game(s)…")
+        workScope.launch {
+            var done = 0
+            for (g in games) {
+                withContext(Dispatchers.IO) {
+                    try {
+                        saveStore.openDurableGame(g.uri)?.use { input ->
+                            library.restore(g.name, g.entry, g.launch, g.ownConfig, g.archive, input)
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "could not restore game ${g.name}", e)
+                    }
+                }
+                done++
+                launcher?.setStatus("Restoring games… ($done/${games.size})")
+            }
+            launcher?.showFiles(library.list())
+            refreshResumeButton()
+            launcher?.setStatus("Restored $done game(s). Your saves are ready.")
+        }
+    }
+
+    /** Config → Saves folder: show the state and let the user set/change it. */
+    private fun showSavesFolderDialog() {
+        val status = if (saveStore.hasFolder()) {
+            "A folder is set — your saves are backed up there (compressed)."
+        } else {
+            "No folder set — saves are kept only inside the app and are lost if it is uninstalled."
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Saves folder")
+            .setMessage(
+                status + "\n\nPick a folder and A-DOS mirrors every save-state " +
+                    "there so it survives a reinstall or a new phone."
+            )
+            .setPositiveButton(if (saveStore.hasFolder()) "Change folder" else "Choose folder") { _, _ ->
+                pickSavesFolder()
+            }
+            .setNegativeButton("Close", null)
+            .show()
     }
 
     private fun saveStateMessage(rc: Int, slot: Int): String = when (rc) {
@@ -510,9 +682,9 @@ class WhereqDosboxActivity : SDLActivity() {
 
     /** Removes a game's save-state slots (called when the game is deleted). */
     private fun deleteStateDir(bundle: GameBundle) {
-        val dir = stateDir(bundle)
-        dir.listFiles()?.forEach { it.delete() }
-        dir.delete()
+        // Only the local working copies are removed; the durable mirror in the
+        // user's folder is theirs to keep or delete.
+        saveStore.deleteLocal(bundle.folder)
     }
 
     /** Asks before a game is removed — the bundle is deleted from the phone. */
@@ -622,7 +794,7 @@ class WhereqDosboxActivity : SDLActivity() {
                     try {
                         withContext(Dispatchers.IO) {
                             entry.open(contentResolver).use { input ->
-                                library.install(input, entry.name)
+                                mirrorGameIfDurable(library.install(input, entry.name))
                             }
                         }
                         installed++
@@ -651,6 +823,45 @@ class WhereqDosboxActivity : SDLActivity() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQUEST_PICK_SAVES_FOLDER) {
+            // Cleared here so a cancelled pick does not leave it dangling.
+            val reopen = pendingStatesGame
+            pendingStatesGame = null
+            val uri = if (resultCode == RESULT_OK) data?.data else null
+            if (uri != null) {
+                try {
+                    contentResolver.takePersistableUriPermission(
+                        uri,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                            Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                    )
+                } catch (e: Exception) {
+                    Log.w(TAG, "could not persist the saves-folder permission", e)
+                }
+                saveStore.folderUri = uri
+                backUpAllSlotsToDurable()
+                // Refresh so slot labels pick up the newly connected folder.
+                launcher?.showFiles(library.list())
+                if (reopen != null) {
+                    // Connected from a game's States dialog: reopen it so the
+                    // game's saves from a previous install show up now.
+                    Toast.makeText(
+                        this, "Saves folder connected — your saves are back.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                    launcher?.openStates(reopen)
+                } else {
+                    Toast.makeText(
+                        this, "Saves folder set — your games and saves are backed up here.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                    // If this folder already has games from a previous install,
+                    // offer to bring them back.
+                    offerRestoreGames()
+                }
+            }
+            return
+        }
         if (requestCode == REQUEST_PICK_FOLDER) {
             if (resultCode != RESULT_OK || data?.data == null) {
                 return
@@ -691,7 +902,8 @@ class WhereqDosboxActivity : SDLActivity() {
             val error = installMutex.withLock {
                 withContext(Dispatchers.IO) {
                     try {
-                        source.open().use { input -> library.install(input, name) }
+                        val bundle = source.open().use { input -> library.install(input, name) }
+                        mirrorGameIfDurable(bundle)
                         null
                     } catch (e: Exception) {
                         Log.e(TAG, "could not install $name", e)
@@ -940,6 +1152,19 @@ class WhereqDosboxActivity : SDLActivity() {
      * its core while it runs.
      */
     private fun showConfigDialog() {
+        AlertDialog.Builder(this)
+            .setTitle("Settings")
+            .setItems(arrayOf("CPU core", "Saves folder")) { _, which ->
+                when (which) {
+                    0 -> showCpuCoreDialog()
+                    1 -> showSavesFolderDialog()
+                }
+            }
+            .setNegativeButton("Close", null)
+            .show()
+    }
+
+    private fun showCpuCoreDialog() {
         val current = getSharedPreferences(LAUNCH_PREFS, MODE_PRIVATE)
             .getString(KEY_CPU_CORE, DEFAULT_CPU_CORE) ?: DEFAULT_CPU_CORE
         val checked = CPU_CORES.indexOf(current).coerceAtLeast(0)
@@ -988,12 +1213,14 @@ class WhereqDosboxActivity : SDLActivity() {
         /** The last game Played — offered as "Resume" after a cold start. */
         private const val KEY_LAST_GAME = "last_game"
 
-        /** Directory (under noBackupFilesDir, outside the C: mount) for save-state
-         *  slots, one subfolder per game. */
-        private const val STATES_DIR = "states"
+        /** Whether the "keep saves across reinstalls" offer was already shown. */
+        private const val KEY_SAVES_FOLDER_OFFERED = "saves_folder_offered"
 
         /** Save-state slots offered per game (must match GameLauncherView). */
         private const val STATE_SLOTS = 3
+
+        /** loadState() sentinel: the slot does not exist (local or durable). */
+        private const val SAVESTATE_NO_SLOT = -1
 
         /** requestPermissions code for POST_NOTIFICATIONS (keep-alive notice). */
         private const val REQUEST_POST_NOTIFICATIONS = 42
@@ -1027,6 +1254,9 @@ class WhereqDosboxActivity : SDLActivity() {
 
         /** The request code of the folder picker. */
         private const val REQUEST_PICK_FOLDER = 2
+
+        /** The request code of the durable saves-folder picker. */
+        private const val REQUEST_PICK_SAVES_FOLDER = 3
 
         /**
          * @return the document of the download folder, so the picker can start

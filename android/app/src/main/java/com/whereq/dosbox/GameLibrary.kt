@@ -197,6 +197,76 @@ class GameLibrary(
         return bundle
     }
 
+    /**
+     * Re-installs a game from a durable bundle — a zip of a previously unpacked
+     * game (see [SaveStore]), used to recover games after an uninstall.
+     *
+     * The files inside are already in DOS 8.3 form (they were unpacked that way
+     * the first time), so they are written verbatim with no renaming. That
+     * reproduces the exact working game, its `RUN.BAT` included, and sidesteps
+     * the install-time path mangling entirely.
+     */
+    @Throws(IOException::class)
+    fun restore(
+        displayName: String,
+        entry: String,
+        launch: String?,
+        ownConfig: Boolean,
+        archive: String,
+        bundleZip: InputStream,
+    ): GameBundle {
+        val games = gamesDir()
+        if (!games.exists() && !games.mkdirs()) {
+            throw IOException("could not create " + games.absolutePath)
+        }
+        val index = nextIndex()
+        val folder = "G$index"
+        val target = File(games, folder)
+        if (!target.mkdirs()) {
+            throw IOException("could not create " + target.absolutePath)
+        }
+
+        var unpacked = 0L
+        try {
+            val input = java.util.zip.ZipInputStream(bundleZip)
+            var entry: java.util.zip.ZipEntry?
+            while (input.nextEntry.also { entry = it } != null) {
+                val ze = entry!!
+                if (ze.isDirectory || ze.name == "__meta.json") {
+                    input.closeEntry()
+                    continue
+                }
+                val out = resolveSafely(target, ze.name)
+                if (out == null) {
+                    Log.w(TAG, "skipping unsafe bundle entry ${ze.name}")
+                    input.closeEntry()
+                    continue
+                }
+                out.parentFile?.let { if (!it.exists()) it.mkdirs() }
+                unpacked += copy(input, out, ze.size)
+                input.closeEntry()
+            }
+        } catch (e: IOException) {
+            deleteRecursively(target)
+            throw e
+        }
+
+        val bundle = GameBundle(
+            folder, displayName, entry, archive,
+            System.currentTimeMillis(), unpacked, ownConfig, launch,
+        )
+        val bundles = ArrayList(list())
+        bundles.add(bundle)
+        try {
+            writeManifest(bundles)
+        } catch (e: Exception) {
+            deleteRecursively(target)
+            throw IOException("could not write the game manifest", e)
+        }
+        Log.i(TAG, "restored $bundle")
+        return bundle
+    }
+
     /** Removes a bundle and its folder. */
     fun delete(bundle: GameBundle) {
         val bundles = ArrayList(list())
