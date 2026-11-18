@@ -47,7 +47,7 @@ class DosboxForegroundService : Service() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("WhereQ-DOSBox")
+            .setContentTitle("A-DOS")
             .setContentText("Playing $game — tap to return")
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentIntent(pending)
