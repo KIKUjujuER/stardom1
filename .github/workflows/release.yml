@@ -103,6 +103,11 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
+          # Cache the Gradle dependency tree and the wrapper distribution.
+          # Without it every run re-downloads the whole AGP tree from Maven
+          # Central, and a rate-limited answer (HTTP 429) fails the release
+          # for reasons that have nothing to do with the code.
+          cache: gradle
 
       - uses: android-actions/setup-android@v3
         with:
