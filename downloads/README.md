@@ -5,8 +5,12 @@ without building it.
 
 **The APK is not in this repository.** CI builds it from the release tag and
 publishes it as a release asset, so the file you download is the file that was
-built, signed and verified — one artifact, one checksum, one place. Older
-versions are on the [releases page](https://github.com/whereq/whereq-dosbox/releases).
+built, signed and verified — one artifact, one checksum, one place.
+
+Older versions are on the [releases page](https://github.com/whereq/whereq-dosbox/releases)
+from 1.0.0.9 on; the ones before that were never released there and live in the
+repository's history, at their own tag — for example
+`https://raw.githubusercontent.com/whereq/whereq-dosbox/v1.0.0.8/downloads/whereq-dosbox-1.0.0.8.apk`.
 
 ## The current release
 
