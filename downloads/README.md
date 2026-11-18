@@ -16,10 +16,10 @@ repository's history, at their own tag — for example
 
 | version | file | size |
 |---|---|---|
-| 1.0.0.12 | [`whereq-dosbox-1.0.0.12.apk`](https://github.com/whereq/whereq-dosbox/releases/download/v1.0.0.12/whereq-dosbox-1.0.0.12.apk) | 16 535 619 bytes (15.8 MB) |
+| 1.0.0.12 | [`whereq-dosbox-1.0.0.12.apk`](https://github.com/whereq/whereq-dosbox/releases/download/v1.0.0.12/whereq-dosbox-1.0.0.12.apk) | 16 536 003 bytes (15.8 MB) |
 
 * SHA-256 of the 1.0.0.12 APK:
-  `35f954d448726a0504d7d207156b411192f6010aabf77e76fbe7a759739b8e26`
+  `961843c3fe0a85fda9eed94ab3bd441ca15d04fcb401031f7d6e0a1ca87baa39`
 * Signing certificate (SHA-256):
   `b16b480d5a1ff6d35baff0b15fa3fc4b0ee815e500861fbff1b062c9bf7d3933`
 

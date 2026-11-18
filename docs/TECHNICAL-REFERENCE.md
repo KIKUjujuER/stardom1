@@ -3061,7 +3061,7 @@ by driving the release APK on an emulator.
 | The **mouse** is in the save state | 5.5 | a save → load round trip on the emulator with the new block in place | the OPL chip comes back field for field, the four DOS handles with it, no payload-size mismatch |
 | The mouse block is **stable configuration only** | 5.5 | the block was slimmed in 1.0.0.12 after restoring the volatile half wedged mouse-driven games, and then grown again to the whole configuration the guest cannot rebuild | the event queue and the interrupt flags are cleared on load, not restored; the cursor shape and hotspot are restored |
 | An **old state** is refused, not misread | 5.4 | loading a slot written by 1.0.0.10 (version 7) into the version-8 build | *"That save file is damaged"* |
-| A **version-8 slot** is refused by the version-9 build | 5.4 | loading a slot written by 1.0.0.11 / 1.0.0.12 into the re-cut 1.0.0.12 | *"That save file is damaged"* — the version is checked before the payload size |
+| An **older slot** is refused by this build | 5.4 | loading a slot written by 1.0.0.11 (version 8) into 1.0.0.12 | *"That save file is damaged"* — the version is checked before the payload size |
 | The three keyboard layouts follow from the geometry | 9.2 | the width formula and the two thresholds | `VirtualKeyboardView.kt:161-167`; measured on the emulator at 420 dpi (§9.8) |
 | The bundle names are rewritten to DOS 8.3 | 8.4 | the naming function read against DOSBox's own name handling | `GameLibrary.kt:551` vs `localDrive.cpp` |
 | A **relaunch** is needed, not a typed command | 8.7 | DOSBox caches the drive listing at mount time | `localDrive.cpp:184`, quoted in `WhereqDosboxActivity.kt:130-136` |
@@ -3074,10 +3074,10 @@ by driving the release APK on an emulator.
 |---|---|
 | Device | `emulator-5554` — `sdk_gphone64_x86_64` (Android API 37, x86_64) |
 | Build under test | the **release** APK, all three ABIs |
-| APK | the published `whereq-dosbox-1.0.0.12.apk`, 16 535 619 bytes |
-| SHA-256 | `35f954d448726a0504d7d207156b411192f6010aabf77e76fbe7a759739b8e26` |
-| Published asset | `whereq-dosbox-1.0.0.12.apk` on the [v1.0.0.12 release](https://github.com/whereq/whereq-dosbox/releases/tag/v1.0.0.12), SHA-256 `35f954d448726a0504d7d207156b411192f6010aabf77e76fbe7a759739b8e26` |
-| Previous builds | 1.0.0.12 was re-cut three times, so three different files were published under that name: 16 465 262 bytes (`4ae80a41…`), 16 465 841 bytes (`e5cd6331…`) and 16 535 622 bytes (`80e5d3af…`). Only the one above is current. Before them: `whereq-dosbox-1.0.0.11.apk` — the local build 16 465 163 bytes (`1b0b27cf…`), the published one 16 465 213 bytes (`5dd04af8…`) |
+| APK | the published `whereq-dosbox-1.0.0.12.apk`, 16 536 003 bytes |
+| SHA-256 | `961843c3fe0a85fda9eed94ab3bd441ca15d04fcb401031f7d6e0a1ca87baa39` |
+| Published asset | `whereq-dosbox-1.0.0.12.apk` on the [v1.0.0.12 release](https://github.com/whereq/whereq-dosbox/releases/tag/v1.0.0.12), SHA-256 `961843c3fe0a85fda9eed94ab3bd441ca15d04fcb401031f7d6e0a1ca87baa39` |
+| Previous builds | 1.0.0.12 was re-cut several times, so several different files were published under that name: 16 465 262 bytes (`4ae80a41…`), 16 465 841 bytes (`e5cd6331…`), 16 535 619 bytes (`35f954d4…`) and 16 535 622 bytes (`80e5d3af…`). Only the one above is current. Before them: `whereq-dosbox-1.0.0.11.apk` — the local build 16 465 163 bytes (`1b0b27cf…`), the published one 16 465 213 bytes (`5dd04af8…`) |
 | Version | `versionCode` 1000012, `versionName` 1.0.0.12 |
 | Signature | release key, cert SHA-256 `b16b480d5a1ff6d35baff0b15fa3fc4b0ee815e500861fbff1b062c9bf7d3933` (§3.5) |
 | ABIs in the APK | `lib/arm64-v8a/libdosbox.so`, `lib/armeabi-v7a/libdosbox.so`, `lib/x86_64/libdosbox.so` — all three |
@@ -3103,14 +3103,14 @@ signed with a different key has to be uninstalled first).
 | The **native version** is the release version | ✓ — `config -get sdl mapperfile` answers `mapper-1.0.0.12.map`. Until 1.0.0.12 the macro was a literal `1.0.0.1`, so every release answered `mapper-1.0.0.1.map` |
 | A **save → load** round trip works with the mouse block | ✓ — the OPL chip comes back field for field, the four DOS handles with it, no payload-size mismatch |
 | A state written by **1.0.0.10** is refused | ✓ — *"That save file is damaged"*, the version guard (§5.4) |
-| A state written by **1.0.0.11** (version 8) is refused by the re-cut build | ✓ — *"That save file is damaged"*; the version is checked before the payload size, so the older layout is never read |
-| A **version-9** state round-trips | ✓ — saved with `mode 9`, loaded with `mode 9`, the OPL phase comes back unchanged (`phase=f2446ee8`) and the tone does not restart |
+| A state written by **1.0.0.11** (version 8) is refused | ✓ — *"That save file is damaged"*; the version is checked before the payload size, so the older layout is never read |
+| A **version-10** state round-trips | ✓ — the header of the file carries `WQSS` + `0a`, the OPL phase comes back unchanged (`phase=38780a16`) and the tone does not restart. (The `mode` in the log line is the VGA mode, not the state version) |
 | The app is called **A-DOS** | ✓ — the launcher name, the notification and the system permission dialogs all read *A-DOS* |
 | A **saves folder** is connected | ✓ — the Storage Access Framework picker; the app takes a persistent URI on the folder and writes into it |
 | A slot is **mirrored** into that folder | ✓ — `slot1.gz`, 37 KB for a 16 MB snapshot, next to the game's `bundle.zip` |
 | The app is **uninstalled** and installed again | ✓ — the local games and slots are gone; the durable copy is not |
 | The games are **restored** from the folder | ✓ — *"Restore games? — This folder has 2 games that are not installed"*, and both come back with their names |
-| The **save state** comes back with them | ✓ — loaded out of the mirror with `mode 9` and the OPL phase unchanged (`phase=a6edc5ba`) |
+| The **save state** comes back with them | ✓ — loaded out of the mirror with the header version 10 and the OPL phase unchanged (`phase=38780a16`) |
 | Two archives with the **same name** stay apart | ✓ — the second one installs as *whereq-opl-test-bundle (2)*, and the two keep separate durable folders and separate slots |
 
 ### 10.3 ▸ The OPL test: the proof in two lines
