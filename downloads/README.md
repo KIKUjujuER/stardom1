@@ -16,10 +16,10 @@ repository's history, at their own tag — for example
 
 | version | file | size |
 |---|---|---|
-| 1.0.0.12 | [`whereq-dosbox-1.0.0.12.apk`](https://github.com/whereq/whereq-dosbox/releases/download/v1.0.0.12/whereq-dosbox-1.0.0.12.apk) | 16 465 841 bytes (15.7 MB) |
+| 1.0.0.12 | [`whereq-dosbox-1.0.0.12.apk`](https://github.com/whereq/whereq-dosbox/releases/download/v1.0.0.12/whereq-dosbox-1.0.0.12.apk) | 16 535 619 bytes (15.8 MB) |
 
 * SHA-256 of the 1.0.0.12 APK:
-  `e5cd6331e1e2978cf0f56a50c6aecc62d0d667f4c61377fcc5e25c69b6e97842`
+  `35f954d448726a0504d7d207156b411192f6010aabf77e76fbe7a759739b8e26`
 * Signing certificate (SHA-256):
   `b16b480d5a1ff6d35baff0b15fa3fc4b0ee815e500861fbff1b062c9bf7d3933`
 
@@ -41,7 +41,9 @@ the app's own storage. The milestone marker
   (**Config → Saves folder**, or the offer that appears after the first save)
   and every slot is mirrored there, gzipped, next to the game itself. A
   reinstall, a new phone or a deleted app therefore all come back: the games
-  are offered for restore by name, with their save states already there.
+  are offered for restore by name, with their save states already there. Two
+  archives with the same file name are told apart by name — *game* and *game
+  (2)* — so their saves never end up in the same place.
 * **The save state no longer restores the mouse driver's volatile half.**
   1.0.0.11 put the *whole* INT 33h driver into the snapshot — the event
   queue, the click counters and the interrupt re-entrancy flags included.

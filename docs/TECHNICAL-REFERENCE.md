@@ -3043,10 +3043,10 @@ by driving the release APK on an emulator.
 |---|---|
 | Device | `emulator-5554` — `sdk_gphone64_x86_64` (Android API 37, x86_64) |
 | Build under test | the **release** APK, all three ABIs |
-| APK | the published `whereq-dosbox-1.0.0.12.apk`, 16 465 841 bytes |
-| SHA-256 | `e5cd6331e1e2978cf0f56a50c6aecc62d0d667f4c61377fcc5e25c69b6e97842` |
-| Published asset | `whereq-dosbox-1.0.0.12.apk` on the [v1.0.0.12 release](https://github.com/whereq/whereq-dosbox/releases/tag/v1.0.0.12), SHA-256 `e5cd6331e1e2978cf0f56a50c6aecc62d0d667f4c61377fcc5e25c69b6e97842` |
-| Previous build | the **first cut** of 1.0.0.12 — 16 465 262 bytes (`4ae80a41…`), superseded by the re-cut; and `whereq-dosbox-1.0.0.11.apk` — the local build 16 465 163 bytes (`1b0b27cf…`), the published one 16 465 213 bytes (`5dd04af8…`) |
+| APK | the published `whereq-dosbox-1.0.0.12.apk`, 16 535 619 bytes |
+| SHA-256 | `35f954d448726a0504d7d207156b411192f6010aabf77e76fbe7a759739b8e26` |
+| Published asset | `whereq-dosbox-1.0.0.12.apk` on the [v1.0.0.12 release](https://github.com/whereq/whereq-dosbox/releases/tag/v1.0.0.12), SHA-256 `35f954d448726a0504d7d207156b411192f6010aabf77e76fbe7a759739b8e26` |
+| Previous builds | 1.0.0.12 was re-cut three times, so three different files were published under that name: 16 465 262 bytes (`4ae80a41…`), 16 465 841 bytes (`e5cd6331…`) and 16 535 622 bytes (`80e5d3af…`). Only the one above is current. Before them: `whereq-dosbox-1.0.0.11.apk` — the local build 16 465 163 bytes (`1b0b27cf…`), the published one 16 465 213 bytes (`5dd04af8…`) |
 | Version | `versionCode` 1000012, `versionName` 1.0.0.12 |
 | Signature | release key, cert SHA-256 `b16b480d5a1ff6d35baff0b15fa3fc4b0ee815e500861fbff1b062c9bf7d3933` (§3.5) |
 | ABIs in the APK | `lib/arm64-v8a/libdosbox.so`, `lib/armeabi-v7a/libdosbox.so`, `lib/x86_64/libdosbox.so` — all three |
@@ -3074,6 +3074,13 @@ signed with a different key has to be uninstalled first).
 | A state written by **1.0.0.10** is refused | ✓ — *"That save file is damaged"*, the version guard (§5.4) |
 | A state written by **1.0.0.11** (version 8) is refused by the re-cut build | ✓ — *"That save file is damaged"*; the version is checked before the payload size, so the older layout is never read |
 | A **version-9** state round-trips | ✓ — saved with `mode 9`, loaded with `mode 9`, the OPL phase comes back unchanged (`phase=f2446ee8`) and the tone does not restart |
+| The app is called **A-DOS** | ✓ — the launcher name, the notification and the system permission dialogs all read *A-DOS* |
+| A **saves folder** is connected | ✓ — the Storage Access Framework picker; the app takes a persistent URI on the folder and writes into it |
+| A slot is **mirrored** into that folder | ✓ — `slot1.gz`, 37 KB for a 16 MB snapshot, next to the game's `bundle.zip` |
+| The app is **uninstalled** and installed again | ✓ — the local games and slots are gone; the durable copy is not |
+| The games are **restored** from the folder | ✓ — *"Restore games? — This folder has 2 games that are not installed"*, and both come back with their names |
+| The **save state** comes back with them | ✓ — loaded out of the mirror with `mode 9` and the OPL phase unchanged (`phase=a6edc5ba`) |
+| Two archives with the **same name** stay apart | ✓ — the second one installs as *whereq-opl-test-bundle (2)*, and the two keep separate durable folders and separate slots |
 
 ### 10.3 ▸ The OPL test: the proof in two lines
 
