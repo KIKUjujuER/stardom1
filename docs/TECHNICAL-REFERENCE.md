@@ -22,7 +22,7 @@ each one is for, and which code answers it.
 
 **Status:** the Android migration phase is **complete** — the milestone tag
 `milestone/android-migration-complete` marks it, and it rides on the current
-release, `v1.0.0.13` (the phase itself ended with `v1.0.0.10`). From there the
+release, `v1.0.0.14` (the phase itself ended with `v1.0.0.10`). From there the
 project is in **maintenance**: bug fixes and documentation polish, no new
 features. §11 is therefore a list of known gaps, not a roadmap.
 
@@ -3209,11 +3209,11 @@ by driving the release APK on an emulator.
 |---|---|
 | Device | `emulator-5554` — `sdk_gphone64_x86_64` (Android API 37, x86_64) |
 | Build under test | the **release** APK, all three ABIs |
-| APK | the published `whereq-dosbox-1.0.0.13.apk`, 16 482 792 bytes |
-| SHA-256 | `98243e5577276d31f89adc1ac776bfc4242fdc0ff43f877bc36797c138cffa94` |
-| Published asset | `whereq-dosbox-1.0.0.13.apk` on the [v1.0.0.13 release](https://github.com/whereq/whereq-dosbox/releases/tag/v1.0.0.13), SHA-256 `98243e5577276d31f89adc1ac776bfc4242fdc0ff43f877bc36797c138cffa94` |
-| Previous builds | `whereq-dosbox-1.0.0.12.apk` — 16 536 964 bytes (`67577d59…`), the published one before it 16 536 003 bytes (`961843c3…`). Before those: `whereq-dosbox-1.0.0.11.apk` — the local build 16 465 163 bytes (`1b0b27cf…`), the published one 16 465 213 bytes (`5dd04af8…`) |
-| Version | `versionCode` 1000013, `versionName` 1.0.0.13 |
+| APK | the published `whereq-dosbox-1.0.0.14.apk`, 16 482 965 bytes |
+| SHA-256 | `2bf4d58b8e59413fa1795f7a2baa65b13f642daa76d9696a062d70893ad2d628` |
+| Published asset | `whereq-dosbox-1.0.0.14.apk` on the [v1.0.0.14 release](https://github.com/whereq/whereq-dosbox/releases/tag/v1.0.0.14), SHA-256 `2bf4d58b8e59413fa1795f7a2baa65b13f642daa76d9696a062d70893ad2d628` |
+| Previous builds | `whereq-dosbox-1.0.0.13.apk` — 16 482 792 bytes (`98243e55…`). Before those: `whereq-dosbox-1.0.0.12.apk` — 16 536 964 bytes (`67577d59…`), the published one before it 16 536 003 bytes (`961843c3…`) |
+| Version | `versionCode` 1000014, `versionName` 1.0.0.14 |
 | Signature | release key, cert SHA-256 `b16b480d5a1ff6d35baff0b15fa3fc4b0ee815e500861fbff1b062c9bf7d3933` (§3.5) |
 | ABIs in the APK | `lib/arm64-v8a/libdosbox.so`, `lib/armeabi-v7a/libdosbox.so`, `lib/x86_64/libdosbox.so` — all three |
 
@@ -3235,7 +3235,7 @@ signed with a different key has to be uninstalled first).
 | The DOS layer is restored (the open handles come back) | ✓ |
 | The keyboard survives a rotation | ✓ — no stuck key |
 | The **RMB** key is in all three layouts | ✓ — the left pad, the key column and the bottom bar |
-| The **native version** is the release version | ✓ — `config -get sdl mapperfile` answers `mapper-1.0.0.13.map`. Until 1.0.0.12 the macro was a literal `1.0.0.1`, so every release answered `mapper-1.0.0.1.map` |
+| The **native version** is the release version | ✓ — `config -get sdl mapperfile` answers `mapper-1.0.0.14.map`. Until 1.0.0.12 the macro was a literal `1.0.0.1`, so every release answered `mapper-1.0.0.1.map` |
 | A **save → load** round trip works with the mouse block | ✓ — the OPL chip comes back field for field, the four DOS handles with it, no payload-size mismatch |
 | A state written by **1.0.0.10** is refused | ✓ — *"That save file is damaged"*, the version guard (§5.4) |
 | A state written by **1.0.0.11** (version 8) is refused | ✓ — *"That save file is damaged"*; the version is checked before the payload size, so the older layout is never read |

@@ -39,6 +39,20 @@ verified. What follows is maintenance — bug fixes and documentation.
 installing a game, playing it, saving a state and keeping your saves safe, one
 step at a time, with a screenshot of every screen. No DOS knowledge needed.
 
+New in 1.0.0.14
+---------------
+
+A **patch** release with three save-state repairs: the requests no longer
+answer each other, a duplicated handle survives a restore, and a restore no
+longer leaks a file descriptor.
+
+| | |
+|---|---|
+| **A save that times out no longer answers the next request** | A save or a restore that overran its time limit used to hand its late result to the *next* request — the new request was answered with an old answer, and the file on disk could be the file the old request wrote. Every request now carries a generation, and a completion that arrives after its request gave up is dropped. |
+| **A duplicated handle survives a restore** | A handle duplicated with INT 21h/45h is two names for one file, and the restore keeps that sharing: the reference count goes back as it was saved, so closing one of the two names no longer takes the other down with it — which used to end in *"invalid handle"*. |
+| **A restore no longer leaks a file descriptor** | The machine a restore replaces is closed properly now, whatever its reference count. Before, a state in which a handle was shared left one host file descriptor open per restore, for the rest of the session. |
+| **The save-state format did not change** | All three fixes are in the snapshot's plumbing, not in the file, so every save state written by the earlier releases loads normally. |
+
 New in 1.0.0.13
 ---------------
 
@@ -466,7 +480,7 @@ A **milestone tag** marks a phase rather than a release: `milestone/<name>`,
 annotated, and deliberately outside the `vX.Y.Z.A` scheme so the release
 script never picks it up. `milestone/android-migration-complete` marks the end
 of the Android migration phase — from there the project is in maintenance. It
-rides on the current release, `v1.0.0.13`.
+rides on the current release, `v1.0.0.14`.
 
 The production APK is signed with the release key, which is never committed:
 
