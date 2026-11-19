@@ -34,6 +34,11 @@ The Android migration is complete: the emulator core, the app layer, the
 bundle launcher, the save states and the build pipeline are all in place and
 verified. What follows is maintenance — bug fixes and documentation.
 
+**New to the app? Start with the
+[user guide](docs/USER-GUIDE.md)** — it walks through installing the app,
+installing a game, playing it, saving a state and keeping your saves safe, one
+step at a time, with a screenshot of every screen. No DOS knowledge needed.
+
 New in 1.0.0.13
 ---------------
 
@@ -379,7 +384,8 @@ bench/                CPU-core throughput probe
 toolchain/            rootless dev toolchain (no root, no sudo)
 third_party/          SDL2 sources, fetched by third_party/fetch-sdl2.sh
 resources/            the logo and the screenshot
-docs/                 the technical reference and the screenshot gallery
+docs/                 the user guide, the technical reference and the
+                      screenshot gallery
                        (and DOSBox's own man page and porting guide)
 examples/             the example bundle (STARFALL)
 downloads/            the link to the published release APK
@@ -423,6 +429,11 @@ the Kotlin sources.
 a command you can paste — the first build on a fresh clone, the release APK
 with its signing variables, the Gradle path, the launcher icons, the version
 bump and the benchmark.
+
+`docs/USER-GUIDE.md` is the guide for the person holding the phone: installing
+the app, installing a game, playing it, the keyboard and the mouse, saving a
+state, keeping the saves safe, and what happens after a reinstall — one step at
+a time, with a screenshot of every screen.
 
 `docs/TECHNICAL-REFERENCE.md` is the technical reference for the
 implementation: how the native build works, how the save-state machine takes a
