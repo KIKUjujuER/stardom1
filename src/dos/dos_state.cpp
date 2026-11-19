@@ -208,7 +208,18 @@ bool DOS_LoadState(FILE *f) {
 			 * console), so it is retired instead of deleted. */
 			retire_handle(file);
 		} else {
-			if (file->IsOpen()) file->Close();
+			/* The whole machine is being thrown away, so this object will
+			 * never be reached through a handle again. Force its host file
+			 * shut even when the reference count is > 1 - a handle duplicated
+			 * with INT 21h/45h (DUP) shares one table object, and
+			 * localFile::Close() only closes the host file when the count is
+			 * 1. localFile has no destructor, so without this the host
+			 * descriptor would leak for the rest of the session: one leaked
+			 * descriptor per restore of a state that held a shared handle. */
+			if (file->IsOpen()) {
+				file->refCtr = 1;
+				file->Close();
+			}
 			delete file;
 		}
 	}

@@ -534,6 +534,15 @@ static char  g_path[4096];
 static bool  g_done = false;
 static int   g_result = SAVESTATE_OK;
 
+/* Generation of the in-flight request. It is bumped every time a request stops
+ * waiting (serviced OR timed out). SAVESTATE_RunPending captures it when it
+ * begins servicing and, after the save/load returns, only publishes the result
+ * if the generation still matches. This closes a race: a request that times out
+ * while the DOSBox thread is still inside do_save()/do_load() clears g_op and
+ * returns, and without this guard the eventual completion would set g_done and
+ * be mistaken for the NEXT request's result. */
+static uint64_t g_gen = 0;
+
 /* Whether the guest is running (see SAVESTATE_GuestReady). Only the DOSBox
  * thread touches it, and it does so from the same thread that runs the shell,
  * so no lock is needed. */
@@ -578,6 +587,11 @@ int SAVESTATE_Request(int op, const char *path) {
 	const std::chrono::seconds timeout = (op == 2) ? std::chrono::seconds(30)
 	                                                : std::chrono::seconds(5);
 	bool serviced = g_cv.wait_for(lk, timeout, [] { return g_done; });
+	/* Retire this generation. If we timed out while the DOSBox thread is still
+	 * in do_save()/do_load(), its later completion will see g_gen move past the
+	 * value it captured and discard its result instead of handing it to the
+	 * next requester. */
+	++g_gen;
 	g_op = 0;
 	if (!serviced) return SAVESTATE_ERR_TIMEOUT;
 	return g_result;
@@ -586,6 +600,7 @@ int SAVESTATE_Request(int op, const char *path) {
 void SAVESTATE_RunPending(void) {
 	int  op;
 	char path[sizeof(g_path)];
+	uint64_t gen;
 	{
 		std::lock_guard<std::mutex> lk(g_mtx);
 		if (g_op == 0 || g_done) return;
@@ -602,6 +617,7 @@ void SAVESTATE_RunPending(void) {
 			return;
 		}
 		op = g_op;
+		gen = g_gen;
 		memcpy(path, g_path, sizeof(path));
 	}
 
@@ -639,8 +655,13 @@ void SAVESTATE_RunPending(void) {
 
 	{
 		std::lock_guard<std::mutex> lk(g_mtx);
-		g_result = rc;
-		g_done = true;
+		/* Publish only if this is still the request being waited on. A
+		 * requester that timed out meanwhile has bumped g_gen, so its stale
+		 * result is dropped rather than satisfying the next request. */
+		if (g_gen == gen) {
+			g_result = rc;
+			g_done = true;
+		}
 	}
 	g_cv.notify_all();
 }

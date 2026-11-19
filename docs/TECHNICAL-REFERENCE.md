@@ -1289,8 +1289,9 @@ The UI thread never touches the machine. It posts a request and blocks.
                  │              │   → do_save(path) ─────────────────────┤
                  │              │        FillFlags()                     │
                  │              │        write every block ─────────────┴──►
-                 │              │   g_result = rc; g_done = true
-                 │              │   g_cv.notify_all()
+                 │              │   if (g_gen == gen)                   │
+                 │              │     g_result = rc; g_done = true      │
+                 │              │   g_cv.notify_all()                   │
                  │◄─────────────┘
        return rc
      setStatus(message)
@@ -1308,6 +1309,50 @@ The timeouts are asymmetric on purpose: a save has to happen *right away* —
 the machine is running — so 5 s is a generous ceiling that still fails fast if
 the DOSBox thread is wedged. A load may have to wait for the guest to start at
 all, so it gets 30 s.
+
+▸ **A timeout retires its generation.** The wait above has a ceiling, and the
+requester may give up while the DOSBox thread is still *inside*
+`do_save()`/`do_load()` — a large save on a slow phone can outlast the 5 s.
+When that happens the requester clears `g_op` and returns
+`SAVESTATE_ERR_TIMEOUT`, but the in-flight `do_save()` keeps running and will
+eventually publish a result.
+
+Without a guard, that late result is mistaken for the **next** request's. The
+next requester sets `g_done = false` and waits; the stale completion then sets
+`g_done = true` with the *previous* request's `g_result`. The new request is
+answered with an old answer, and the file on disk is the file the old request
+wrote.
+
+The guard is a generation counter, bumped when a request **stops waiting**
+rather than when it is published:
+
+```c
+static uint64_t g_gen = 0;   /* bumped every time a request stops waiting */
+
+int SAVESTATE_Request(int op, const char *path) {
+    ...
+    bool serviced = g_cv.wait_for(lk, timeout, [] { return g_done; });
+    ++g_gen;          /* retire this generation - serviced *or* timed out */
+    g_op = 0;
+    if (!serviced) return SAVESTATE_ERR_TIMEOUT;
+    return g_result;
+}
+
+void SAVESTATE_RunPending(void) {
+    ...
+    gen = g_gen;      /* the generation being serviced */
+    ...
+    if (g_gen == gen) {   /* still the request being waited on? */
+        g_result = rc;
+        g_done = true;
+    }
+    g_cv.notify_all();
+}
+```
+
+A completion that arrives after a timeout therefore always finds a different
+generation and drops its result. `g_cv.notify_all()` still runs — it simply has
+nobody to wake up.
 
 ### 5.3 ▸ The safe point
 
@@ -2125,7 +2170,7 @@ Per handle:
 | `kind` | 0 = an empty slot, 1 = a device, 2 = a file |
 | `flags` | `DOS_File::flags`: the open mode and the inherit flag |
 | `time`, `date`, `attr` | the file's timestamps and attributes |
-| `refCtr` | the reference count — a duplicated handle shares one entry |
+| `refCtr` | the reference count — a duplicated handle shares one entry, and the count is restored as it was saved (§7.3) |
 | `pos` | the position in the file |
 | `devnum` | the device number (for `kind == 1`) |
 | `hdrive` | the drive the handle belongs to |
@@ -2161,6 +2206,7 @@ guest's memory either, and they travel with the state as well:
       ▸ a truncated state is rejected instead of half-restored
   close and drop everything the loading process has open
       ▸ the guest's own file table (in the restored memory) takes its place
+      ▸ the discarded files are closed even when their count is > 1
   restore the current drive, the code page and the current directories
   rebuild the table, in the same order:
       ▸ a device  → a fresh wrapper around the device itself,
@@ -2172,6 +2218,61 @@ guest's memory either, and they travel with the state as well:
 A file is restored by **re-opening it through its drive** — exactly the way
 `DOS_OpenFile()` opened it the first time — and then seeking to the saved
 position. A device is restored from the device table.
+
+▸ **The reference count is restored — and it has to be.** A handle duplicated
+with INT 21h/45h (DUP) does **not** get a second entry in DOSBox's file table.
+It gets a second entry in the *guest's* Job File Table (the JFT), which lives
+in the PSP — and the PSP is part of the guest's memory, which the snapshot
+captures. Both PSP entries therefore point at the **same** index of the table,
+and the object in that slot is shared by both handles.
+
+The count says how many of those references exist, and two rules depend on it:
+`DOS_CloseFile()` deletes the table entry when the count reaches zero
+(`src/dos/dos_files.cpp`), and `localFile::Close()` closes the host file only
+when the count is 1 (`src/dos/drive_local.cpp`). Both assume that the count
+which comes back is the count which was saved: with a count of 2, closing the
+first handle leaves the entry alive for the second one, and the host file is
+closed when the last reference goes away.
+
+▸ **Setting the count to 1 on restore breaks the DUP semantics.** The restore
+puts the saved count back (`dev->refCtr = (Bits)h->refCtr;` and
+`file->refCtr = (Bits)h->refCtr;` in `src/dos/dos_state.cpp`). Replacing those
+two lines with a fixed `= 1` looks tidier — each slot holds one object, so one
+reference — but it breaks exactly the sharing DUP creates.
+
+The first close then takes the count to zero, the shared entry is deleted, and
+the second handle is left pointing at nothing: the next read fails with
+"invalid handle" (DOS error 6), and so does closing it. The handle is not
+"a file of its own" after a restore — it is a handle to nothing.
+
+Measured on the emulator, with a program that opens a file, duplicates the
+handle (INT 21h/45h), waits while a state is saved and restored, closes the
+first handle and then reads through the second:
+
+| the restored count | the read through the duplicate | closing the duplicate |
+|---|---|---|
+| the saved one (2) | 1 byte, the file's content | succeeds |
+| 1 | fails, "invalid handle" | fails — the entry was gone |
+
+The restore therefore keeps the saved count. The sharing that DUP creates is
+part of what the snapshot has to preserve, and the reference count is what
+preserves it.
+
+▸ **The discarded machine's files are closed, whatever their count.** The
+objects of the machine that is being replaced are closed before they are
+thrown away, and the count is forced to 1 first: `localFile::Close()` only
+closes the host file when the count is 1, and a handle duplicated with
+INT 21h/45h (DUP) shares one table object — so the objects that would
+otherwise be left open are exactly the shared ones. `localFile` has no
+destructor, so a file that is not closed here stays open for the rest of the
+session.
+
+Without that forced close, every restore of a state in which a handle was
+shared leaked one host file descriptor. Measured on the emulator, with the
+guest holding the file open through three save/restore cycles, the number of
+descriptors pointing at the guest's file went from 1 to 2, 3 and 4 — one leak
+per restore. With the forced close it stays at 1, and it falls back to 0 when
+the guest closes its handles.
 
 Every step logs what it did, so a failed restore is diagnosable from the log
 alone:
