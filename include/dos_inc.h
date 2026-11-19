@@ -645,7 +645,7 @@ struct DOS_Block {
 
 extern DOS_Block dos;
 
-/* WhereQ-DOSBox: the DOS layer as part of a save-state (milestone B2).
+/* A-DOS: the DOS layer as part of a save-state (milestone B2).
  *
  * DOS_SaveState()/DOS_LoadState() store the open file handles (and the
  * current drive, the code page and the current directories) next to the

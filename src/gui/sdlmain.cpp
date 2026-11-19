@@ -118,7 +118,7 @@ struct private_hwdata {
 #define STDERR_FILE	TEXT("stderr.txt")
 #define DEFAULT_CONFIG_FILE "/dosbox.conf"
 #elif defined(MACOSX)
-#define DEFAULT_CONFIG_FILE "/Library/Preferences/WhereQ-DOSBox Preferences"
+#define DEFAULT_CONFIG_FILE "/Library/Preferences/A-DOS Preferences"
 #else /*linux freebsd*/
 #define DEFAULT_CONFIG_FILE "/.dosboxrc"
 #endif
@@ -356,9 +356,9 @@ void GFX_SetTitle(Bit32s cycles,int frameskip,bool paused){
 	if (cycles != -1) internal_cycles = cycles;
 	if (frameskip != -1) internal_frameskip = frameskip;
 	if(CPU_CycleAutoAdjust) {
-		sprintf(title,"WhereQ-DOSBox %s, CPU speed: max %3d%% cycles, Frameskip %2d, Program: %8s",VERSION,internal_cycles,internal_frameskip,RunningProgram);
+		sprintf(title,"A-DOS %s, CPU speed: max %3d%% cycles, Frameskip %2d, Program: %8s",VERSION,internal_cycles,internal_frameskip,RunningProgram);
 	} else {
-		sprintf(title,"WhereQ-DOSBox %s, CPU speed: %8d cycles, Frameskip %2d, Program: %8s",VERSION,internal_cycles,internal_frameskip,RunningProgram);
+		sprintf(title,"A-DOS %s, CPU speed: %8d cycles, Frameskip %2d, Program: %8s",VERSION,internal_cycles,internal_frameskip,RunningProgram);
 	}
 
 	if (paused) strcat(title," PAUSED");
@@ -2172,7 +2172,7 @@ static void GUI_StartUp(Section * sec) {
 		int win_h = GetSystemMetrics(SM_CYSCREEN);
 		if (sdl_w != win_w && sdl_h != win_h) 
 			LOG_MSG("Windows dpi/blurry apps scaling detected! The screen might be too large or not\n"
-			        "show properly, please see the WhereQ-DOSBox options file (fullresolution) for details.\n");
+			        "show properly, please see the A-DOS options file (fullresolution) for details.\n");
 		}
 #else
 	if (!sdl.desktop.full.width || !sdl.desktop.full.height){
@@ -2347,9 +2347,9 @@ static void GUI_StartUp(Section * sec) {
 	}
 	GFX_Stop();
 #if SDL_VERSION_ATLEAST(2,0,0)
-	SDL_SetWindowTitle(sdl.window,"WhereQ-DOSBox"); // VERSION is gone...
+	SDL_SetWindowTitle(sdl.window,"A-DOS"); // VERSION is gone...
 #else
-	SDL_WM_SetCaption("WhereQ-DOSBox",VERSION);
+	SDL_WM_SetCaption("A-DOS",VERSION);
 #endif
 
 /* The endian part is intentionally disabled as somehow it produces correct results without according to rhoenie*/
@@ -2954,9 +2954,9 @@ void Config_Add_SDL() {
 	Pbool = sdl_sec->Add_bool("fulldouble",Property::Changeable::Always,false);
 #if SDL_VERSION_ATLEAST(2, 0, 0)
 	Pbool->Set_help("Sync to Vblank IF supported by the output device and renderer (if relevant).\n"
-	                "It can reduce screen flickering, but it can also result in a slow WhereQ-DOSBox.");
+	                "It can reduce screen flickering, but it can also result in a slow A-DOS.");
 #else	// !SDL_VERSION_ATLEAST(2, 0, 0)
-	Pbool->Set_help("Use double buffering in fullscreen. It can reduce screen flickering, but it can also result in a slow WhereQ-DOSBox.");
+	Pbool->Set_help("Use double buffering in fullscreen. It can reduce screen flickering, but it can also result in a slow A-DOS.");
 #endif	// !SDL_VERSION_ATLEAST(2, 0, 0)
 
 	Pstring = sdl_sec->Add_string("fullresolution",Property::Changeable::Always,"0x0");
@@ -3292,14 +3292,14 @@ int main(int argc, char* argv[]) {
 				freopen("CONOUT$","w",stdout);
 				freopen("CONOUT$","w",stderr);
 			}
-			SetConsoleTitle("WhereQ-DOSBox Status Window");
+			SetConsoleTitle("A-DOS Status Window");
 		}
 #endif  //defined(WIN32) && !(C_DEBUG)
 		if (control->cmdline->FindExist("-version") ||
 		    control->cmdline->FindExist("--version") ) {
-			printf("\nWhereQ-DOSBox version %s, copyright 2002-2019 DOSBox Team.\n\n",VERSION);
+			printf("\nA-DOS version %s, copyright 2002-2019 DOSBox Team.\n\n",VERSION);
 			printf("DOSBox is written by the DOSBox Team (See AUTHORS file))\n");
-			printf("WhereQ-DOSBox comes with ABSOLUTELY NO WARRANTY.  This is free software,\n");
+			printf("A-DOS comes with ABSOLUTELY NO WARRANTY.  This is free software,\n");
 			printf("and you are welcome to redistribute it under certain conditions;\n");
 			printf("please read the COPYING file thoroughly before doing so.\n\n");
 			return 0;
@@ -3346,7 +3346,7 @@ int main(int argc, char* argv[]) {
 #endif
 
 	/* Display Welcometext in the console */
-	LOG_MSG("WhereQ-DOSBox version %s",VERSION_TEXT);
+	LOG_MSG("A-DOS version %s",VERSION_TEXT);
 	LOG_MSG("Copyright 2002-2019 DOSBox Team, published under GNU GPL.");
 	LOG_MSG("---");
 

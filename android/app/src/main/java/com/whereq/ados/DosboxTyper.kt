@@ -1,4 +1,4 @@
-package com.whereq.dosbox
+package com.whereq.ados
 
 import android.os.Handler
 import android.os.Looper
@@ -129,7 +129,7 @@ class DosboxTyper {
         scancodes.getOrPut(keyName) { DosboxNative.nativeScancodeFromName(keyName) }
 
     companion object {
-        private const val TAG = "whereq-dosbox"
+        private const val TAG = "a-dos"
 
         /** Pause between two characters, in milliseconds. */
         private const val CHAR_DELAY_MS = 45L

@@ -7,10 +7,15 @@ without building it.
 publishes it as a release asset, so the file you download is the file that was
 built, signed and verified — one artifact, one checksum, one place.
 
-Older versions are on the [releases page](https://github.com/whereq/whereq-dosbox/releases)
-from 1.0.0.9 on; the ones before that were never released there and live in the
+**A-DOS starts at v1.0.0.0.** The releases before the rename — up to
+v1.0.0.12 — were published from the predecessor repository and stay there, on
+the [releases page](https://github.com/whereq/whereq-dosbox/releases) from
+1.0.0.9 on; the ones before that were never released there and live in that
 repository's history, at their own tag — for example
 `https://raw.githubusercontent.com/whereq/whereq-dosbox/v1.0.0.8/downloads/whereq-dosbox-1.0.0.8.apk`.
+
+The A-DOS releases are published from this repository, as
+`a-dos-<version>.apk` next to its `.sha256` sidecar.
 
 ## The current release
 
@@ -23,6 +28,13 @@ repository's history, at their own tag — for example
 * Signing certificate (SHA-256):
   `b16b480d5a1ff6d35baff0b15fa3fc4b0ee815e500861fbff1b062c9bf7d3933`
 
+1.0.0.12 is the last release of the **predecessor** series: it is the release
+that introduced the A-DOS name, and it was published from
+[`whereq/whereq-dosbox`](https://github.com/whereq/whereq-dosbox) under the
+old file name. The first A-DOS release — v1.0.0.0 — is published from this
+repository as `a-dos-1.0.0.0.apk`, and it carries the same signing
+certificate, so the two can be installed side by side.
+
 ## What changed in 1.0.0.12
 
 A **patch** on the `android-migration-complete` milestone: the mouse work that
@@ -33,8 +45,9 @@ the app's own storage. The milestone marker
 
 * **The app is now called A-DOS.** The launcher name, the notification and the
   launcher icons all carry the new name and mark — DOS across Android and
-  Apple. The repository, the package name and the download file names stay
-  `whereq-dosbox`.
+  Apple. In this release the repository, the package name and the download
+  file names still say `whereq-dosbox`; the A-DOS series moves all three to
+  the new name, starting at v1.0.0.0.
 * **Your saves survive a reinstall.** The save-state slots lived in the app's
   private storage, and Android deletes that when the app is uninstalled — so
   reinstalling used to mean losing every save. Pick a folder on the phone
@@ -236,9 +249,15 @@ from 1.0.0.7 on it can be picked in the app, see above.
 The APK is signed with the release key of this repository, so it can be
 updated in place: a later version replaces it without uninstalling first.
 
+One exception: **A-DOS itself is a new application id** (`com.whereq.ados`
+instead of `com.whereq.dosbox`), so Android installs it *beside* the old one
+rather than over it. Uninstall the old app when you are happy with the new
+one. Your save states are safe either way — they live in the durable saves
+folder you picked, not in the app's own storage.
+
 The SHA-256 of the current release is at the top of this file; every release
 carries its own `.sha256` sidecar next to the APK on the [releases
-page](https://github.com/whereq/whereq-dosbox/releases).
+page](https://github.com/whereq/A-DOS/releases).
 
 ## What to try first
 

@@ -1,4 +1,4 @@
-// Root project of the whereq-dosbox Android build.
+// Root project of the A-DOS Android build.
 //
 // The app layer is Kotlin + AndroidX. SDL2 and the DOSBox emulator are native
 // (statically linked into libdosbox.so, built out-of-tree by

@@ -1,5 +1,5 @@
 /*
- *  dos_state.cpp - WhereQ-DOSBox: the DOS layer as part of a save-state.
+ *  dos_state.cpp - A-DOS: the DOS layer as part of a save-state.
  *
  *  NOT part of upstream DOSBox. See include/savestate.h for the contract and
  *  docs/TECHNICAL-REFERENCE.md for the design notes.

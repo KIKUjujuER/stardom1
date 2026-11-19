@@ -30,9 +30,9 @@
    in the DOS startup banner, in the window title, in the BIOS machine string
    and in the name of the mapper file, so a stale literal makes the native
    library claim to be an old release. */
-#define PACKAGE "whereq-dosbox"
-#define PACKAGE_NAME "WhereQ-DOSBox"
-#define PACKAGE_TARNAME "whereq-dosbox"
+#define PACKAGE "a-dos"
+#define PACKAGE_NAME "A-DOS"
+#define PACKAGE_TARNAME "a-dos"
 #define PACKAGE_VERSION "@DOSBOX_VERSION@"
 #define PACKAGE_STRING "@DOSBOX_PACKAGE_STRING@"
 #define PACKAGE_BUGREPORT ""

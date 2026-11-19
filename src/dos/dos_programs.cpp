@@ -1781,7 +1781,7 @@ void DOS_SetupPrograms(void) {
 	MSG_Add("PROGRAM_MOUNT_USAGE",
 		"Usage \033[34;1mMOUNT Drive-Letter Local-Directory\033[0m\n"
 		"For example: MOUNT c %s\n"
-		"This makes the directory %s act as the C: drive inside WhereQ-DOSBox.\n"
+		"This makes the directory %s act as the C: drive inside A-DOS.\n"
 		"The directory has to exist.\n");
 	MSG_Add("PROGRAM_MOUNT_UMOUNT_NOT_MOUNTED","Drive %c isn't mounted.\n");
 	MSG_Add("PROGRAM_MOUNT_UMOUNT_SUCCESS","Drive %c has successfully been removed.\n");
@@ -1812,15 +1812,15 @@ void DOS_SetupPrograms(void) {
 	MSG_Add("PROGRAM_RESCAN_SUCCESS","Drive cache cleared.\n");
 
 	MSG_Add("PROGRAM_INTRO",
-		"\033[2J\033[32;1mWelcome to WhereQ-DOSBox\033[0m, an x86 emulator with sound and graphics.\n"
-		"WhereQ-DOSBox creates a shell for you which looks like old plain DOS.\n"
+		"\033[2J\033[32;1mWelcome to A-DOS\033[0m, an x86 emulator with sound and graphics.\n"
+		"A-DOS creates a shell for you which looks like old plain DOS.\n"
 		"\n"
 		"For information about basic mount type \033[34;1mintro mount\033[0m\n"
 		"For information about CD-ROM support type \033[34;1mintro cdrom\033[0m\n"
 		"For information about special keys type \033[34;1mintro special\033[0m\n"
 		"For more information about DOSBox, go to \033[34;1mhttp://www.dosbox.com/wiki\033[0m\n"
 		"\n"
-		"\033[31;1mWhereQ-DOSBox will stop/exit without a warning if an error occurred!\033[0m\n"
+		"\033[31;1mA-DOS will stop/exit without a warning if an error occurred!\033[0m\n"
 		"\n"
 		"\n"
 		);
@@ -1860,18 +1860,18 @@ void DOS_SetupPrograms(void) {
 		"You can run programs/files which end with \033[31m.exe .bat\033[0m and \033[31m.com\033[0m.\n"
 		);
 	MSG_Add("PROGRAM_INTRO_CDROM",
-		"\033[2J\033[32;1mHow to mount a Real/Virtual CD-ROM Drive in WhereQ-DOSBox:\033[0m\n"
+		"\033[2J\033[32;1mHow to mount a Real/Virtual CD-ROM Drive in A-DOS:\033[0m\n"
 #if SDL_VERSION_ATLEAST(2,0,0)
-		"WhereQ-DOSBox provides CD-ROM emulation on a few levels.\n"
+		"A-DOS provides CD-ROM emulation on a few levels.\n"
 #else
-		"WhereQ-DOSBox provides CD-ROM emulation on several levels.\n"
+		"A-DOS provides CD-ROM emulation on several levels.\n"
 #endif
 		"\n"
 		"The \033[33mbasic\033[0m level works on all CD-ROM drives and normal directories.\n"
 		"It installs MSCDEX and marks the files read-only.\n"
 		"Usually this is enough for most games:\n"
 		"\033[34;1mmount d \033[0;31mD:\\\033[34;1m -t cdrom\033[0m   or   \033[34;1mmount d C:\\example -t cdrom\033[0m\n"
-		"If it doesn't work you might have to tell WhereQ-DOSBox the label of the CD-ROM:\n"
+		"If it doesn't work you might have to tell A-DOS the label of the CD-ROM:\n"
 		"\033[34;1mmount d C:\\example -t cdrom -label CDLABEL\033[0m\n"
 		"\n"
 #if SDL_VERSION_ATLEAST(2,0,0)
@@ -1903,7 +1903,7 @@ void DOS_SetupPrograms(void) {
 		"They can be changed in the \033[33mkeymapper\033[0m.\n"
 		"\n"
 		"\033[33;1mALT-ENTER\033[0m   : Go full screen and back.\n"
-		"\033[33;1mALT-PAUSE\033[0m   : Pause WhereQ-DOSBox.\n"
+		"\033[33;1mALT-PAUSE\033[0m   : Pause A-DOS.\n"
 		"\033[33;1mCTRL-F1\033[0m     : Start the \033[33mkeymapper\033[0m.\n"
 		"\033[33;1mCTRL-F4\033[0m     : Update directory cache for all drives! Swap mounted disk-image.\n"
 		"\033[33;1mCTRL-ALT-F5\033[0m : Start/Stop creating a movie of the screen.\n"
@@ -1913,16 +1913,16 @@ void DOS_SetupPrograms(void) {
 		"\033[33;1mCTRL-ALT-F8\033[0m : Start/Stop the recording of raw MIDI commands.\n"
 		"\033[33;1mCTRL-F7\033[0m     : Decrease frameskip.\n"
 		"\033[33;1mCTRL-F8\033[0m     : Increase frameskip.\n"
-		"\033[33;1mCTRL-F9\033[0m     : Kill WhereQ-DOSBox.\n"
+		"\033[33;1mCTRL-F9\033[0m     : Kill A-DOS.\n"
 		"\033[33;1mCTRL-F10\033[0m    : Capture/Release the mouse.\n"
-		"\033[33;1mCTRL-F11\033[0m    : Slow down emulation (Decrease WhereQ-DOSBox Cycles).\n"
+		"\033[33;1mCTRL-F11\033[0m    : Slow down emulation (Decrease A-DOS Cycles).\n"
 		"\033[33;1mCTRL-F12\033[0m    : Speed up emulation (Increase DOSBox Cycles).\n"
 		"\033[33;1mALT-F12\033[0m     : Unlock speed (turbo button/fast forward).\n"
 		);
 	MSG_Add("PROGRAM_BOOT_NOT_EXIST","Bootdisk file does not exist.  Failing.\n");
 	MSG_Add("PROGRAM_BOOT_NOT_OPEN","Cannot open bootdisk file.  Failing.\n");
 	MSG_Add("PROGRAM_BOOT_WRITE_PROTECTED","Image file is read-only! Might create problems.\n");
-	MSG_Add("PROGRAM_BOOT_PRINT_ERROR","This command boots WhereQ-DOSBox from either a floppy or hard disk image.\n\n"
+	MSG_Add("PROGRAM_BOOT_PRINT_ERROR","This command boots A-DOS from either a floppy or hard disk image.\n\n"
 		"For this command, one can specify a succession of floppy disks swappable\n"
 		"by pressing Ctrl-F4, and -l specifies the mounted drive to boot from.  If\n"
 		"no drive letter is specified, this defaults to booting from the A drive.\n"

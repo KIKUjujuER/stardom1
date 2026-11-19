@@ -1,5 +1,5 @@
 /*
- * savestate.h - WhereQ-DOSBox disk save-states (Phase B, milestone B1).
+ * savestate.h - A-DOS disk save-states (Phase B, milestone B1).
  *
  * NOT part of upstream DOSBox. Snapshots the emulated machine (CPU + guest RAM
  * + paging + VGA) to a file and restores it, so a game can be resumed exactly -

@@ -1,4 +1,4 @@
-package com.whereq.dosbox
+package com.whereq.ados
 
 import android.app.Activity
 import android.content.ContentResolver
@@ -22,7 +22,7 @@ import java.io.InputStream
  */
 object BundleFolder {
 
-    private const val TAG = "whereq-dosbox"
+    private const val TAG = "a-dos"
 
     /** How deep the chosen folder is searched. */
     private const val MAX_DEPTH = 3

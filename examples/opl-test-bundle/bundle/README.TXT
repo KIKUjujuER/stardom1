@@ -1,4 +1,4 @@
-OPLTEST - the WhereQ-DOSBox OPL save-state test
+OPLTEST - the A-DOS OPL save-state test
 ================================================
 
 A tiny 16-bit DOS program that programs one sustained tone on the FM chip
@@ -13,7 +13,7 @@ attack, and the sound comes back different from the one that was saved.
 
 How to use it:
 
-  1. install this bundle in WhereQ-DOSBox and play it
+  1. install this bundle in A-DOS and play it
   2. let the tone settle (a second or two)
   3. save a state (Files -> States -> Save)
   4. wait a few seconds, then load the state again
@@ -35,4 +35,4 @@ examples/game-bundle-style 16-bit x86:
 
 Press any key to stop the tone and return to the DOS prompt.
 
-Have a look at whereq.com for WhereQ-DOSBox itself.
+Have a look at whereq.com for A-DOS itself.

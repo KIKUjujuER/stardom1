@@ -1,4 +1,4 @@
-STARFALL - the WhereQ-DOSBox example game
+STARFALL - the A-DOS example game
 =========================================
 
 A tiny arcade game written in 16-bit DOS assembly.  It shows the three
@@ -26,4 +26,4 @@ How it was built:
   TrueType font, and the star field is dithered so that the night sky does
   not show up as bands.
 
-Have a look at whereq.com for WhereQ-DOSBox itself.
+Have a look at whereq.com for A-DOS itself.

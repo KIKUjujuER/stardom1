@@ -1,4 +1,4 @@
-// whereq-dosbox — Android application module (Kotlin + AndroidX).
+// A-DOS — Android application module (Kotlin + AndroidX).
 //
 // Gradle is the CANONICAL app build. The emulator core and SDL2 are native and
 // built out-of-tree by android/build-android.sh into
@@ -64,7 +64,7 @@ tasks.register('generateManifest') {
     inputs.file(src)
     outputs.file(out)
     doLast {
-        def text = src.text.replaceAll(/package="com\.whereq\.dosbox"/, '')
+        def text = src.text.replaceAll(/package="com\.whereq\.ados"/, '')
         def target = out.get().asFile
         target.parentFile.mkdirs()
         target.text = text
@@ -82,14 +82,14 @@ tasks.register('stageNativeLibs', Copy) {
 }
 
 android {
-    namespace 'com.whereq.dosbox'
+    namespace 'com.whereq.ados'
     // The SDK in this environment carries android-36; the app itself uses
     // nothing newer than API 21. The compile SDK only decides which platform
     // the sources are compiled against.
     compileSdk 36
     buildToolsVersion '36.0.0'
     defaultConfig {
-        applicationId 'com.whereq.dosbox'
+        applicationId 'com.whereq.ados'
         minSdk 21
         targetSdk 35
         versionCode appVersionCode

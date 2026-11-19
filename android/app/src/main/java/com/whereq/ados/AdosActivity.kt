@@ -1,4 +1,4 @@
-package com.whereq.dosbox
+package com.whereq.ados
 
 import android.Manifest
 import android.app.AlertDialog
@@ -55,7 +55,7 @@ import java.io.InputStream
  * are injected into SDL's event queue from [VirtualKeyboardView] via
  * [DosboxNative.nativePushKey].
  */
-class WhereqDosboxActivity : SDLActivity() {
+class AdosActivity : SDLActivity() {
 
     /**
      * Opens a bundle archive for reading.
@@ -209,7 +209,7 @@ class WhereqDosboxActivity : SDLActivity() {
      * Installs the bundle of an `ACTION_VIEW` intent.
      *
      * That is how a bundle reaches the app when the user picks it in a file
-     * manager and chooses WhereQ-DOSBox.
+     * manager and chooses A-DOS.
      */
     private fun handleOpenIntent(intent: Intent?) {
         if (intent == null || Intent.ACTION_VIEW != intent.action) {
@@ -272,7 +272,7 @@ class WhereqDosboxActivity : SDLActivity() {
                 override fun onPlayRequested(bundle: GameBundle) = play(bundle)
 
                 override fun onEditLaunchRequested(bundle: GameBundle) {
-                    this@WhereqDosboxActivity.launcher?.showLaunchEditor(
+                    this@AdosActivity.launcher?.showLaunchEditor(
                         bundle,
                         library.launchScriptFor(bundle),
                         library.listCandidates(bundle),
@@ -287,7 +287,7 @@ class WhereqDosboxActivity : SDLActivity() {
                     try {
                         library.setLaunch(bundle, script)
                     } catch (e: IOException) {
-                        this@WhereqDosboxActivity.launcher?.setStatus(
+                        this@AdosActivity.launcher?.setStatus(
                             "Could not set the launch command: " + e.message
                         )
                         return
@@ -613,7 +613,7 @@ class WhereqDosboxActivity : SDLActivity() {
                 return@launch
             }
             val n = missing.size
-            AlertDialog.Builder(this@WhereqDosboxActivity)
+            AlertDialog.Builder(this@AdosActivity)
                 .setTitle("Restore games?")
                 .setMessage(
                     "This folder has $n game${if (n == 1) "" else "s"} that " +
@@ -812,7 +812,7 @@ class WhereqDosboxActivity : SDLActivity() {
                     launcher?.setStatus("Installing ${entry.name} ($done of $total)…")
                 }
 
-                val launcher = this@WhereqDosboxActivity.launcher
+                val launcher = this@AdosActivity.launcher
                 if (launcher != null) {
                     val bundles = withContext(Dispatchers.IO) { library.list() }
                     launcher.showFiles(bundles)
@@ -921,7 +921,7 @@ class WhereqDosboxActivity : SDLActivity() {
                     }
                 }
             }
-            val launcher = this@WhereqDosboxActivity.launcher ?: return@launch
+            val launcher = this@AdosActivity.launcher ?: return@launch
             val bundles = withContext(Dispatchers.IO) { library.list() }
             launcher.showFiles(bundles)
             launcher.setStatus(
@@ -1206,7 +1206,7 @@ class WhereqDosboxActivity : SDLActivity() {
     }
 
     companion object {
-        private const val TAG = "whereq-dosbox"
+        private const val TAG = "a-dos"
 
         /** Name of the native library (without lib prefix / .so suffix). */
         private const val NATIVE_LIB = "dosbox"

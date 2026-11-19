@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22.1)
 
-# whereq-dosbox - Android native build (NDK + CMake)
+# A-DOS - Android native build (NDK + CMake)
 #
 # Produces libdosbox.so, a shared library that contains the whole DOSBox
 # emulator (CPU cores, DOS kernel, hardware, shell) plus the SDL2 back end.
@@ -15,7 +15,7 @@ cmake_minimum_required(VERSION 3.22.1)
 #         -DCMAKE_BUILD_TYPE=Release \
 #         -DCMAKE_PREFIX_PATH=$PWD/build/sdl2/arm64-v8a
 #   cmake --build build/android/arm64-v8a -j
-project(whereq-dosbox C CXX)
+project(a-dos C CXX)
 
 set(DOSBOX_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/..")
 set(DOSBOX_GENERATED "${CMAKE_CURRENT_BINARY_DIR}/include")
@@ -67,8 +67,8 @@ endif()
 if(DOSBOX_VERSION STREQUAL "")
     set(DOSBOX_VERSION "unknown")
 endif()
-set(DOSBOX_PACKAGE_STRING "WhereQ-DOSBox ${DOSBOX_VERSION}")
-message(STATUS "whereq-dosbox: version ${DOSBOX_VERSION}")
+set(DOSBOX_PACKAGE_STRING "A-DOS ${DOSBOX_VERSION}")
+message(STATUS "A-DOS: version ${DOSBOX_VERSION}")
 
 configure_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/cmake/config-android.h.in"
@@ -88,12 +88,12 @@ if(Python3_Interpreter_FOUND)
     if(NOT _ver_res EQUAL 0)
         message(WARNING "version.py failed (${_ver_res}); writing fallback version.h")
         file(WRITE "${DOSBOX_GENERATED}/version.h"
-             "/* fallback */\n#define VERSION_TEXT \"whereq-dosbox android\"\n")
+             "/* fallback */\n#define VERSION_TEXT \"A-DOS android\"\n")
     endif()
 else()
     message(WARNING "python3 not found; writing fallback version.h")
     file(WRITE "${DOSBOX_GENERATED}/version.h"
-         "/* fallback */\n#define VERSION_TEXT \"whereq-dosbox android\"\n")
+         "/* fallback */\n#define VERSION_TEXT \"A-DOS android\"\n")
 endif()
 
 # ----------------------------------------------------------------- SDL2 ----
@@ -386,4 +386,4 @@ set_target_properties(dosbox PROPERTIES
     C_VISIBILITY_PRESET default
     CXX_VISIBILITY_PRESET default)
 
-message(STATUS "whereq-dosbox: ABI=${ANDROID_ABI} targetcpu=${DOSBOX_C_TARGETCPU} SDL2 target=${DOSBOX_SDL2_TARGET}")
+message(STATUS "A-DOS: ABI=${ANDROID_ABI} targetcpu=${DOSBOX_C_TARGETCPU} SDL2 target=${DOSBOX_SDL2_TARGET}")

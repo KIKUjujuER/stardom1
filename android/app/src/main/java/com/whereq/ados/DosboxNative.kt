@@ -1,4 +1,4 @@
-package com.whereq.dosbox
+package com.whereq.ados
 
 /**
  * Bridge to the native side of the DOSBox library.
@@ -8,7 +8,7 @@ package com.whereq.dosbox
  * got a chance to load it.
  *
  * The functions are `@JvmStatic external`, so they keep the exact JNI symbol
- * names (`Java_com_whereq_dosbox_DosboxNative_*`) the native side registers by
+ * names (`Java_com_whereq_ados_DosboxNative_*`) the native side registers by
  * name. The ProGuard keep rule in `proguard-rules.pro` covers this class.
  */
 object DosboxNative {

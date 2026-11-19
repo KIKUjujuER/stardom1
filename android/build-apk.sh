@@ -132,15 +132,15 @@ password is not a production key.
 EOF
     exit 1
   fi
-  KEY_DNAME="${WHEREQ_RELEASE_DNAME:-CN=whereq-dosbox, OU=release, O=whereq, L=-, ST=-, C=DE}"
-  APK_NAME="whereq-dosbox-release.apk"
+  KEY_DNAME="${WHEREQ_RELEASE_DNAME:-CN=A-DOS, OU=release, O=WhereQ, L=-, ST=-, C=DE}"
+  APK_NAME="a-dos-release.apk"
 else
   KEYSTORE="${KEYSTORE:-$ROOT/build/debug.keystore}"
   KS_PASS="${KS_PASS:-android}"
   KEY_PASS="${KEY_PASS:-android}"
   ALIAS="${ALIAS:-androiddebugkey}"
-  KEY_DNAME="CN=whereq-dosbox, OU=dev, O=whereq, L=-, ST=-, C=DE"
-  APK_NAME="whereq-dosbox-debug.apk"
+  KEY_DNAME="CN=A-DOS, OU=dev, O=WhereQ, L=-, ST=-, C=DE"
+  APK_NAME="a-dos-debug.apk"
 fi
 
 OUTPUT="${OUTPUT:-$OUT/$APK_NAME}"
@@ -240,7 +240,7 @@ for ABI in "${ABIS[@]}"; do
   cp "$LIB" "$WORK/lib/$ABI/"
   ( cd "$WORK" && zip -q "$WORK/unsigned.apk" "lib/$ABI/libdosbox.so" )
 done
-# assets/ (dosbox.conf template) is read by WhereqDosboxActivity at runtime.
+# assets/ (dosbox.conf template) is read by AdosActivity at runtime.
 # aapt2 link puts them under assets/ inside the APK for us.
 
 # ----------------------------------------------------------------- sign ---

@@ -35,12 +35,12 @@ APK_MODE="${APK_MODE:-debug}"
 APK_NAME="app-$APK_MODE.apk"
 APK_SRC="$ROOT/android/app/build/outputs/apk/$APK_MODE/$APK_NAME"
 if [ ! -f "$APK_SRC" ]; then
-  APK_SRC="$ROOT/build/apk/whereq-dosbox-$APK_MODE.apk"   # legacy --legacy-apk output
+  APK_SRC="$ROOT/build/apk/a-dos-$APK_MODE.apk"   # legacy --legacy-apk output
   APK_NAME="$(basename "$APK_SRC")"
 fi
 APK_WIN="C:\\Users\\googo\\$APK_NAME"
-PKG="com.whereq.dosbox"
-ACT="$PKG/.WhereqDosboxActivity"
+PKG="com.whereq.ados"
+ACT="$PKG/.AdosActivity"
 
 # Run the Windows adb with a Windows cwd (a UNC cwd makes cmd.exe complain and
 # breaks relative paths).

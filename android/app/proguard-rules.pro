@@ -16,8 +16,8 @@
 -keep class org.libsdl.app.SDLControllerManager { *; }
 -keep class org.libsdl.app.HIDDeviceManager { *; }
 
-# Our JNI entry points (Java_com_whereq_dosbox_DosboxNative_*).
--keep class com.whereq.dosbox.DosboxNative { *; }
+# Our JNI entry points (Java_com_whereq_ados_DosboxNative_*).
+-keep class com.whereq.ados.DosboxNative { *; }
 
 # The activity is referenced from the manifest, but keep it explicit.
--keep class com.whereq.dosbox.WhereqDosboxActivity { *; }
+-keep class com.whereq.ados.AdosActivity { *; }

@@ -1,5 +1,5 @@
 #!/bin/bash
-# build-native.sh - native Linux (WSL2) baseline build for whereq-dosbox.
+# build-native.sh - native Linux (WSL2) baseline build for A-DOS.
 #
 # Feature set mirrors the intended Android/NDK target:
 #   - SDL2 (Android will use SDL2 for Android)

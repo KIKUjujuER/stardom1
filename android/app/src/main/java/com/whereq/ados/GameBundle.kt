@@ -1,4 +1,4 @@
-package com.whereq.dosbox
+package com.whereq.ados
 
 /**
  * One DOS bundle that was installed into the app.

@@ -13,7 +13,7 @@
 #  and enters it, so every label in the source is also its offset inside the
 #  loaded segment.
 #
-#  The result is packed into the bundle zip that WhereQ-DOSBox installs:
+#  The result is packed into the bundle zip that A-DOS installs:
 #
 #      PLAY.BAT       the start-up script the launcher looks for
 #      STARFALL.COM   the game

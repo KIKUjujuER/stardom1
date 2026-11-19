@@ -98,7 +98,7 @@ static void redirect_stdout_to_logcat(void)
 /* --------------------------------------------------------------------- JNI */
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_whereq_dosbox_DosboxNative_nativePrepareEnvironment(JNIEnv *env,
+Java_com_whereq_ados_DosboxNative_nativePrepareEnvironment(JNIEnv *env,
                                                               jclass clazz,
                                                               jstring files_dir)
 {
@@ -140,7 +140,7 @@ Java_com_whereq_dosbox_DosboxNative_nativePrepareEnvironment(JNIEnv *env,
  * Used by the Java side for diagnostics.
  */
 extern "C" JNIEXPORT jstring JNICALL
-Java_com_whereq_dosbox_DosboxNative_nativeConfigDir(JNIEnv *env, jclass clazz)
+Java_com_whereq_ados_DosboxNative_nativeConfigDir(JNIEnv *env, jclass clazz)
 {
     (void)clazz;
     const char *home = getenv("HOME");
@@ -231,7 +231,7 @@ static const struct {
  * SDL scancode. Returns SDL_SCANCODE_UNKNOWN (0) for unknown names.
  */
 extern "C" JNIEXPORT jint JNICALL
-Java_com_whereq_dosbox_DosboxNative_nativeScancodeFromName(JNIEnv *env,
+Java_com_whereq_ados_DosboxNative_nativeScancodeFromName(JNIEnv *env,
                                                             jclass clazz,
                                                             jstring name)
 {
@@ -270,7 +270,7 @@ Java_com_whereq_dosbox_DosboxNative_nativeScancodeFromName(JNIEnv *env,
  * @return true if the event was queued.
  */
 extern "C" JNIEXPORT jboolean JNICALL
-Java_com_whereq_dosbox_DosboxNative_nativePushKey(JNIEnv *env,
+Java_com_whereq_ados_DosboxNative_nativePushKey(JNIEnv *env,
                                                     jclass clazz,
                                                     jint scancode,
                                                     jboolean pressed)
@@ -306,7 +306,7 @@ Java_com_whereq_dosbox_DosboxNative_nativePushKey(JNIEnv *env,
 /* ------------------------------------------------------------- save-state */
 
 /*
- * Save/load the whole emulated machine to/from a file (WhereQ-DOSBox Phase B).
+ * Save/load the whole emulated machine to/from a file (A-DOS Phase B).
  *
  * The request is handed to the DOSBox thread and performed at an instruction
  * boundary (see src/gui/savestate.cpp and the GFX_Events() hook); these JNI
@@ -328,7 +328,7 @@ static jint savestate_request(JNIEnv *env, jstring path, int op)
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_com_whereq_dosbox_DosboxNative_nativeSaveState(JNIEnv *env, jclass clazz,
+Java_com_whereq_ados_DosboxNative_nativeSaveState(JNIEnv *env, jclass clazz,
                                                     jstring path)
 {
     (void)clazz;
@@ -336,7 +336,7 @@ Java_com_whereq_dosbox_DosboxNative_nativeSaveState(JNIEnv *env, jclass clazz,
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_com_whereq_dosbox_DosboxNative_nativeLoadState(JNIEnv *env, jclass clazz,
+Java_com_whereq_ados_DosboxNative_nativeLoadState(JNIEnv *env, jclass clazz,
                                                     jstring path)
 {
     (void)clazz;
@@ -356,7 +356,7 @@ Java_com_whereq_dosbox_DosboxNative_nativeLoadState(JNIEnv *env, jclass clazz,
  * called from the Java UI thread.
  */
 extern "C" JNIEXPORT jboolean JNICALL
-Java_com_whereq_dosbox_DosboxNative_nativePushMouseButton(JNIEnv *env,
+Java_com_whereq_ados_DosboxNative_nativePushMouseButton(JNIEnv *env,
                                                           jclass clazz,
                                                           jint button,
                                                           jboolean pressed)

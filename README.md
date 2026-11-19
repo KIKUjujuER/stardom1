@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="resources/A-DOS-mark.png" alt="A-DOS" width="280">
+  <img src="resources/a-dos-logo.png" alt="A-DOS" width="420">
 </p>
 
 <h1 align="center">A-DOS</h1>
@@ -10,8 +10,9 @@
 </p>
 
 <p align="center">
-  <sub>The app was called <b>WhereQ-DOSBox</b> until 1.0.0.12. The repository, the
-  package and the download file names still carry that name.</sub>
+  <sub><b>A-DOS</b> — the project was called <b>WhereQ-DOSBox</b> until 1.0.0.12.
+  The app, the package, the native product strings, the repository and the
+  download file names all carry the new name now.</sub>
 </p>
 
 <p align="center">
@@ -36,6 +37,23 @@ The Android migration is complete: the emulator core, the app layer, the
 bundle launcher, the save states and the build pipeline are all in place and
 verified. What follows is maintenance — bug fixes and documentation.
 
+New in A-DOS (1.0.0.0)
+----------------------
+
+**A-DOS** is the new name of the project — *DOS across Android and Apple*. The
+rename is complete: the app label, the launcher icons, the notification, the
+native product strings (the DOS banner, the window title, the configuration
+dialog and the generated headers), the package, the repository and the
+published file names all carry it.
+
+| | |
+|---|---|
+| **The project is A-DOS** | The mark is new too — a metallic triangle with the green `C:\>` prompt inside it, drawn from the 4K master in `resources/`. The launcher icons are generated from it by `android/make-icons.py`, and the README uses the lockup. |
+| **The package is `com.whereq.ados`** | A new application id means a **new app on the phone**: Android cannot update `com.whereq.dosbox` into `com.whereq.ados`, so the old one stays on the device until it is uninstalled. The two apps do not see each other's data — but the **durable saves folder** is the same folder on the phone, so the games and their save states carry over to the new app. |
+| **The version series restarts** | A-DOS starts at **v1.0.0.0**. The releases before the rename — up to v1.0.0.12 — stay where they are, in the predecessor repository [`whereq/whereq-dosbox`](https://github.com/whereq/whereq-dosbox/releases). |
+| **The published file is `a-dos-<version>.apk`** | The download names follow the project now, with no `v` in front: `a-dos-1.0.0.0.apk`, next to its `.sha256` sidecar. |
+| **A restored slot keeps its save time** | Loading a slot out of the durable folder rewrites the local file, so the slot used to show *just now* after every restore. The durable copy's timestamp is copied back, and the slot shows when the game was really saved. |
+
 New in 1.0.0.12
 ---------------
 
@@ -46,7 +64,7 @@ out of the app's own storage.
 
 | | |
 |---|---|
-| **The app is called A-DOS** | The launcher name, the notification and the launcher icons now carry the new name and mark — DOS across Android and Apple. The repository, the package and the download file names still say `whereq-dosbox`. |
+| **The app is called A-DOS** | The launcher name, the notification and the launcher icons now carry the new name and mark — DOS across Android and Apple. |
 | **Your saves survive a reinstall** | The save-state slots lived inside the app's private storage, so uninstalling the app deleted them. Pick a folder on the phone (**Config → Saves folder**) and every slot is mirrored there, gzipped, next to the game itself — so a reinstall, a new phone or a lost app all come back. Two archives with the same file name are told apart by name (*game* and *game (2)*), so their saves never end up in the same place. |
 | **The save state keeps the mouse driver's configuration, not its run-time state** | 1.0.0.11 put the *whole* INT 33h driver into the snapshot, event queue and interrupt flags included. Restoring that wedged mouse-driven games — a game could hang on load. The snapshot now carries only the configuration the guest cannot rebuild itself: the game's event-callback registration, the cursor range and position, the cursor shape and hotspot, the granularity and the sensitivity. The visible cursor therefore still lines up with the click point after a restore. |
 | **The emulator knows its own version** | The version was a literal `1.0.0.1` in the Android config template, so the DOS banner and the window title said *WhereQ-DOSBox version 1.0.0.1* whatever release was installed. The native build now reads the same `VERSION` file the release script and the app read, so the two can never disagree. |
@@ -129,7 +147,7 @@ The port touches the core in a handful of places, all of them small and local:
 | `src/hardware/pic.cpp`, `src/hardware/timer.cpp` | the interrupt controllers and the PIT, so their phase is part of the snapshot |
 | `src/hardware/vga_dac.cpp`, `src/hardware/vga_draw.cpp`, `src/cpu/core_dynrec.cpp` | the state that is *rebuilt* after a restore instead of restored |
 | `src/Makefile.am`, `src/dos/Makefile.am`, `src/gui/Makefile.am`, `include/Makefile.am` | the build files, so the desktop baseline stays in sync with the Android one |
-| the product name | the upstream product name → **WhereQ-DOSBox** in the banner, the version string, the config and the generated headers (the app around it is called **A-DOS** since 1.0.0.12) |
+| the product name | the upstream product name → **A-DOS** in the banner, the version string, the config, the generated headers and the logcat tag |
 
 Everything else in `src/` and `include/` is the imported upstream code. The
 technical reference lists every change with the reason for it.
@@ -174,6 +192,8 @@ two minutes of live chip time apart.
 | Android target | `arm64-v8a`, `armeabi-v7a`, `x86_64`, minSdk 21 |
 | Toolchain | NDK r27 + CMake; also builds a plain desktop Linux baseline |
 | Version scheme | `v{major}.{minor}.{patch}.{build}` — see `bin/release.sh` |
+| Package id | `com.whereq.ados` |
+| Published file | `a-dos-<version>.apk`, next to its `.sha256` sidecar |
 | APK size | ~15.7 MB with all three ABIs (the native libraries are stored uncompressed, so they can be mapped straight from the APK) |
 
 The on-screen keyboard
@@ -226,7 +246,7 @@ Files on the phone
 ------------------
 
 > **Want to try the app without building it?** The release APK is published on
-> the [releases page](https://github.com/whereq/whereq-dosbox/releases) —
+> the [releases page](https://github.com/whereq/A-DOS/releases) —
 > [`downloads/README.md`](downloads/README.md) has the current link, the
 > checksum and the install steps.
 
@@ -235,8 +255,9 @@ installs a DOS bundle (a `.zip` archive) on the phone and starts it. The
 button says *File* and not *Games*, because a bundle can hold any DOS
 program — a game, a utility, a text mode application.
 
-The **Config** button next to it opens the settings. There is one setting
-today: the **CPU core** DOSBox should use.
+The **Config** button next to it opens the settings. There are two of them
+today: the **CPU core** DOSBox should use, and the **saves folder** the save
+states are mirrored into.
 
 | core | |
 |---|---|
@@ -248,6 +269,9 @@ today: the **CPU core** DOSBox should use.
 `auto` is right for almost everything, but a few old DOS programs misbehave
 on the recompiler, and `normal` is the fallback for them. DOSBox picks its
 core when it starts, so the app asks whether to restart now.
+
+The **saves folder** is described under
+[Your saves, outside the app](#your-saves-outside-the-app) below.
 
 There are three ways to get a bundle onto the phone:
 
@@ -316,6 +340,13 @@ back: the games are offered for restore by name, and their save states are
 already there. The folder is an ordinary folder in the phone's storage, so it
 can be copied, synced or moved like any other file.
 
+That is also what carries the saves across the rename. A-DOS installs as
+`com.whereq.ados`, a different application than `com.whereq.dosbox`, so
+Android treats it as a new app and the old one cannot be updated in place —
+but the durable folder is *your* folder, not the app's, and both apps read and
+write it. Point A-DOS at the same folder and the games and their save states
+are offered for restore.
+
 > Some old DOS programs do not survive a restore — the extender of Ultima
 > VIII, for example, still aborts on it. That is a limitation of the DOS
 > internals that the snapshot does not capture yet (the DMA controller, the
@@ -369,7 +400,8 @@ native/               desktop Linux baseline build (VPATH, out of tree)
 bench/                CPU-core throughput probe
 toolchain/            rootless dev toolchain (no root, no sudo)
 third_party/          SDL2 sources, fetched by third_party/fetch-sdl2.sh
-resources/            the logo and the screenshot
+resources/            the A-DOS brand assets and the screenshot
+tools/                make-brand-assets.py (the screen-sized brand assets)
 docs/                 the technical reference and the screenshot gallery
                        (and DOSBox's own man page and porting guide)
 examples/             the example bundle (STARFALL)
@@ -383,8 +415,8 @@ Build
 Everything is driven by one script:
 
 ```sh
-git clone git@github.com:whereq/whereq-dosbox.git
-cd whereq-dosbox
+git clone git@github.com:whereq/A-DOS.git
+cd A-DOS
 
 bin/build.sh doctor      # what is installed, what is already built
 bin/build.sh all         # bootstrap + native + android + apk
@@ -395,7 +427,7 @@ That produces:
 ```
 build/install/bin/dosbox                  the desktop baseline
 build/android/<abi>/libdosbox.so          the native library per ABI
-build/apk/whereq-dosbox-debug.apk         the debug APK
+build/apk/a-dos-debug.apk                 the debug APK
 ```
 
 The individual steps are `bin/build.sh bootstrap | native | android | apk`,
@@ -441,7 +473,8 @@ A **milestone tag** marks a phase rather than a release: `milestone/<name>`,
 annotated, and deliberately outside the `vX.Y.Z.A` scheme so the release
 script never picks it up. `milestone/android-migration-complete` marks the end
 of the Android migration phase — from there the project is in maintenance. It
-rides on the current release, `v1.0.0.12`.
+rides on the release that closed it, `v1.0.0.12`, in the predecessor
+repository.
 
 The production APK is signed with the release key, which is never committed:
 

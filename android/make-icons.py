@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """make-icons.py - generate the Android launcher icons from the A-DOS logo.
 
-Takes the single logo image in resources/ (A-DOS-Logo.*, any of jpeg/png/webp)
-and produces every launcher asset the app needs:
+Takes the A-DOS mark in resources/ (a-dos-icon-transparent-4k.png by default,
+any of jpeg/png/webp) and produces every launcher asset the app needs:
 
   mipmap-*/ic_launcher.png            legacy square icon  (API 21-25)
   mipmap-*/ic_launcher_round.png      legacy round icon   (API 21-25)
@@ -57,7 +57,9 @@ DENSITIES = {
 SAFE_ZONE = 72.0 / 108.0
 # how much of the square / safe zone the logo fills (a little margin looks best)
 LEGACY_FILL = 0.92
-FOREGROUND_FILL = 0.94
+# The adaptive foreground fills the 72/108 safe zone exactly: the launcher mask
+# never crops inside the safe zone, so the mark can use all of it.
+FOREGROUND_FILL = 1.0
 
 # Background for a logo that carries its own transparency (the A-DOS mark): a
 # dark navy that the metallic mark, the blue glow and the green prompt all read
@@ -75,9 +77,23 @@ def find_source():
     def base(c):
         return os.path.basename(c).lower()
 
-    # Prefer, in order: the cleaned A-DOS *mark* (transparent, what the launcher
-    # shows), then any A-DOS artwork, then anything with "logo".
-    ados = [c for c in cands if "ados" in base(c).replace("-", "")]
+    # The launcher shows the A-DOS *mark* - the metallic triangle with the
+    # green C:\> prompt - not the wordmark lockup. Prefer, in order:
+    #   1. the 4K transparent icon (the current master asset)
+    #   2. any other A-DOS icon
+    #   3. any A-DOS mark
+    #   4. the largest A-DOS artwork
+    #   5. anything with "logo" in its name
+    def flat(c):
+        return base(c).replace("-", "").replace("_", "").replace(" ", "")
+
+    ados = [c for c in cands if "ados" in flat(c)]
+    master = [c for c in ados if flat(c).startswith("adosicon")]
+    if master:
+        return max(master, key=os.path.getsize)
+    icon = [c for c in ados if "icon" in base(c)]
+    if icon:
+        return max(icon, key=os.path.getsize)
     mark = [c for c in ados if "mark" in base(c)]
     if mark:
         return max(mark, key=os.path.getsize)

@@ -659,7 +659,7 @@ void DOSBOX_Init(void) {
 
 	Pstring = secprop->Add_string("machine",Property::Changeable::OnlyAtStart,"svga_s3");
 	Pstring->Set_values(machines);
-	Pstring->Set_help("The type of machine WhereQ-DOSBox tries to emulate.");
+	Pstring->Set_help("The type of machine A-DOS tries to emulate.");
 
 	Pstring = secprop->Add_path("captures",Property::Changeable::Always,"capture");
 	Pstring->Set_help("Directory where things like wave, midi, screenshot get captured.");
@@ -688,7 +688,7 @@ void DOSBOX_Init(void) {
 	secprop=control->AddSection_prop("render",&RENDER_Init,true);
 	Pint = secprop->Add_int("frameskip",Property::Changeable::Always,0);
 	Pint->SetMinMax(0,10);
-	Pint->Set_help("How many frames WhereQ-DOSBox skips before drawing one.");
+	Pint->Set_help("How many frames A-DOS skips before drawing one.");
 
 	Pbool = secprop->Add_bool("aspect",Property::Changeable::Always,false);
 	Pbool->Set_help("Do aspect correction, if your output method doesn't support scaling this can slow things down!");
@@ -858,7 +858,7 @@ void DOSBOX_Init(void) {
 	Pint->Set_help("The High DMA number of the soundblaster.");
 
 	Pbool = secprop->Add_bool("sbmixer",Property::Changeable::WhenIdle,true);
-	Pbool->Set_help("Allow the soundblaster mixer to modify the WhereQ-DOSBox mixer.");
+	Pbool->Set_help("Allow the soundblaster mixer to modify the A-DOS mixer.");
 
 	const char* oplmodes[]={ "auto", "cms", "opl2", "dualopl2", "opl3", "opl3gold", "none", 0};
 	Pstring = secprop->Add_string("oplmode",Property::Changeable::WhenIdle,"auto");
@@ -1047,8 +1047,8 @@ void DOSBOX_Init(void) {
 		"You can put your MOUNT lines here.\n"
 	);
 	MSG_Add("CONFIGFILE_INTRO",
-	        "# This is the configuration file for WhereQ-DOSBox %s. (Please use the latest version of WhereQ-DOSBox)\n"
-	        "# Lines starting with a # are comment lines and are ignored by WhereQ-DOSBox.\n"
+	        "# This is the configuration file for A-DOS %s. (Please use the latest version of A-DOS)\n"
+	        "# Lines starting with a # are comment lines and are ignored by A-DOS.\n"
 	        "# They are used to (briefly) document the effect of each option.\n");
 	MSG_Add("CONFIG_SUGGESTED_VALUES", "Possible values");
 

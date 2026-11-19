@@ -599,7 +599,7 @@ public:
 
 static void UI_Execute(GUI::ScreenSDL *screen) {
 	SDL_Surface *sdlscreen = screen->getSurface();
-	new ConfigurationWindow(screen, 30, 30, "WhereQ-DOSBox Configuration");
+	new ConfigurationWindow(screen, 30, 30, "A-DOS Configuration");
 
 	// event loop
 	SDL_Event event;

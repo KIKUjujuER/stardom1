@@ -1,5 +1,5 @@
 #!/bin/bash
-# run-bench.sh - DOSBox CPU-core throughput probe (whereq-dosbox).
+# run-bench.sh - DOSBox CPU-core throughput probe (A-DOS).
 #
 #   ./run-bench.sh [rounds] [core ...]
 #

@@ -1,4 +1,4 @@
-# Gradle version catalog for the whereq-dosbox Android build.
+# Gradle version catalog for the A-DOS Android build.
 #
 # Single source of truth for plugin/library versions. The app layer is Kotlin +
 # AndroidX; the DOSBox emulator and SDL2 are native (libdosbox.so) and built

@@ -1,4 +1,4 @@
-package com.whereq.dosbox
+package com.whereq.ados
 
 import android.app.AlertDialog
 import android.content.Context
