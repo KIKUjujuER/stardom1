@@ -34,6 +34,18 @@ The Android migration is complete: the emulator core, the app layer, the
 bundle launcher, the save states and the build pipeline are all in place and
 verified. What follows is maintenance — bug fixes and documentation.
 
+New in 1.0.0.13
+---------------
+
+A **patch** release: the name and the mark of the project are on the app again,
+and a restored save keeps the time it was made.
+
+| | |
+|---|---|
+| **The app is WhereQ-DOSBox** | The launcher name, the notification and the launcher icons carry the name and the mark of the project, the package is `com.whereq.dosbox` and the download is `whereq-dosbox-1.0.0.13.apk` — so the app installs under its own id and updates in place from the earlier releases. |
+| **A restored save keeps the time it was made** | Loading a save state rewrites the local file, and the launcher read the time off that file — so every restored slot claimed to be *"just now"*. The original save time is carried over now: a slot made five hours ago still says *five hours ago* after it has been restored. |
+| **The save-state format did not change** | The fix is in the launcher, not in the snapshot, so every save state written by the earlier releases loads normally. |
+
 New in 1.0.0.12
 ---------------
 
@@ -438,7 +450,7 @@ A **milestone tag** marks a phase rather than a release: `milestone/<name>`,
 annotated, and deliberately outside the `vX.Y.Z.A` scheme so the release
 script never picks it up. `milestone/android-migration-complete` marks the end
 of the Android migration phase — from there the project is in maintenance. It
-rides on the current release, `v1.0.0.12`.
+rides on the current release, `v1.0.0.13`.
 
 The production APK is signed with the release key, which is never committed:
 

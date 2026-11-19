@@ -16,12 +16,31 @@ repository's history, at their own tag — for example
 
 | version | file | size |
 |---|---|---|
-| 1.0.0.12 | [`whereq-dosbox-1.0.0.12.apk`](https://github.com/whereq/whereq-dosbox/releases/download/v1.0.0.12/whereq-dosbox-1.0.0.12.apk) | 16 536 964 bytes (15.8 MB) |
+| 1.0.0.13 | [`whereq-dosbox-1.0.0.13.apk`](https://github.com/whereq/whereq-dosbox/releases/download/v1.0.0.13/whereq-dosbox-1.0.0.13.apk) | 16 482 792 bytes (15.7 MB) |
 
-* SHA-256 of the 1.0.0.12 APK:
-  `67577d59e078cd2953c24ea24753068aae2a01c2cf27a9788644787e999f2fd9`
+* SHA-256 of the 1.0.0.13 APK:
+  `98243e5577276d31f89adc1ac776bfc4242fdc0ff43f877bc36797c138cffa94`
 * Signing certificate (SHA-256):
   `b16b480d5a1ff6d35baff0b15fa3fc4b0ee815e500861fbff1b062c9bf7d3933`
+
+## What changed in 1.0.0.13
+
+A **patch** release: the name and the mark of the project are on the app again,
+and a restored save keeps the time it was made.
+
+* **The app is called WhereQ-DOSBox.** The launcher name, the notification and
+  the launcher icons all carry the name and the mark of the project. The
+  package is `com.whereq.dosbox` and the download file is
+  `whereq-dosbox-1.0.0.13.apk`, so the app installs under its own id and
+  updates in place from the earlier releases.
+* **A restored save keeps the time it was made.** Loading a save state
+  rewrites the local file, and the launcher read the time off that file — so
+  every restored slot claimed to be *"just now"*. The original save time is
+  carried over now, and a slot that was made five hours ago still says *five
+  hours ago* after it has been restored.
+* **The save-state format did not change.** The fix is in the launcher, not in
+  the snapshot, so every save state written by the earlier releases loads
+  normally — the file layout is the same version 10 as before.
 
 ## What changed in 1.0.0.12
 
@@ -107,7 +126,7 @@ state is refused rather than misread.
 
 This release carried the **milestone tag** for the end of the Android
 migration phase — `milestone/android-migration-complete`, the same marker that
-was placed at 1.0.0.10 and has since been moved on to 1.0.0.12.
+was placed at 1.0.0.10 and has since been moved on to 1.0.0.13.
 
 The rest of the emulator core is unchanged — this release is the app layer and
 the mouse driver.
@@ -144,7 +163,7 @@ file grew a version when the sound chips became part of the snapshot, and an
 older state is refused rather than misread.
 
 This release carried the **milestone tag** for the end of the Android
-migration phase; the marker has since moved on to 1.0.0.12, which carries the
+migration phase; the marker has since moved on to 1.0.0.13, which carries the
 same state. What follows is maintenance: bug fixes and documentation.
 
 ## What changed in 1.0.0.9
