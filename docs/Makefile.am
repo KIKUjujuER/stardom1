@@ -4,7 +4,7 @@ man_MANS = dosbox.1
 # WhereQ-DOSBox: the technical reference that lives next to DOSBox's own
 # documents. It is part of the distribution tarball so that a release carries it.
 EXTRA_DIST = $(man_MANS) README.video PORTING \
-             TECHNICAL-REFERENCE.md USER-GUIDE.md \
+             TECHNICAL-REFERENCE.md USER-GUIDE.md INTERRUPTS.md \
              $(GUIDE_SCREENSHOTS)
 
 # The screenshots the user guide points at. The guide is distributed with

@@ -384,8 +384,8 @@ bench/                CPU-core throughput probe
 toolchain/            rootless dev toolchain (no root, no sudo)
 third_party/          SDL2 sources, fetched by third_party/fetch-sdl2.sh
 resources/            the logo and the screenshot
-docs/                 the user guide, the technical reference and the
-                      screenshot gallery
+docs/                 the user guide, the interrupt map, the technical
+                      reference and the screenshot gallery
                        (and DOSBox's own man page and porting guide)
 examples/             the example bundle (STARFALL)
 downloads/            the link to the published release APK
@@ -434,6 +434,11 @@ bump and the benchmark.
 the app, installing a game, playing it, the keyboard and the mouse, saving a
 state, keeping the saves safe, and what happens after a reinstall — one step at
 a time, with a screenshot of every screen.
+
+`docs/INTERRUPTS.md` is the interrupt map: every software interrupt and
+hardware vector this emulator implements, what each one is for, and which code
+answers it — with the INT 33h mouse driver and the interrupt state that belongs
+in a save state worked through in full.
 
 `docs/TECHNICAL-REFERENCE.md` is the technical reference for the
 implementation: how the native build works, how the save-state machine takes a

@@ -15,6 +15,11 @@ covers the rest: *how the thing works*, why it is built that way, what was
 measured, what is still open, and what the screenshots show. It supersedes the
 migration diary that came before it.
 
+**Companion documents.** [`USER-GUIDE.md`](USER-GUIDE.md) is the guide for the
+person holding the phone. [`INTERRUPTS.md`](INTERRUPTS.md) is the interrupt map:
+every software interrupt and hardware vector this emulator implements, what
+each one is for, and which code answers it.
+
 **Status:** the Android migration phase is **complete** — the milestone tag
 `milestone/android-migration-complete` marks it, and it rides on the current
 release, `v1.0.0.13` (the phase itself ended with `v1.0.0.10`). From there the
