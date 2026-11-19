@@ -154,20 +154,53 @@ Two consequences of the thread split drive the whole design:
 
 ### 1.3 What is upstream and what is WhereQ
 
-The vendored tree is the em-dosbox fork of DOSBox r4305, imported verbatim.
-Everything the port added is listed here — this is the complete set of
-changes to `src/` and `include/` relative to the import, so a reviewer can
+The vendored tree is the em-dosbox fork of DOSBox r4305. Upstream's own logic
+is untouched: every change WhereQ made to it is the save-state machine, an
+Android fix, or one branding string. But "upstream is untouched" needs one
+qualifier, because the port's **first** commit did not stop at the upstream
+tip.
+
+The import commit `e119e3e` copied upstream's tip verbatim **and** layered the
+Android port on top of it in the same commit. Its own message says so:
+
+```text
+Initial commit: WhereQ-DOSBox — a native Android port of DOSBox r4305
+
+The DOSBox emulator core (r4305, SDL2 branch) imported verbatim from the
+Em-DOSBox fork, plus a native Android port layered on top of it.
+...
+Every Android-specific change is fenced behind #if defined(__ANDROID__)
+(include/mouse.h, src/gui/sdlmain.cpp, src/ints/mouse.cpp) - the emulator
+core itself is untouched.
+```
+
+So the boundary between upstream and the port is the `#if defined(__ANDROID__)`
+fence, not a commit. The import-time Android layer is:
+
+| File | Import-time Android change |
+|---|---|
+| `src/gui/sdlmain.cpp` | the texture is destroyed **before** the renderer (SDL frees a renderer's textures with it, so the upstream order hands `SDL_DestroyTexture()` an already freed pointer); the SDL window asks for `SDL_WINDOW_OPENGL` right away, so it is created once and stays bound to the SurfaceView instead of being torn down and re-fetched; the splash screen opens the window with the screen type that will actually be used; `android_handle_touch()` maps a finger to a DOS mouse through the letterbox rectangle instead of using SDL's own touch synthesis (which reports the *system* mouse, so a tap would land at (0, 0)); `SDL_HINT_TOUCH_MOUSE_EVENTS` is switched off so the mouse is not moved twice; `GFX_CaptureMouse()` and `GFX_UpdateSDLCaptureState()` never enter SDL's relative-mouse mode (there is no real mouse, and relative movement would fight the absolute touch mapping); a diagnostic log of the renderer/window/clip/texture geometry |
+| `include/mouse.h`, `src/ints/mouse.cpp` | `Mouse_GetPosition()` — an Android-only accessor for the DOS-pixel mouse position, used by the diagnostic log above |
+
+Everything below is the **post-import** work: the complete set of changes to
+`src/` and `include/` relative to `e119e3e` — 29 files — so a reviewer can
 bound the blast radius.
 
-**New files (WhereQ only):**
+**New files (added after the import):**
 
 | File | Lines | What it is |
 |---|---|---|
 | `include/savestate.h` | 71 | the save-state contract: result codes and three C functions |
-| `src/gui/savestate.cpp` | 618 | the machine snapshot (§5) |
-| `src/dos/dos_state.cpp` | 304 | the DOS layer of the snapshot (§7) |
-| `android/jni/dosbox_android.cpp` | 344 | the JNI bridge and the sandbox setup (§4.3) |
-| `android/jni/dosbox_log.h` | 15 | `DOSBOX_LOG` → `__android_log_print(ANDROID_LOG_INFO, "whereq-dosbox", …)` |
+| `src/gui/savestate.cpp` | 646 | the machine snapshot (§5) |
+| `src/dos/dos_state.cpp` | 305 | the DOS layer of the snapshot (§7) |
+
+**WhereQ-only files outside the vendored tree** (present since the import, so
+not part of the diff above):
+
+| File | Lines | What it is |
+|---|---|---|
+| `android/jni/dosbox_android.cpp` | 387 | the JNI bridge and the sandbox setup (§4.3) |
+| `android/jni/dosbox_log.h` | 14 | `DOSBOX_LOG` → `__android_log_print(ANDROID_LOG_INFO, "whereq-dosbox", …)` |
 
 **Upstream files with a WhereQ change:**
 
@@ -176,16 +209,19 @@ bound the blast radius.
 | `src/dosbox.cpp` | `Normal_Loop` split into `Normal_Loop_Inner` + a depth counter; `SAVESTATE_RunPending()` at depth 1 | a snapshot may only be taken at the outermost loop (§5.3) |
 | `src/shell/shell_misc.cpp` | `SAVESTATE_GuestReady()` in `DOS_Shell::InputCommand()` | the shell reached its prompt ⇒ the autoexec (and the game) has run |
 | `src/dos/dos_execute.cpp` | `SAVESTATE_GuestReady()` in `DOS_Execute()` | a game started by the autoexec never lets the shell return |
-| `src/gui/sdlmain.cpp` | `sdl.recreate_window`, `sdl.video_presented`, `GFX_VideoReady()`, `VGA_KillDrawing()` before texture recreation, a redraw invalidation, `bool` for the alt-state flags | Android's surface lifecycle and the orientation settle (§4.2, §5.3) |
+| `src/gui/sdlmain.cpp` | the Android surface lifecycle (`sdl.recreate_window`, `sdl.video_presented`, `GFX_VideoReady()`, `VGA_KillDrawing()` before the texture is recreated, a redraw invalidation after it, `bool` for the alt-state flags) **and** the touch→mouse mapping (`android_touch_cursor()`, the LEFT button held for as long as the finger is down, a second finger as a RIGHT click) | Android's surface lifecycle and the orientation settle (§4.2, §5.3); the touch semantics the games actually read (§4.7) |
+| `src/ints/mouse.cpp` | the INT 33h driver gains `MOUSE_StateSize/SaveState/LoadState`: the stable configuration (the AX=0Ch callback, the cursor range, the position, the custom cursor and its hotspot, the sensitivity) is saved, the volatile state (the event queue, the button and click counters, `in_UIR`, the timer) is **reset** on load, and the two cursor-mask pointers are re-derived from the saved cursor type | a restored game has to find its own mouse callback again, and a stale queue or a stuck `in_UIR` wedges the driver (§5.5, §5.6) |
+| `include/mouse.h` | the Android-only `Mouse_GetPosition()` accessor is removed | it existed for the touch diagnostic log, which the port replaced (§4.7) |
+| `src/hardware/serialport/softmodem.cpp` | one string: `"Modem compiled for DOSBox version "` → `"Modem compiled for WhereQ-DOSBox version "` | the modem announces itself to the guest like everything else (§1.1) |
 | `src/cpu/core_dynrec/cache.h` | an `__ANDROID__` branch that `mmap`s the JIT cache RWX from the start | Android enforces W^X: a malloc'd heap may not be made executable (§2.6) |
 | `src/hardware/pic.cpp` | `PIC_StateSize/SaveState/LoadState` | the interrupt state is part of the machine (§5.5) |
 | `src/hardware/timer.cpp` | `TIMER_StateSize/SaveState/LoadState(f, clock_saved)` | the PIT phase is part of the machine (§5.5) |
-| `src/hardware/pcspeaker.cpp` | `SPKR_StateSize/SaveState/LoadState` + a reset on load | the speaker is a real-time device (§6.6) |
+| `src/hardware/pcspeaker.cpp` | `SPKR_StateSize/SaveState/LoadState` + a reset on load | the speaker is a real-time device (§6.7) |
 | `src/hardware/vga_dac.cpp` | `VGA_DAC_UpdateAllColors()` | the restored palette has to reach the renderer (§5.7) |
 | `src/hardware/vga_draw.cpp` | `VGA_RestartFrameTimer()` | the vertical retrace is a PIC event, and the event queue is not in the snapshot (§5.7) |
 | `src/cpu/core_dynrec.cpp` | `CPU_Core_Dynrec_Cache_Reset()` | stale translations of replaced memory must never run (§5.7) |
-| `src/hardware/adlib.cpp`, `adlib.h` | the OPL block of the snapshot | §6 |
-| `src/hardware/dbopl.cpp`, `dbopl.h` | the exact OPL chip snapshot | §6 |
+| `src/hardware/adlib.cpp`, `src/hardware/adlib.h` | the OPL block of the snapshot | §6 |
+| `src/hardware/dbopl.cpp`, `src/hardware/dbopl.h` | the exact OPL chip snapshot | §6 |
 | `include/dos_inc.h`, `include/dos_system.h`, `include/vga.h`, `include/video.h` | the new prototypes | the save-state API |
 | `src/gui/Makefile.am`, `include/Makefile.am`, `src/dos/Makefile.am` | the new files | the desktop build stays in sync |
 | `src/Makefile.am` | the dos archive is listed a second time, after the gui archive | the save-state code in `gui/` calls into `dos/`, and a linker walks a static archive only once (§2.12) |
@@ -3268,8 +3304,9 @@ Two defects that used to be listed here were fixed in **1.0.0.12**:
 
 ▸ **The baseline is the em-dosbox fork of DOSBox r4305**, not plain DOSBox
 0.74. A fork-versus-plain diff is therefore **not available in this
-repository** — the import was taken verbatim and the changes to `src/` and
-`include/` are the list in §1.3.
+repository** — the upstream core was taken verbatim, and the changes to `src/`
+and `include/` are the list in §1.3, which also covers the Android layer the
+import commit itself carried.
 
 ### 11.2 What the snapshot does not capture
 
