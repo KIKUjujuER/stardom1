@@ -75,7 +75,7 @@ static void ResizeConsole( HANDLE hConsole, SHORT xSize, SHORT ySize ) {
 
 void WIN32_Console() {
 	AllocConsole();
-	SetConsoleTitle("A-DOS Debugger");
+	SetConsoleTitle("WhereQ-DOSBox Debugger");
 	ResizeConsole(GetStdHandle(STD_OUTPUT_HANDLE),80,50);
 }
 #endif

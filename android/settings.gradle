@@ -1,4 +1,4 @@
-// Gradle settings for the A-DOS Android project.
+// Gradle settings for the whereq-dosbox Android project.
 //
 //   android/settings.gradle      <- this file (project root)
 //   android/build.gradle         <- root project
@@ -23,5 +23,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = 'a-dos'
+rootProject.name = 'whereq-dosbox'
 include ':app'

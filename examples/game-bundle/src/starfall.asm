@@ -1,9 +1,9 @@
 # ===========================================================================
-#  STARFALL - the A-DOS example game
+#  STARFALL - the WhereQ-DOSBox example game
 # ===========================================================================
 #
 #  A tiny arcade game written in 16-bit x86 assembly for plain DOS.  It is
-#  the example game bundle that ships with A-DOS, so it has to show
+#  the example game bundle that ships with WhereQ-DOSBox, so it has to show
 #  the three things the phone port has to get right:
 #
 #    graphics - VGA mode 13h, 320x200, drawn straight into video memory
@@ -11,7 +11,7 @@
 #    audio    - the PC speaker, driven through the PIT counter 2
 #
 #  Build it with ./build.sh, which produces STARFALL.COM and the bundle
-#  zip that A-DOS installs.
+#  zip that WhereQ-DOSBox installs.
 #
 #  The keys:
 #

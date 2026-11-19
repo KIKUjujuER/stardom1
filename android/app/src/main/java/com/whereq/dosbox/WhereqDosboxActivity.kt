@@ -1,4 +1,4 @@
-package com.whereq.ados
+package com.whereq.dosbox
 
 import android.Manifest
 import android.app.AlertDialog
@@ -55,7 +55,7 @@ import java.io.InputStream
  * are injected into SDL's event queue from [VirtualKeyboardView] via
  * [DosboxNative.nativePushKey].
  */
-class AdosActivity : SDLActivity() {
+class WhereqDosboxActivity : SDLActivity() {
 
     /**
      * Opens a bundle archive for reading.
@@ -209,7 +209,7 @@ class AdosActivity : SDLActivity() {
      * Installs the bundle of an `ACTION_VIEW` intent.
      *
      * That is how a bundle reaches the app when the user picks it in a file
-     * manager and chooses A-DOS.
+     * manager and chooses WhereQ-DOSBox.
      */
     private fun handleOpenIntent(intent: Intent?) {
         if (intent == null || Intent.ACTION_VIEW != intent.action) {
@@ -272,7 +272,7 @@ class AdosActivity : SDLActivity() {
                 override fun onPlayRequested(bundle: GameBundle) = play(bundle)
 
                 override fun onEditLaunchRequested(bundle: GameBundle) {
-                    this@AdosActivity.launcher?.showLaunchEditor(
+                    this@WhereqDosboxActivity.launcher?.showLaunchEditor(
                         bundle,
                         library.launchScriptFor(bundle),
                         library.listCandidates(bundle),
@@ -287,7 +287,7 @@ class AdosActivity : SDLActivity() {
                     try {
                         library.setLaunch(bundle, script)
                     } catch (e: IOException) {
-                        this@AdosActivity.launcher?.setStatus(
+                        this@WhereqDosboxActivity.launcher?.setStatus(
                             "Could not set the launch command: " + e.message
                         )
                         return
@@ -542,7 +542,7 @@ class AdosActivity : SDLActivity() {
         AlertDialog.Builder(this)
             .setTitle("Keep your saves safe?")
             .setMessage(
-                "Pick a folder on your phone and A-DOS will also store your " +
+                "Pick a folder on your phone and WhereQ-DOSBox will also store your " +
                     "save-states there, compressed. They then survive " +
                     "reinstalling the app or moving to a new phone. You can set " +
                     "this later from Config → Saves folder."
@@ -613,7 +613,7 @@ class AdosActivity : SDLActivity() {
                 return@launch
             }
             val n = missing.size
-            AlertDialog.Builder(this@AdosActivity)
+            AlertDialog.Builder(this@WhereqDosboxActivity)
                 .setTitle("Restore games?")
                 .setMessage(
                     "This folder has $n game${if (n == 1) "" else "s"} that " +
@@ -660,7 +660,7 @@ class AdosActivity : SDLActivity() {
         AlertDialog.Builder(this)
             .setTitle("Saves folder")
             .setMessage(
-                status + "\n\nPick a folder and A-DOS mirrors every save-state " +
+                status + "\n\nPick a folder and WhereQ-DOSBox mirrors every save-state " +
                     "there so it survives a reinstall or a new phone."
             )
             .setPositiveButton(if (saveStore.hasFolder()) "Change folder" else "Choose folder") { _, _ ->
@@ -812,7 +812,7 @@ class AdosActivity : SDLActivity() {
                     launcher?.setStatus("Installing ${entry.name} ($done of $total)…")
                 }
 
-                val launcher = this@AdosActivity.launcher
+                val launcher = this@WhereqDosboxActivity.launcher
                 if (launcher != null) {
                     val bundles = withContext(Dispatchers.IO) { library.list() }
                     launcher.showFiles(bundles)
@@ -921,7 +921,7 @@ class AdosActivity : SDLActivity() {
                     }
                 }
             }
-            val launcher = this@AdosActivity.launcher ?: return@launch
+            val launcher = this@WhereqDosboxActivity.launcher ?: return@launch
             val bundles = withContext(Dispatchers.IO) { library.list() }
             launcher.showFiles(bundles)
             launcher.setStatus(
@@ -1206,7 +1206,7 @@ class AdosActivity : SDLActivity() {
     }
 
     companion object {
-        private const val TAG = "a-dos"
+        private const val TAG = "whereq-dosbox"
 
         /** Name of the native library (without lib prefix / .so suffix). */
         private const val NATIVE_LIB = "dosbox"

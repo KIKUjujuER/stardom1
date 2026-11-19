@@ -1,5 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- "A-DOS": DOS across Android and Apple. -->
-    <string name="app_name">A-DOS</string>
+    <string name="app_name">WhereQ-DOSBox</string>
 </resources>

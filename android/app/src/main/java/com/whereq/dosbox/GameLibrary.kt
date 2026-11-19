@@ -1,4 +1,4 @@
-package com.whereq.ados
+package com.whereq.dosbox
 
 import android.util.Log
 import org.json.JSONArray
@@ -590,7 +590,7 @@ class GameLibrary(
     }
 
     companion object {
-        private const val TAG = "a-dos"
+        private const val TAG = "whereq-dosbox"
 
         /**
          * Name of the games directory inside the app's files directory.

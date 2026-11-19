@@ -1,4 +1,4 @@
-# A-DOS — the Android native port
+# whereq-dosbox — Android native port
 
 Native Android build of the em-dosbox (DOSBox r4305 / SDL2) tree.
 
@@ -7,7 +7,7 @@ Native Android build of the em-dosbox (DOSBox r4305 / SDL2) tree.
 ```
 Java app (SDLActivity subclass)  ──►  SDL2 Android (SDLActivity)  ──►  libdosbox.so
    ├─ org.libsdl.app.*      (copied from third_party/SDL2)   (this repo)
-   ├─ AdosActivity  (immersive mode, config bootstrap)
+   ├─ WhereqDosboxActivity  (immersive mode, config bootstrap)
    └─ libdosbox.so          (DOSBox emulator + SDL2 back end, statically linked SDL2)
 ```
 
@@ -68,8 +68,8 @@ code, the toolchain is a private sysroot), so a fresh clone starts with two
 bootstrap steps:
 
 ```sh
-git clone git@github.com:whereq/A-DOS.git
-cd A-DOS
+git clone git@github.com:whereq/whereq-dosbox.git
+cd whereq-dosbox
 
 bin/build.sh bootstrap                  # SDL2 + toolchain, see below
 bin/build.sh all                         # native + android + apk
@@ -83,7 +83,7 @@ or, without the wrapper:
 . toolchain/env.sh                   # cmake / nasm / m4 / pkg-config on PATH
 
 ./android/build-android.sh           # libdosbox.so for all three ABIs
-./android/build-apk.sh               # build/apk/a-dos-debug.apk
+./android/build-apk.sh               # build/apk/whereq-dosbox-debug.apk
 ```
 
 [`BUILDING.md`](../BUILDING.md) has every build scenario with a command you
@@ -162,7 +162,7 @@ The APK layout matters and is easy to get wrong:
 
 ```
 lib/<abi>/libdosbox.so   <- native libraries; Android only extracts THIS path
-assets/dosbox.conf       <- read by AdosActivity at startup
+assets/dosbox.conf       <- read by WhereqDosboxActivity at startup
 classes.dex
 ```
 
@@ -177,7 +177,7 @@ WHEREQ_RELEASE_STORE_PASS='<your password>' \
   ./android/build-apk.sh --release --version-code 1 --version-name 0.1.0
 ```
 
-The result is `build/apk/a-dos-release.apk`.
+The result is `build/apk/whereq-dosbox-release.apk`.
 
 What the release build does differently:
 
@@ -218,8 +218,8 @@ The release APK is signed with a different key than the debug one, so the
 debug build has to be uninstalled first:
 
 ```sh
-./android/run-emulator.sh shell pm uninstall com.whereq.ados
-APK_NAME=a-dos-release.apk ./android/run-emulator.sh install
+./android/run-emulator.sh shell pm uninstall com.whereq.dosbox
+APK_NAME=whereq-dosbox-release.apk ./android/run-emulator.sh install
 ```
 
 ### With Gradle / Android Studio
@@ -391,7 +391,7 @@ press is simply an SDL key event with the right scancode, pushed in through
 `DosboxNative.nativePushKey()`.
 
 Verified on the emulator: `ver` typed on the virtual keyboard prints
-`A-DOS version`, backspace deletes, sticky Shift produces upper case, and
+`WhereQ-DOSBox version`, backspace deletes, sticky Shift produces upper case, and
 taps move the DOS mouse to the computed cell.
 
 ## Feature set (Android equivalent of the native baseline)
@@ -454,7 +454,7 @@ change reaches installs that are already on the phone — which also means a
 hand-edited config would be lost. The **Config** button in the Files panel
 therefore offers the cores (`auto`, `normal`, `dynamic`, `simple`,
 `prefetch`); the choice is stored in the preferences and written into the
-generated config. See `AdosActivity.showConfigDialog()` and
+generated config. See `WhereqDosboxActivity.showConfigDialog()` and
 `applyCpuCore()`.
 
 ## Maintenance phase

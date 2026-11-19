@@ -1,4 +1,4 @@
-package com.whereq.ados
+package com.whereq.dosbox
 
 import android.content.Context
 import android.net.Uri
@@ -282,7 +282,7 @@ class SaveStore(private val context: Context) {
     }
 
     companion object {
-        private const val TAG = "a-dos"
+        private const val TAG = "whereq-dosbox"
         private const val PREFS = "launch"
         private const val STATES_DIR = "states"
         private const val KEY_SAVES_FOLDER = "saves_folder"

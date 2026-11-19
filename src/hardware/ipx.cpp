@@ -854,7 +854,7 @@ public:
 		// Help on connect command
 		if(strcasecmp("connect", helpStr) == 0) {
 			WriteOut("IPXNET CONNECT opens a connection to an IPX tunneling server running on another\n");
-			WriteOut("A-DOS session.  The \"address\" parameter specifies the IP address or host name\n");
+			WriteOut("WhereQ-DOSBox session.  The \"address\" parameter specifies the IP address or host name\n");
 			WriteOut("of the server computer.  One can also specify the UDP port to use.  By default\n");
 			WriteOut("IPXNET uses port 213, the assigned IANA port for IPX tunneling, for its\nconnection.\n\n");
 			WriteOut("The syntax for IPXNET CONNECT is:\n\n");
@@ -870,9 +870,9 @@ public:
 		}
 		// Help on the startserver command
 		if(strcasecmp("startserver", helpStr) == 0) {
-			WriteOut("IPXNET STARTSERVER starts and IPX tunneling server on this A-DOS session.  By\n");
+			WriteOut("IPXNET STARTSERVER starts and IPX tunneling server on this WhereQ-DOSBox session.  By\n");
 			WriteOut("default, the server will accept connections on UDP port 213, though this can be\n");
-			WriteOut("changed.  Once the server is started, A-DOS will automatically start a client\n");
+			WriteOut("changed.  Once the server is started, WhereQ-DOSBox will automatically start a client\n");
 			WriteOut("connection to the IPX tunneling server.\n\n");
 			WriteOut("The syntax for IPXNET STARTSERVER is:\n\n");
 			WriteOut("IPXNET STARTSERVER <port>\n\n");
@@ -880,7 +880,7 @@ public:
 		}
 		// Help on the stop server command
 		if(strcasecmp("stopserver", helpStr) == 0) {
-			WriteOut("IPXNET STOPSERVER stops the IPX tunneling server running on this A-DOS\nsession.");
+			WriteOut("IPXNET STOPSERVER stops the IPX tunneling server running on this WhereQ-DOSBox\nsession.");
 			WriteOut("  Care should be taken to ensure that all other connections have\nterminated ");
 			WriteOut("as well since stopping the server may cause lockups on other\nmachines still using ");
 			WriteOut("the IPX tunneling server.\n\n");
@@ -899,7 +899,7 @@ public:
 		}
 		// Help on the status command
 		if(strcasecmp("status", helpStr) == 0) {
-			WriteOut("IPXNET STATUS reports the current state of this A-DOS's sessions IPX tunneling\n");
+			WriteOut("IPXNET STATUS reports the current state of this WhereQ-DOSBox's sessions IPX tunneling\n");
 			WriteOut("network.  For a list of the computers connected to the network use the IPXNET \n");
 			WriteOut("PING command.\n\n");
 			WriteOut("The syntax for IPXNET STATUS is:\n\n");
@@ -910,7 +910,7 @@ public:
 
 	void Run(void)
 	{
-		WriteOut("IPX Tunneling utility for A-DOS\n\n");
+		WriteOut("IPX Tunneling utility for WhereQ-DOSBox\n\n");
 		if(!cmd->GetCount()) {
 			WriteOut("The syntax of this command is:\n\n");
 			WriteOut("IPXNET [ CONNECT | DISCONNECT | STARTSERVER | STOPSERVER | PING | HELP |\n         STATUS ]\n\n");
@@ -960,7 +960,7 @@ public:
 			}
 			if(strcasecmp("stopserver", temp_line.c_str()) == 0) {
 				if(!isIpxServer) {
-					WriteOut("IPX Tunneling Server not running in this A-DOS session.\n");
+					WriteOut("IPX Tunneling Server not running in this WhereQ-DOSBox session.\n");
 				} else {
 					isIpxServer = false;
 					DisconnectFromServer(false);

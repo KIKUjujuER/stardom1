@@ -781,7 +781,7 @@ void PROGRAMS_Init(Section* /*sec*/) {
 	MSG_Add("PROGRAM_CONFIG_NOCONFIGFILE","No config file loaded!\n");
 	MSG_Add("PROGRAM_CONFIG_PRIMARY_CONF","Primary config file: \n%s\n");
 	MSG_Add("PROGRAM_CONFIG_ADDITIONAL_CONF","Additional config files:\n");
-	MSG_Add("PROGRAM_CONFIG_CONFDIR","A-DOS %s configuration directory: \n%s\n\n");
+	MSG_Add("PROGRAM_CONFIG_CONFDIR","WhereQ-DOSBox %s configuration directory: \n%s\n\n");
 	
 	// writeconf
 	MSG_Add("PROGRAM_CONFIG_FILE_ERROR","\nCan't open file %s\n");
@@ -810,7 +810,7 @@ void PROGRAMS_Init(Section* /*sec*/) {
 	MSG_Add("PROGRAM_CONFIG_HLP_NOCHANGE","This property cannot be changed at runtime.\n");
 	MSG_Add("PROGRAM_CONFIG_HLP_POSINT","positive integer"); 
 	MSG_Add("PROGRAM_CONFIG_HLP_SECTHLP","Section %s contains the following properties:\n");				
-	MSG_Add("PROGRAM_CONFIG_HLP_SECTLIST","A-DOS configuration contains the following sections:\n\n");
+	MSG_Add("PROGRAM_CONFIG_HLP_SECTLIST","WhereQ-DOSBox configuration contains the following sections:\n\n");
 
 	MSG_Add("PROGRAM_CONFIG_SECURE_ON","Switched to secure mode.\n");
 	MSG_Add("PROGRAM_CONFIG_SECURE_DISALLOW","This operation is not permitted in secure mode.\n");
@@ -820,6 +820,6 @@ void PROGRAMS_Init(Section* /*sec*/) {
 	MSG_Add("PROGRAM_CONFIG_NO_PROPERTY","There is no property %s in section %s.\n");
 	MSG_Add("PROGRAM_CONFIG_SET_SYNTAX","Correct syntax: config -set \"section property\".\n");
 	MSG_Add("PROGRAM_CONFIG_GET_SYNTAX","Correct syntax: config -get \"section property\".\n");
-	MSG_Add("PROGRAM_CONFIG_PRINT_STARTUP","\nA-DOS was started with the following command line parameters:\n%s");
+	MSG_Add("PROGRAM_CONFIG_PRINT_STARTUP","\nWhereQ-DOSBox was started with the following command line parameters:\n%s");
 	MSG_Add("PROGRAM_CONFIG_MISSINGPARAM","Missing parameter.");
 }

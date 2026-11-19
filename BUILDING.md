@@ -1,11 +1,11 @@
-# Building A-DOS
+# Building WhereQ-DOSBox
 
 Every build scenario of this project, with a command you can paste. The
 shortest possible version:
 
 ```sh
-git clone git@github.com:whereq/A-DOS.git
-cd A-DOS
+git clone git@github.com:whereq/whereq-dosbox.git
+cd whereq-dosbox
 bin/build.sh all
 ```
 
@@ -108,8 +108,8 @@ Two bootstrap steps are needed once per clone: the SDL2 sources (they are not
 committed — 100+ MB of upstream code) and the rootless toolchain.
 
 ```sh
-git clone git@github.com:whereq/A-DOS.git
-cd A-DOS
+git clone git@github.com:whereq/whereq-dosbox.git
+cd whereq-dosbox
 
 bin/build.sh bootstrap
 ```
@@ -152,21 +152,21 @@ bin/build.sh native
 ```
 ==> Native desktop baseline (Linux)
 === binary ===
--rwxr-xr-x 1 whereq whereq 16770496 /home/whereq/git/A-DOS/build/install/bin/dosbox
+-rwxr-xr-x 1 whereq whereq 16770496 /home/whereq/git/whereq-dosbox/build/install/bin/dosbox
 ```
 
 Run it:
 
 ```sh
 ./build/install/bin/dosbox -version
-# A-DOS version 1.0.0.1, copyright 2002-2019 DOSBox Team.
+# WhereQ-DOSBox version 1.0.0.1, copyright 2002-2019 DOSBox Team.
 ```
 
 A headless smoke test, useful in CI:
 
 ```sh
 cd /tmp && SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy \
-  /home/whereq/git/A-DOS/build/install/bin/dosbox -c "exit"
+  /home/whereq/git/whereq-dosbox/build/install/bin/dosbox -c "exit"
 ```
 
 The underlying script is `native/build-native.sh` — it configures with
@@ -229,7 +229,7 @@ bin/build.sh apk
 ```
 ==> APK (debug)
 --- manifest ---
-package: name='com.whereq.ados' versionCode='1000001' versionName='1.0.0.1'
+package: name='com.whereq.dosbox' versionCode='1000001' versionName='1.0.0.1'
 application-debuggable
 --- contents ---
      99824  classes.dex
@@ -281,7 +281,7 @@ bin/build.sh apk --release
 | `WHEREQ_RELEASE_KEY_PASS` | password of the private key inside the keystore | the store password |
 | `WHEREQ_RELEASE_ALIAS` | name of the key entry | `whereq` |
 | `WHEREQ_RELEASE_KEYSTORE` | path to the keystore | `build/release.keystore` |
-| `WHEREQ_RELEASE_DNAME` | X.509 name, used only when a new keystore is created | `CN=A-DOS, OU=release, O=WhereQ, L=-, ST=-, C=DE` |
+| `WHEREQ_RELEASE_DNAME` | X.509 name, used only when a new keystore is created | `CN=whereq-dosbox, OU=release, O=whereq, L=-, ST=-, C=DE` |
 
 Keep the password out of the shell history:
 
@@ -318,14 +318,14 @@ On a connected device or emulator with `adb` on the `PATH`:
 
 ```sh
 adb install -r android/app/build/outputs/apk/release/app-release.apk
-adb shell am start -n com.whereq.ados/.AdosActivity
+adb shell am start -n com.whereq.dosbox/.WhereqDosboxActivity
 ```
 
 A release APK cannot be installed over a debug-signed one (different
 signature). Uninstall first:
 
 ```sh
-adb uninstall com.whereq.ados
+adb uninstall com.whereq.dosbox
 adb install android/app/build/outputs/apk/release/app-release.apk
 ```
 
@@ -358,7 +358,7 @@ back to the environment variables:
 
 ```properties
 # android/keystore.properties  (gitignored)
-storeFile=/home/whereq/git/A-DOS/build/release.keystore
+storeFile=/home/whereq/git/whereq-dosbox/build/release.keystore
 storePassword=...
 keyAlias=whereq
 keyPassword=...
@@ -378,27 +378,17 @@ bin/build.sh icons
 ```
 
 ```
-logo: resources/a-dos-icon-transparent-4k.png
-background: #0D0D1F (transparent logo)
-icons written to android/app/src/main/res
+==> Launcher icons
+logo: resources/WD-logo-4K-4096x4096.png
+size: 4096x4096
+adaptive background: #0D0D1F
+mark: 2425x1369
+wrote 16 assets + colors.xml
 ```
 
-It takes the A-DOS mark in `resources/` — the 4K transparent icon, which is
-preferred by name — fits it (aspect preserved) and centres it, then writes the
-legacy square and round icons, the adaptive foreground (the logo inside the
-72/108 safe zone), the adaptive background colour and the logo the README
-shows. Do not edit the generated PNGs by hand.
-
-The screen-sized brand assets the README and the docs use are derived from the
-same 4K masters:
-
-```sh
-python3 tools/make-brand-assets.py
-```
-
-That writes `resources/a-dos-logo.png` (the lockup) and `resources/a-dos-icon.png`
-(the mark) with their transparency intact. The 4K files stay the source of
-truth; the derived ones are what a README can load without pulling megabytes.
+It writes the legacy square and round icons, the adaptive foreground (the
+`>_` mark inside the 72/108 safe zone), the adaptive background colour and
+the logo the README shows. Do not edit the generated PNGs by hand.
 
 Check that the assets are in sync without writing anything (exit code 1 when
 they are not):
@@ -600,8 +590,8 @@ bin/build.sh all
 
 ```
 build/
-  apk/a-dos-debug.apk                debug APK
-  apk/a-dos-release.apk              release APK
+  apk/whereq-dosbox-debug.apk        debug APK
+  apk/whereq-dosbox-release.apk      release APK
   android/<abi>/libdosbox.so         native library per ABI
   android/<abi>/libdosbox.so.unstripped
   install/bin/dosbox                 desktop baseline binary
@@ -621,7 +611,7 @@ build/
 | `cmake: command not found` | the toolchain is not on the `PATH` — source `toolchain/env.sh` |
 | `No such file or directory: .../configure` | the tree was cloned without it: run `bin/build.sh bootstrap` |
 | `failed to load the jniLibs` in Gradle | build the libraries first: `bin/build.sh android` |
-| `INSTALL_FAILED_UPDATE_INCOMPATIBLE` | a release APK over a debug install: `adb uninstall com.whereq.ados` first |
+| `INSTALL_FAILED_UPDATE_INCOMPATIBLE` | a release APK over a debug install: `adb uninstall com.whereq.dosbox` first |
 | `keystore password was incorrect` | wrong password, or the keystore was created with a different one — check with `keytool -list -keystore build/release.keystore` |
 | The emulator shows a black screen | the SDL2 static library is stale: `rm -rf build/sdl2 && bin/build.sh android` |
 

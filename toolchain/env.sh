@@ -1,5 +1,5 @@
 #!/bin/sh
-# Rootless dev toolchain for A-DOS.
+# Rootless dev toolchain for whereq-dosbox.
 #
 #   . toolchain/env.sh
 #

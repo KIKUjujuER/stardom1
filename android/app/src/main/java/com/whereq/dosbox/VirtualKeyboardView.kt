@@ -1,4 +1,4 @@
-package com.whereq.ados
+package com.whereq.dosbox
 
 import android.annotation.SuppressLint
 import android.content.Context
@@ -1033,7 +1033,7 @@ class VirtualKeyboardView(context: Context) : FrameLayout(context) {
     ).toInt()
 
     companion object {
-        private const val TAG = "a-dos"
+        private const val TAG = "whereq-dosbox"
 
         /** Ordinary key: pressed and released again straight away. */
         private const val KIND_KEY = 0

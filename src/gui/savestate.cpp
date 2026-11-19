@@ -1,5 +1,5 @@
 /*
- * savestate.cpp - A-DOS disk save-states (Phase B, milestone B1).
+ * savestate.cpp - WhereQ-DOSBox disk save-states (Phase B, milestone B1).
  *
  * NOT part of upstream DOSBox. See include/savestate.h for the contract.
  *

@@ -170,10 +170,10 @@ jobs:
         id: stage
         run: |
           # The published file is named after the *version*, not the tag:
-          # "a-dos-1.0.0.0.apk", the same name the download link in
+          # "whereq-dosbox-1.0.0.12.apk", the same name the download link in
           # downloads/ points at. The APK is built here and nowhere else, so
           # the file people download is the one that was signed and verified.
-          apk="a-dos-${RELEASE_TAG#v}.apk"
+          apk="whereq-dosbox-${RELEASE_TAG#v}.apk"
           cp android/app/build/outputs/apk/release/app-release.apk "$apk"
           sha256sum "$apk" > "$apk.sha256"
           ls -la "$apk" "$apk.sha256"
@@ -184,7 +184,7 @@ jobs:
       # release, otherwise Android refuses to install it over the old one.
       - name: verify the release certificate
         run: |
-          apk="a-dos-${RELEASE_TAG#v}.apk"
+          apk="whereq-dosbox-${RELEASE_TAG#v}.apk"
           expected="b16b480d5a1ff6d35baff0b15fa3fc4b0ee815e500861fbff1b062c9bf7d3933"
           "$ANDROID_SDK_ROOT/build-tools/36.0.0/apksigner" verify --print-certs "$apk" \
             | tee certificate.txt
@@ -197,7 +197,7 @@ jobs:
 
       - name: check that all three ABIs are in the APK
         run: |
-          apk="a-dos-${RELEASE_TAG#v}.apk"
+          apk="whereq-dosbox-${RELEASE_TAG#v}.apk"
           for abi in arm64-v8a armeabi-v7a x86_64; do
             unzip -l "$apk" | grep -q "lib/$abi/libdosbox.so" \
               || { echo "::error::$abi is missing from the APK"; exit 1; }
@@ -208,7 +208,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          apk="a-dos-${RELEASE_TAG#v}.apk"
+          apk="whereq-dosbox-${RELEASE_TAG#v}.apk"
           version="${RELEASE_TAG#v}"
           # The prose of the release lives in the repository, in
           # docs/releases/<version>.md, so it is reviewed, versioned and
@@ -217,9 +217,7 @@ jobs:
           # release still gets the machine facts below.
           notes="docs/releases/${version}.md"
           {
-            # The app is called A-DOS, and so is the project: the package is
-            # com.whereq.ados and the published file is a-dos-<version>.apk.
-            echo "**A-DOS ${RELEASE_TAG}**"
+            echo "**WhereQ-DOSBox ${RELEASE_TAG}**"
             echo
             if [ -f "$notes" ]; then
               # {{TAG}} and {{VERSION}} are replaced with the tag and the
@@ -268,7 +266,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: a-dos-apk-${{ env.RELEASE_TAG }}
+          name: whereq-dosbox-apk-${{ env.RELEASE_TAG }}
           path: |
             ${{ steps.stage.outputs.file }}
             ${{ steps.stage.outputs.file }}.sha256

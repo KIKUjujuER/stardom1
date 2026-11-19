@@ -1,5 +1,5 @@
 #!/bin/bash
-# build.sh - the single entry point for every build scenario of A-DOS.
+# build.sh - the single entry point for every build scenario of whereq-dosbox.
 #
 # Every step below delegates to the script that owns it, so there is exactly
 # one implementation of each build step:

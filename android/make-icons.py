@@ -1,41 +1,41 @@
 #!/usr/bin/env python3
-"""make-icons.py - generate the Android launcher icons from the A-DOS logo.
+"""make-icons.py - generate the Android launcher icons from the WhereQ logo.
 
-Takes the A-DOS mark in resources/ (a-dos-icon-transparent-4k.png by default,
-any of jpeg/png/webp) and produces every launcher asset the app needs:
+The logo in ../resources/ is a 4096x4096 artwork that carries two parts:
 
-  mipmap-*/ic_launcher.png            legacy square icon  (API 21-25)
-  mipmap-*/ic_launcher_round.png      legacy round icon   (API 21-25)
-  mipmap-*/ic_launcher_foreground.png adaptive foreground (API 26+), the logo
-                                      centred inside the 72/108 safe zone
-  values/colors.xml                   ic_launcher_background, sampled from the
-                                      logo's border so it blends with it
+  * the top half is the ">_" command prompt mark - white on a dark navy
+    background, which is what the launcher shows;
+  * the bottom half is the "WD" wordmark with the blue swoosh.
 
-The logo is fitted (contain, aspect preserved) and centred. The background
-colour is taken from the logo's border, so the adaptive background and the
-logo's own background are the same colour and the seam disappears - the icon
-reads as that colour with the A-DOS mark in the middle.
+From that one artwork this script produces every asset the launcher needs:
+
+  ic_launcher.png            legacy square icon  (API 21-25), full artwork
+  ic_launcher_round.png      legacy round icon   (API 21-25), full artwork
+  ic_launcher_foreground.png adaptive foreground (API 26+), the ">_" mark
+                             on transparency, inside the 72/108 safe zone
+  colors.xml                 ic_launcher_background, sampled from the logo
+
+The adaptive foreground is the mark on its own: the wordmark turns into
+unreadable grey mush at 48dp, while the prompt mark stays sharp.
 
 Usage:
     ./android/make-icons.py [--source FILE] [--check]
 
-    --source FILE   logo to use (default: the largest *logo* image in resources/)
-    --check         verify the committed assets match a fresh render; write
-                    nothing, exit 1 on a mismatch.
+    --source FILE   logo to use (default: the largest PNG in resources/)
+    --check         verify that the generated assets are up to date, do not
+                    write anything (exit 1 if they are not)
 
 Requires Python 3 with Pillow:
     python3 -m pip install --user pillow
 """
 
 import argparse
-import glob
 import io
 import os
 import sys
-from collections import Counter
 
 try:
-    from PIL import Image
+    from PIL import Image, ImageChops, ImageDraw
 except ImportError:
     sys.exit("Pillow is required: python3 -m pip install --user pillow")
 
@@ -44,7 +44,7 @@ ROOT = os.path.dirname(HERE)
 RES = os.path.join(ROOT, "resources")
 RES_OUT = os.path.join(HERE, "app", "src", "main", "res")
 
-# density -> (legacy icon size px, adaptive canvas size px)
+# density -> (legacy icon size, adaptive canvas size)
 DENSITIES = {
     "mdpi":    (48, 108),
     "hdpi":    (72, 162),
@@ -55,147 +55,243 @@ DENSITIES = {
 
 # the adaptive icon is 108x108dp with a 72x72dp safe zone in the middle
 SAFE_ZONE = 72.0 / 108.0
-# how much of the square / safe zone the logo fills (a little margin looks best)
-LEGACY_FILL = 0.92
-# The adaptive foreground fills the 72/108 safe zone exactly: the launcher mask
-# never crops inside the safe zone, so the mark can use all of it.
-FOREGROUND_FILL = 1.0
 
-# Background for a logo that carries its own transparency (the A-DOS mark): a
-# dark navy that the metallic mark, the blue glow and the green prompt all read
-# well on. An opaque logo uses its own sampled border colour instead.
-FIXED_BG = (0x0D, 0x0D, 0x1F)
+# the mark lives in the top half of the artwork; the wordmark is below it
+MARK_TOP = 0.0
+MARK_BOTTOM = 0.56
 
 
-def find_source():
-    cands = []
-    for ext in ("jpeg", "jpg", "png", "webp", "JPEG", "JPG", "PNG", "WEBP"):
-        cands += glob.glob(os.path.join(RES, "*." + ext))
-    if not cands:
-        sys.exit("no logo image found in resources/ (pass --source)")
+def find_source(explicit=None):
+    """Pick the logo to work from: the explicit file, else the largest PNG."""
+    if explicit:
+        if not os.path.isfile(explicit):
+            sys.exit("no such logo: %s" % explicit)
+        return explicit
 
-    def base(c):
-        return os.path.basename(c).lower()
-
-    # The launcher shows the A-DOS *mark* - the metallic triangle with the
-    # green C:\> prompt - not the wordmark lockup. Prefer, in order:
-    #   1. the 4K transparent icon (the current master asset)
-    #   2. any other A-DOS icon
-    #   3. any A-DOS mark
-    #   4. the largest A-DOS artwork
-    #   5. anything with "logo" in its name
-    def flat(c):
-        return base(c).replace("-", "").replace("_", "").replace(" ", "")
-
-    ados = [c for c in cands if "ados" in flat(c)]
-    master = [c for c in ados if flat(c).startswith("adosicon")]
-    if master:
-        return max(master, key=os.path.getsize)
-    icon = [c for c in ados if "icon" in base(c)]
-    if icon:
-        return max(icon, key=os.path.getsize)
-    mark = [c for c in ados if "mark" in base(c)]
-    if mark:
-        return max(mark, key=os.path.getsize)
-    if ados:
-        return max(ados, key=os.path.getsize)
-    named = [c for c in cands if "logo" in base(c)]
-    pool = named or cands
-    return max(pool, key=os.path.getsize)
+    candidates = []
+    for name in sorted(os.listdir(RES)):
+        if not name.lower().endswith(".png"):
+            continue
+        path = os.path.join(RES, name)
+        try:
+            with Image.open(path) as im:
+                area = im.size[0] * im.size[1]
+                # a real PNG wins over a JPEG that only carries the .png name
+                rank = (1 if im.format == "PNG" else 0, area)
+                candidates.append((rank, path))
+        except Exception:
+            continue
+    if not candidates:
+        sys.exit("no PNG found in %s - pass --source" % RES)
+    candidates.sort(reverse=True)
+    return candidates[0][1]
 
 
-def border_color(img):
-    """Most common colour along the image border - the logo's background."""
-    rgb = img.convert("RGB")
-    w, h = rgb.size
-    px = rgb.load()
-    counter = Counter()
-    sx = max(1, w // 64)
-    sy = max(1, h // 64)
-    for x in range(0, w, sx):
-        counter[px[x, 0]] += 1
-        counter[px[x, h - 1]] += 1
-    for y in range(0, h, sy):
-        counter[px[0, y]] += 1
-        counter[px[w - 1, y]] += 1
-    return counter.most_common(1)[0][0]
+def dominant_background(im):
+    """The navy the artwork sits on - used as the adaptive background."""
+    small = im.convert("RGB").resize((64, 64), Image.LANCZOS)
+    # the corners carry the flat background, the middle carries the artwork
+    corners = [small.getpixel(p) for p in ((0, 0), (63, 0), (0, 63), (63, 63))]
+    r = sum(c[0] for c in corners) // 4
+    g = sum(c[1] for c in corners) // 4
+    b = sum(c[2] for c in corners) // 4
+    return (r, g, b)
 
 
-def contain(logo, box):
-    """Logo scaled (aspect preserved) to fit within box x box, as RGBA."""
-    out = logo.copy()
-    out.thumbnail((box, box), Image.LANCZOS)
+def extract_mark(im):
+    """Cut the '>_' mark out of the artwork and return it as white on alpha."""
+    w, h = im.size
+    region = im.convert("RGB").crop((0, int(h * MARK_TOP), w, int(h * MARK_BOTTOM)))
+    grey = region.convert("L")
+
+    # the mark is the bright part; the navy background is dark
+    mask = grey.point(lambda v: 255 if v > 140 else 0)
+    bbox = mask.getbbox()
+    if not bbox:
+        sys.exit("could not find the mark in the logo")
+    region = region.crop(bbox)
+
+    # turn the luminance into the alpha channel and paint the mark white, so
+    # the glow around it fades out instead of ending in a hard edge
+    alpha = region.convert("L").point(lambda v: 0 if v < 90 else min(255, (v - 90) * 4))
+    mark = Image.new("RGBA", region.size, (255, 255, 255, 0))
+    mark.putalpha(alpha)
+    return mark
+
+
+def fit(mark, box):
+    """Scale the mark so that it fits into a box of box x box pixels."""
+    w, h = mark.size
+    scale = min(box / float(w), box / float(h))
+    size = (max(1, int(round(w * scale))), max(1, int(round(h * scale))))
+    return mark.resize(size, Image.LANCZOS)
+
+
+def trim_logo(im, transparent=False, max_width=768, pad_ratio=0.04):
+    """Turn the square artwork into an actual logo.
+
+    The artwork is a full-bleed square: a dark navy panel with the '>_'
+    mark, the 'WD' wordmark and the blue swoosh. A logo wants the empty
+    margins gone - the artwork cropped to what is actually drawn.
+
+    With transparent=False the navy panel is kept, which is what the README
+    needs: the drawing is white, so on a white page it would be invisible
+    without the panel behind it. With transparent=True the panel is turned
+    into alpha, which is what a dark background wants.
+
+    The alpha channel comes from the luminance: the navy panel peaks at
+    V=52, while the mark, the wordmark and the swoosh are all bright, and
+    the glow around the mark sits in between. So one ramp separates the
+    drawing from its panel, and the glow fades out instead of ending in a
+    hard edge.
+    """
+    value = im.convert("L")
+    alpha = value.point(lambda v: 0 if v < 48 else min(255, (v - 48) * 3))
+
+    # crop to what is actually drawn, with a little breathing room
+    bbox = alpha.point(lambda x: 255 if x > 8 else 0).getbbox()
+    if not bbox:
+        sys.exit("could not find the logo in the artwork")
+    pad = int(max(bbox[2] - bbox[0], bbox[3] - bbox[1]) * pad_ratio)
+    box = (max(0, bbox[0] - pad), max(0, bbox[1] - pad),
+           min(im.size[0], bbox[2] + pad), min(im.size[1], bbox[3] + pad))
+
+    logo = im.convert("RGBA").crop(box)
+    if transparent:
+        logo.putalpha(alpha.crop(box))
+    else:
+        logo.putalpha(255)
+
+    if logo.size[0] > max_width:
+        scale = max_width / float(logo.size[0])
+        logo = logo.resize(
+            (max_width, max(1, int(round(logo.size[1] * scale)))), Image.LANCZOS)
+    return logo
+
+
+def circular(im):
+    """Cut a circle out of a square image."""
+    mask = Image.new("L", im.size, 0)
+    ImageDraw.Draw(mask).ellipse((0, 0) + im.size, fill=255)
+    out = im.convert("RGBA")
+    out.putalpha(mask)
     return out
 
 
-def render():
-    """Returns {relative path -> bytes} of every generated asset."""
-    src = ARGS.source or find_source()
-    print("logo:", os.path.relpath(src, ROOT), file=sys.stderr)
-    logo = Image.open(src).convert("RGBA")
-    # A logo with real transparency (the A-DOS mark) goes on a fixed dark
-    # background; a flat/opaque logo gets its background sampled from its border.
-    transparent = logo.getchannel("A").getextrema()[0] < 16
-    bg = FIXED_BG if transparent else border_color(logo)
-    hexbg = "#%02X%02X%02X" % bg
-    print("background:", hexbg, "(transparent logo)" if transparent else "(sampled)",
-          file=sys.stderr)
+def write(path, data):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    data.save(path, optimize=True)
+    return path
 
-    out = {}
-    for dens, (lsize, csize) in DENSITIES.items():
-        # legacy square + round: the logo centred on the background
-        legacy = Image.new("RGBA", (lsize, lsize), bg + (255,))
-        fit = contain(logo, int(lsize * LEGACY_FILL))
-        legacy.alpha_composite(fit, ((lsize - fit.width) // 2, (lsize - fit.height) // 2))
-        legacy_rgb = legacy.convert("RGB")
-        for name in ("ic_launcher.png", "ic_launcher_round.png"):
-            buf = io.BytesIO()
-            legacy_rgb.save(buf, "PNG")
-            out[f"mipmap-{dens}/{name}"] = buf.getvalue()
 
-        # adaptive foreground: the logo in the safe zone on transparency (the
-        # adaptive background colour fills the rest, matching the logo's own)
-        fg = Image.new("RGBA", (csize, csize), (0, 0, 0, 0))
-        fitf = contain(logo, int(csize * SAFE_ZONE * FOREGROUND_FILL))
-        fg.alpha_composite(fitf, ((csize - fitf.width) // 2, (csize - fitf.height) // 2))
-        buf = io.BytesIO()
-        fg.save(buf, "PNG")
-        out[f"mipmap-{dens}/ic_launcher_foreground.png"] = buf.getvalue()
+def encode(data):
+    """The bytes an image would be written as, for comparison and writing."""
+    buf = io.BytesIO()
+    data.save(buf, format="PNG", optimize=True)
+    return buf.getvalue()
 
-    colors = (
-        '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n'
-        '    <!-- sampled from the A-DOS logo by android/make-icons.py -->\n'
-        f'    <color name="ic_launcher_background">{hexbg}</color>\n'
-        '</resources>\n'
-    )
-    out["values/colors.xml"] = colors.encode("utf-8")
-    return out
+
+def write_bytes(path, blob):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "wb") as fh:
+        fh.write(blob)
+    return path
 
 
 def main():
-    assets = render()
-    if ARGS.check:
-        stale = []
-        for rel, data in assets.items():
-            path = os.path.join(RES_OUT, rel)
-            if not os.path.exists(path) or open(path, "rb").read() != data:
-                stale.append(rel)
-        if stale:
-            print("out of date:\n  " + "\n  ".join(stale), file=sys.stderr)
-            sys.exit(1)
-        print("icons up to date", file=sys.stderr)
-        return
-    for rel, data in assets.items():
-        path = os.path.join(RES_OUT, rel)
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "wb") as f:
-            f.write(data)
-    print("icons written to", os.path.relpath(RES_OUT, ROOT), file=sys.stderr)
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--source", help="logo to use")
+    ap.add_argument("--check", action="store_true",
+                    help="only report whether the assets are up to date")
+    args = ap.parse_args()
+
+    src = find_source(args.source)
+    print("logo: %s" % os.path.relpath(src, ROOT))
+
+    im = Image.open(src).convert("RGB")
+    print("size: %dx%d" % im.size)
+
+    bg = dominant_background(im)
+    print("adaptive background: #%02X%02X%02X" % bg)
+
+    mark = extract_mark(im)
+    print("mark: %dx%d" % mark.size)
+
+    logo = trim_logo(im)
+    print("logo: %dx%d (trimmed)" % logo.size)
+    logo_alpha = trim_logo(im, transparent=True)
+    print("logo (transparent): %dx%d" % logo_alpha.size)
+
+    written = []
+    changed = []
+
+    for density, (legacy, canvas) in sorted(DENSITIES.items()):
+        ddir = os.path.join(RES_OUT, "mipmap-%s" % density)
+
+        # legacy square: the whole artwork, full bleed
+        square = im.resize((legacy, legacy), Image.LANCZOS)
+        p = os.path.join(ddir, "ic_launcher.png")
+        written.append((p, square.convert("RGB")))
+
+        # legacy round: the same artwork in a circle
+        p = os.path.join(ddir, "ic_launcher_round.png")
+        written.append((p, circular(im.resize((legacy, legacy), Image.LANCZOS))))
+
+        # adaptive foreground: the mark, inside the 72/108 safe zone
+        fg = Image.new("RGBA", (canvas, canvas), (255, 255, 255, 0))
+        scaled = fit(mark, int(canvas * SAFE_ZONE))
+        fg.paste(scaled, ((canvas - scaled.size[0]) // 2,
+                          (canvas - scaled.size[1]) // 2), scaled)
+        p = os.path.join(ddir, "ic_launcher_foreground.png")
+        written.append((p, fg))
+
+    # the adaptive background colour
+    colors = os.path.join(RES_OUT, "values", "colors.xml")
+    colors_text = (
+        '<?xml version="1.0" encoding="utf-8"?>\n'
+        '<resources>\n'
+        '    <!-- sampled from the WhereQ logo by android/make-icons.py -->\n'
+        '    <color name="ic_launcher_background">#%02X%02X%02X</color>\n'
+        '</resources>\n' % bg
+    )
+
+    # the logos the README shows: the artwork trimmed to the drawing. The
+    # navy one keeps the panel, because the drawing is white and would be
+    # invisible on a white page; the transparent one is for a dark
+    # background. The 4k original in resources/ stays untouched - it is the
+    # source, these are what gets shown.
+    readme_logo = os.path.join(RES, "whereq-dosbox-logo.png")
+    written.append((readme_logo, encode(logo)))
+    readme_logo_alpha = os.path.join(RES, "whereq-dosbox-logo-transparent.png")
+    written.append((readme_logo_alpha, encode(logo_alpha)))
+
+    for path, data in written:
+        blob = data if isinstance(data, bytes) else encode(data)
+        old = None
+        if os.path.exists(path):
+            with open(path, "rb") as fh:
+                old = fh.read()
+        if old != blob:
+            changed.append(os.path.relpath(path, ROOT))
+        if not args.check:
+            write_bytes(path, blob)
+
+    colors_blob = colors_text.encode("utf-8")
+    if not args.check:
+        write_bytes(colors, colors_blob)
+        print("wrote %d assets + colors.xml" % len(written))
+    else:
+        if os.path.exists(colors):
+            with open(colors, "rb") as fh:
+                if fh.read() != colors_blob:
+                    changed.append(os.path.relpath(colors, ROOT))
+        else:
+            changed.append(os.path.relpath(colors, ROOT))
+        print("out of date: %s" % (", ".join(changed) if changed else "nothing"))
+
+    return 1 if (args.check and changed) else 0
 
 
 if __name__ == "__main__":
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--source")
-    ap.add_argument("--check", action="store_true")
-    ARGS = ap.parse_args()
-    main()
+    sys.exit(main())

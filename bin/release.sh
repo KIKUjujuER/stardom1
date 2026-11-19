@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# A-DOS — Release Script
+# whereq-dosbox — Release Script
 # =============================================================================
 # Bump the version, write it to the VERSION file, commit, tag and push.
 #

@@ -1,4 +1,4 @@
-package com.whereq.ados
+package com.whereq.dosbox
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -23,7 +23,7 @@ import androidx.core.content.ContextCompat
  *
  * The service carries no logic; it only shows an ongoing notification (tap to
  * return to the game) and holds the process. It is started by
- * [AdosActivity] when a game is launched and stopped when the player
+ * [WhereqDosboxActivity] when a game is launched and stopped when the player
  * exits to the prompt or the activity is destroyed.
  */
 class DosboxForegroundService : Service() {
@@ -35,7 +35,7 @@ class DosboxForegroundService : Service() {
         ensureChannel()
         startForeground(NOTIF_ID, buildNotification(game))
         // Not sticky: a game launch restarts the whole process (see
-        // AdosActivity.relaunch); the OS must NOT resurrect this service
+        // WhereqDosboxActivity.relaunch); the OS must NOT resurrect this service
         // on its own after that process dies.
         return START_NOT_STICKY
     }
@@ -47,7 +47,7 @@ class DosboxForegroundService : Service() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("A-DOS")
+            .setContentTitle("WhereQ-DOSBox")
             .setContentText("Playing $game — tap to return")
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentIntent(pending)

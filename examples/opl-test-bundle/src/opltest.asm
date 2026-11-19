@@ -1,5 +1,5 @@
 # ===========================================================================
-#  OPLTEST - the A-DOS OPL save-state test
+#  OPLTEST - the WhereQ-DOSBox OPL save-state test
 # ===========================================================================
 #
 #  A tiny 16-bit DOS program that programs one sustained tone on the FM chip
@@ -15,7 +15,7 @@
 #
 #  How to use it:
 #
-#    1. install this bundle in A-DOS and play it
+#    1. install this bundle in WhereQ-DOSBox and play it
 #    2. let the tone settle (a second or two)
 #    3. save a state (Files -> States -> Save)
 #    4. wait a few seconds, then load the state again

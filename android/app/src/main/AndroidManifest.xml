@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.whereq.ados"
+    package="com.whereq.dosbox"
     android:versionCode="1000012"
     android:versionName="1.0.0.12"
     android:installLocation="auto">
@@ -39,7 +39,7 @@
              debuggable. -->
 
         <activity
-            android:name="com.whereq.ados.AdosActivity"
+            android:name="com.whereq.dosbox.WhereqDosboxActivity"
             android:label="@string/app_name"
             android:alwaysRetainTaskState="true"
             android:launchMode="singleTop"
@@ -60,7 +60,7 @@
             </intent-filter>
 
             <!-- A game bundle can also be opened straight from a file
-                 manager: pick a .zip and choose A-DOS. -->
+                 manager: pick a .zip and choose WhereQ-DOSBox. -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -77,7 +77,7 @@
              the player is in another app. "specialUse" is the honest foreground
              type for a DOS emulator keeping its machine state resident. -->
         <service
-            android:name="com.whereq.ados.DosboxForegroundService"
+            android:name="com.whereq.dosbox.DosboxForegroundService"
             android:exported="false"
             android:foregroundServiceType="specialUse">
             <property

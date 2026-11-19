@@ -561,7 +561,7 @@ void SHELL_Init() {
 	MSG_Add("SHELL_CMD_DATE_HELP_LONG","DATE [[/T] [/H] [/S] | MM-DD-YYYY]\n"\
 									"  MM-DD-YYYY: new date to set\n"\
 									"  /S:         Permanently use host time and date as DOS time\n"\
-                                    "  /F:         Switch back to A-DOS internal time (opposite of /S)\n"\
+                                    "  /F:         Switch back to WhereQ-DOSBox internal time (opposite of /S)\n"\
 									"  /T:         Only display date\n"\
 									"  /H:         Synchronize with host\n");
 	MSG_Add("SHELL_CMD_TIME_HELP","Displays the internal time.\n");
@@ -598,18 +598,18 @@ void SHELL_Init() {
 		"\033[44;1m\xC9\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD"
 		"\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD"
 		"\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xBB\n"
-		"\xBA \033[32mWelcome to A-DOS\033[37m                                                   \xBA\n"
+		"\xBA \033[32mWelcome to WhereQ-DOSBox\033[37m                                           \xBA\n"
 		"\xBA                                                                    \xBA\n"
-//		"\xBA A-DOS runs real and protected mode games.                             \xBA\n"
+//		"\xBA WhereQ-DOSBox runs real and protected mode games.                     \xBA\n"
 		"\xBA For a short introduction for new users type: \033[33mINTRO\033[37m                 \xBA\n"
 		"\xBA For supported shell commands type: \033[33mHELP\033[37m                            \xBA\n"
 		"\xBA                                                                    \xBA\n"
 		"\xBA To adjust the emulated CPU speed, use \033[31mctrl-F11\033[37m and \033[31mctrl-F12\033[37m.       \xBA\n"
 		"\xBA To activate the keymapper \033[31mctrl-F1\033[37m.                                 \xBA\n"
-		"\xBA For information read the \033[36mREADME\033[37m in the A-DOS directory.            \xBA\n"
+		"\xBA For information read the \033[36mREADME\033[37m in the WhereQ-DOSBox directory.    \xBA\n"
 		"\xBA                                                                    \xBA\n"
 	);
-	MSG_Add("SHELL_STARTUP_CGA","\xBA A-DOS supports Composite CGA mode.                                 \xBA\n"
+	MSG_Add("SHELL_STARTUP_CGA","\xBA WhereQ-DOSBox supports Composite CGA mode.                         \xBA\n"
 	        "\xBA Use \033[31mF12\033[37m to set composite output ON, OFF, or AUTO (default).        \xBA\n"
 	        "\xBA \033[31m(Alt-)F11\033[37m changes hue; \033[31mctrl-alt-F11\033[37m selects early/late CGA model.  \xBA\n"
 	        "\xBA                                                                    \xBA\n"
@@ -629,7 +629,7 @@ void SHELL_Init() {
 	        "\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xBC\033[0m\n"
 	        //"\n" //Breaks the startup message if you type a mount and a drive change.
 	);
-	MSG_Add("SHELL_STARTUP_SUB","\n\n\033[32;1mA-DOS %s Command Shell\033[0m\n\n");
+	MSG_Add("SHELL_STARTUP_SUB","\n\n\033[32;1mWhereQ-DOSBox %s Command Shell\033[0m\n\n");
 	MSG_Add("SHELL_CMD_CHDIR_HELP","Displays/changes the current directory.\n");
 	MSG_Add("SHELL_CMD_CHDIR_HELP_LONG","CHDIR [drive:][path]\n"
 	        "CHDIR [..]\n"
@@ -676,7 +676,7 @@ void SHELL_Init() {
 	MSG_Add("SHELL_CMD_ATTRIB_HELP","Does nothing. Provided for compatibility.\n");
 	MSG_Add("SHELL_CMD_PATH_HELP","Provided for compatibility.\n");
 	MSG_Add("SHELL_CMD_VER_HELP","View and set the reported DOS version.\n");
-	MSG_Add("SHELL_CMD_VER_VER","A-DOS version %s. Reported DOS version %d.%02d.\n");
+	MSG_Add("SHELL_CMD_VER_VER","WhereQ-DOSBox version %s. Reported DOS version %d.%02d.\n");
 
 	/* Regular startup */
 	call_shellstop=CALLBACK_Allocate();

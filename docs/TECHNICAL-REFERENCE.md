@@ -1,22 +1,13 @@
-# A-DOS — technical reference
+# WhereQ-DOSBox — technical reference
 
 **Audience:** senior software engineers who have to read, review or modify this
 codebase. It assumes familiarity with emulators, C/C++, the JVM/Android and
 build systems; it does not assume familiarity with *this* port.
 
-**Scope:** the technical implementation of A-DOS — the Android native
+**Scope:** the technical implementation of WhereQ-DOSBox — the Android native
 port of DOSBox, the disk save-state machine, the sound-chip snapshots, the
 bundle launcher, the on-screen keyboard, the build pipeline and the release
 process.
-
-> **On the name.** The project is **A-DOS** — DOS across Android and Apple.
-> The app on the device has been called A-DOS since 1.0.0.12; the rename now
-> covers the whole project: the package name (`com.whereq.ados`), the native
-> product string (the DOS banner, the window title, the configuration dialog
-> and the generated headers), the logcat tag, the repository, the published
-> file names (`a-dos-*.apk`) and the launcher icons. The version series
-> restarts at **v1.0.0.0**; the releases before the rename, up to v1.0.0.12,
-> stay in the predecessor repository `whereq/whereq-dosbox`.
 
 **Not scope:** the product pitch — that is the top-level
 [`README.md`](../README.md) (what the app is and how to use it). This document
@@ -70,7 +61,7 @@ features. §11 is therefore a list of known gaps, not a roadmap.
 
 ### 1.1 What the app is
 
-A-DOS is **upstream DOSBox r4305 (the SDL2 branch, as maintained by the
+WhereQ-DOSBox is **upstream DOSBox r4305 (the SDL2 branch, as maintained by the
 em-dosbox fork) plus a thin WhereQ layer**. The port does not rewrite the
 emulator; it makes it build for Android, gives it a private writable home, adds
 a disk save-state machine that upstream does not have, and puts a phone-shaped
@@ -80,7 +71,7 @@ shell around it.
 ┌───────────────────────────────────────────────────────────────────────────┐
 │  Android app layer (Kotlin)                                              │
 │                                                                          │
-│  AdosActivity ── SDLActivity (upstream SDL2 2.30.0, unmodified)  │
+│  WhereqDosboxActivity ── SDLActivity (upstream SDL2 2.30.0, unmodified)  │
 │    ├── SurfaceView (SDLSurface)  ←→ SDL2 C library (statically linked)   │
 │    ├── VirtualKeyboardView  ── overlay: letters/symbols/functions layers  │
 │    ├── GameLauncherView     ── overlay: the "Files" panel, bundles, slots │
@@ -171,7 +162,7 @@ bound the blast radius.
 | `src/gui/savestate.cpp` | 618 | the machine snapshot (§5) |
 | `src/dos/dos_state.cpp` | 304 | the DOS layer of the snapshot (§7) |
 | `android/jni/dosbox_android.cpp` | 344 | the JNI bridge and the sandbox setup (§4.3) |
-| `android/jni/dosbox_log.h` | 15 | `DOSBOX_LOG` → `__android_log_print(ANDROID_LOG_INFO, "a-dos", …)` |
+| `android/jni/dosbox_log.h` | 15 | `DOSBOX_LOG` → `__android_log_print(ANDROID_LOG_INFO, "whereq-dosbox", …)` |
 
 **Upstream files with a WhereQ change:**
 
@@ -193,17 +184,15 @@ bound the blast radius.
 | `include/dos_inc.h`, `include/dos_system.h`, `include/vga.h`, `include/video.h` | the new prototypes | the save-state API |
 | `src/gui/Makefile.am`, `include/Makefile.am`, `src/dos/Makefile.am` | the new files | the desktop build stays in sync |
 | `src/Makefile.am` | the dos archive is listed a second time, after the gui archive | the save-state code in `gui/` calls into `dos/`, and a linker walks a static archive only once (§2.12) |
-| `src/gui/sdlmain.cpp`, `src/gui/sdl_gui.cpp`, `src/shell/shell.cpp`, `src/dosbox.cpp`, `src/misc/programs.cpp`, `src/misc/cross.cpp`, `src/hardware/hardware.cpp`, `src/hardware/ipx.cpp`, `src/hardware/serialport/softmodem.cpp`, `src/debug/debug_win32.cpp`, `include/dos_inc.h`, `include/dos_system.h`, `include/savestate.h` | the product name in the banner, the window title, the configuration dialog, the DOS shell banner, the config-file header and the help texts | the project is **A-DOS** (§3.7) — the strings only, no behaviour |
 
-The **autoconf build is untouched** apart from the product name: `configure.ac`
-still carries the same checks, and the root `Makefile.am` has not changed
-since the import. The Android build is a separate CMake project that never
-reuses them (§2.1).
+The **autoconf build is untouched**: `configure.ac` and the root `Makefile.am`
+have not changed since the import. The Android build is a separate CMake
+project that never reuses them (§2.1).
 
 ### 1.4 The repository map
 
 ```
-A-DOS/
+whereq-dosbox/
 ├── src/ include/            upstream DOSBox (em-dosbox fork of r4305) + the
 │                            WhereQ save-state additions
 ├── android/
@@ -219,9 +208,6 @@ A-DOS/
 ├── native/                   the desktop Linux baseline build
 ├── bench/                    the CPU-core throughput probe
 ├── examples/                 game-bundle (STARFALL) and opl-test-bundle
-├── resources/                the A-DOS brand assets (4K masters + the
-│                             screen-sized lockup and mark) and the screenshot
-├── tools/                    make-brand-assets.py (the derived brand assets)
 ├── docs/                      this document + the screenshot gallery, next to
 │                              DOSBox's own man page and porting guide
 ├── bin/release.sh            the release script (tag → VERSION → APK)
@@ -265,7 +251,7 @@ import.
 | Setting | Value |
 |---|---|
 | `cmake_minimum_required` | 3.22.1 |
-| `project()` | `a-dos C CXX` |
+| `project()` | `whereq-dosbox C CXX` |
 | target | `add_library(dosbox SHARED …)` → `libdosbox.so` |
 | sources | 122 translation units, listed explicitly (§2.4) |
 | include dirs | `include/`, `src/`, `android/jni/`, the generated `include/` |
@@ -674,7 +660,7 @@ blocker at the interpreter level. Real-device ARM64 numbers are still missing
         ┌──────────────────────────┐
         │  ci.yml · job "apk"      │   downloads the three .so files,
         │  (debug APK)             │   assembles, VERIFIES the ABIs
-        └──────────────────────────┘   → artifact a-dos-debug-apk
+        └──────────────────────────┘   → artifact whereq-dosbox-debug-apk
 
       push tag v1.0.0.9  (or workflow_dispatch with a tag)
                     │
@@ -711,7 +697,7 @@ secrets**; only the release workflow does.
 | `cache: gradle` on the same `setup-java` step | every run used to re-download the whole AGP dependency tree from Maven Central, and a rate-limited answer (HTTP 429) failed the build for reasons that have nothing to do with the code. The cache makes the second and later runs resolve from the local store. `setup-java` rather than `gradle/actions/setup-gradle@v4`: the latter has no `cache-dependency-path` input and validates the wrapper jars by default (`validate-wrappers: true`), which is a failure mode to avoid. `setup-java`'s own defaults already match this repo (`**/*.gradle*`, `**/gradle.properties`, `**/gradle-wrapper.properties`), so the input is deliberately not overridden. |
 | `if-no-files-found: error` on every upload | a missing artifact must fail the job, not silently produce an empty download. |
 | the **ABI verification** step | the APK is unzipped and grepped for `lib/<abi>/libdosbox.so` for each ABI; a missing one fails with `::error::<abi> is missing from the APK`. This is the guard against the "1.8 MB APK with no `lib/`" failure of §2.10. |
-| the released file is named after the **version**, not the tag | `a-dos-<version>.apk` — the tag's "v" is dropped (`${RELEASE_TAG#v}`), so the release asset and the download link in `downloads/` carry the same name. One file, one name: a release asset called `a-dos-v1.0.0.11.apk` next to a link to `a-dos-1.0.0.11.apk` is a support question waiting to happen. |
+| the released file is named after the **version**, not the tag | `whereq-dosbox-<version>.apk` — the tag's "v" is dropped (`${RELEASE_TAG#v}`), so the release asset and the download link in `downloads/` carry the same name. One file, one name: a release asset called `whereq-dosbox-v1.0.0.11.apk` next to a link to `whereq-dosbox-1.0.0.11.apk` is a support question waiting to happen. |
 | the **release prose** comes from `docs/releases/<version>.md` | the body of the GitHub Release is read from the repository, so it is reviewed, versioned and changed in the same commit as the code it describes. `{{TAG}}` and `{{VERSION}}` are substituted before it is published, which is how a screenshot can be pinned to the release it belongs to. A release without such a file still gets published — it just gets the machine facts (file name, SHA-256, certificate) and no prose. See [docs/releases/README.md](releases/README.md). |
 | the **native version** comes from the `VERSION` file | `android/CMakeLists.txt` reads the same `VERSION` file the release script writes and the Gradle build reads, and substitutes it into `config-android.h.in`. It used to be a literal `1.0.0.1`, so the emulator said *version 1.0.0.1* in the DOS banner and in the window title whatever release was installed. |
 
@@ -820,47 +806,6 @@ through the environment.
 It is the only supported way to cut a release, because it is the only place
 that keeps the tag, the `VERSION` file, the manifest and the APK in step.
 
-### 3.7 The names
-
-The rename to **A-DOS** reaches into five places, and they have to agree —
-otherwise the app on the device says one thing and the build says another.
-
-| Where | Name |
-|---|---|
-| The app label | `android/app/src/main/res/values/strings.xml` → `app_name` = `A-DOS` |
-| The Android package | `android/app/build.gradle` → `namespace` and `applicationId` = `com.whereq.ados`; the manifest carries the same `android:package` for the legacy `aapt2` path |
-| The launcher icons | generated from `resources/a-dos-icon-transparent-4k.png` by `android/make-icons.py` |
-| The native product string | `android/cmake/config-android.h.in` (`PACKAGE`, `PACKAGE_NAME`, `PACKAGE_TARNAME`) and the DOS banner, the window title and the configuration dialog in `src/gui/sdlmain.cpp` and `src/gui/sdl_gui.cpp` |
-| The published file | `a-dos-<version>.apk`, named by `.github/workflows/release.yml` — the tag's `v` is dropped |
-
-Two consequences worth knowing:
-
-▸ **The package id is a new application.** `com.whereq.ados` is not
-`com.whereq.dosbox` with a new label — it is a different application to
-Android. The old install cannot be updated in place, so the two coexist on the
-device until the old one is uninstalled. They share nothing: not the private
-storage, not the local save-state slots. The **durable saves folder** (§8.9) is
-the exception — it is a folder the user picked on the phone, so both apps read
-and write the same one, and the games and their save states carry over.
-
-▸ **The default config file name follows the product.** `Cross::GetPlatformConfigName()`
-(`src/misc/cross.cpp`) builds `a-dos-<version>.conf` from the `PACKAGE`
-prefix and the version. It is the fallback the app's own generated
-configuration replaces, so it only matters to a desktop build.
-
-The **logcat tag** is `a-dos` on both sides of the bridge — the native layer
-(`android/jni/dosbox_log.h`) and the Kotlin layer — while DOSBox's own
-`LOG_MSG` output stays under `DOSBox` (§4.3).
-
-The **brand assets** live in `resources/`: the 4K masters
-(`a-dos-icon-transparent-4k.png`, `a-dos-logo-transparent-4k.png`) are the
-source of truth, and `tools/make-brand-assets.py` derives the screen-sized
-`a-dos-logo.png` (the lockup the README shows) and `a-dos-icon.png` from them.
-`android/make-icons.py` renders the launcher icons from the 4K mark: the
-legacy square and round icons, the adaptive foreground inside the 72/108 safe
-zone, and `values/colors.xml` with the background colour. `--check` verifies
-that the committed assets match a fresh render.
-
 ---
 
 ## 4. The runtime
@@ -871,7 +816,7 @@ The app layer is **Kotlin only**; there is no `.java` variant of the activity.
 The SDL2 shell under `android/app/src/main/java/org/libsdl/app/` is
 **byte-identical to upstream SDL2 2.30.0** — the port adds no patches to it.
 
-`AdosActivity` (`android/app/src/main/java/com/whereq/ados/AdosActivity.kt:58`)
+`WhereqDosboxActivity` (`android/app/src/main/java/com/whereq/dosbox/WhereqDosboxActivity.kt:58`)
 extends `SDLActivity` and overrides four hooks:
 
 | Hook | Value | Why |
@@ -914,7 +859,7 @@ Two Android-specific details in `src/gui/sdlmain.cpp` matter:
   the mouse-mapping rectangle.
 
   ▸ The app layer deliberately does **not** resize the surface
-  (`AdosActivity.kt:124-128`): changing the `SurfaceView` size breaks
+  (`WhereqDosboxActivity.kt:124-128`): changing the `SurfaceView` size breaks
   DOSBox's Android texture renderer and the screen goes black. The keyboard
   instead derives the same geometry independently in Kotlin
   (`VirtualKeyboardView.kt:161`) and uses only the letterbox bars beside the
@@ -949,7 +894,7 @@ Two Android-specific details in `src/gui/sdlmain.cpp` matter:
 
 `android/jni/dosbox_android.cpp` (344 lines) has six entry points. All of them
 are declared as `@JvmStatic external` in `DosboxNative.kt`, so the JNI symbols
-keep the `Java_com_whereq_ados_DosboxNative_*` shape.
+keep the `Java_com_whereq_dosbox_DosboxNative_*` shape.
 
 | Native method | Purpose |
 |---|---|
@@ -988,8 +933,8 @@ of the pipe (i.e. `/dev/null`) — logging is a nicety, not a requirement.
 
 There is a second, smaller logging channel: `DOSBOX_LOG` in
 `android/jni/dosbox_log.h` calls `__android_log_print(ANDROID_LOG_INFO,
-"a-dos", …)`. So the logcat shows two tags: **`DOSBox`** for DOSBox's
-own `LOG_MSG` output and **`a-dos`** for the port's own messages.
+"whereq-dosbox", …)`. So the logcat shows two tags: **`DOSBox`** for DOSBox's
+own `LOG_MSG` output and **`whereq-dosbox`** for the port's own messages.
 
 **The key injection.** `nativePushKey` builds an SDL keyboard event and pushes
 it into SDL's queue:
@@ -1075,7 +1020,7 @@ benchmarks.
 ### 4.5 The configuration
 
 The app writes `dosbox.conf` from an asset template on **every boot**
-(`AdosActivity.kt:886-919`), so a shipped change always takes effect
+(`WhereqDosboxActivity.kt:886-919`), so a shipped change always takes effect
 and the file cannot drift. The only thing the app overrides is the CPU core
 the user picked:
 
@@ -1156,7 +1101,7 @@ documentation:
 | Detail | Value |
 |---|---|
 | channel | `"dosbox_running"`, `IMPORTANCE_LOW`, `setShowBadge(false)` |
-| notification | `"A-DOS"` / *"Playing `<game>` — tap to return"*, `setOngoing(true)` |
+| notification | `"WhereQ-DOSBox"` / *"Playing `<game>` — tap to return"*, `setOngoing(true)` |
 | type | `foregroundServiceType="specialUse"` with a `PROPERTY_SPECIAL_USE_FGS_SUBTYPE` description |
 | return value | `START_NOT_STICKY` — the OS must **not** resurrect the service on its own; a game launch restarts the whole process |
 
@@ -2266,12 +2211,12 @@ The three files that carry the whole launcher:
 |---|---|---|
 | `GameLibrary.kt` | 678 | the manifest, the install, the DOS naming, the entry-point heuristic, `RUN.BAT` |
 | `GameLauncherView.kt` | 575 | the overlay panel, the bundle rows, the slot dialog, the launch editor |
-| `AdosActivity.kt` | 1050 | the picker, the relaunch, the slot files, the `[autoexec]` line |
+| `WhereqDosboxActivity.kt` | 1050 | the picker, the relaunch, the slot files, the `[autoexec]` line |
 
 ### 8.1 The on-disk layout
 
 ```
- /data/data/com.whereq.ados/
+ /data/data/com.whereq.dosbox/
  │
  ├── files/                          ← mounted as C: by DOSBox
  │   ├── dosbox.conf                 ← regenerated from the asset on every boot
@@ -2294,7 +2239,7 @@ The three files that carry the whole launcher:
 ```
 
 ▸ **The slot files are outside the C: mount.** They live under `noBackupFilesDir`
-(`AdosActivity.kt:386`), not under `filesDir`, so they never appear
+(`WhereqDosboxActivity.kt:386`), not under `filesDir`, so they never appear
 inside DOS — a `DIR` in the emulator does not list 16 MB of save states — and
 they are excluded from the cloud backup, because a slot is a copy of the machine
 and the game's own save files are the real data.
@@ -2311,7 +2256,7 @@ is typed have to spell it identically, or DOSBox answers *"Illegal command"*.
 
 ### 8.2 Picking the archive
 
-`pickZipFile()` (`AdosActivity.kt:550`) opens the system document
+`pickZipFile()` (`WhereqDosboxActivity.kt:550`) opens the system document
 picker:
 
 | Detail | Value | Why |
@@ -2490,7 +2435,7 @@ generated configuration whose `[autoexec]` ends with `mount c .` and `c:`, and
 the auto-start line is **appended** to it:
 
 ```kotlin
-// AdosActivity.kt:903
+// WhereqDosboxActivity.kt:903
 val autostart = "\r\nC:\\" + GameBundle.DOS_GAMES_DIR + "\\" +
     pendingLaunch + "\\RUN.BAT\r\n"
 ```
@@ -2505,7 +2450,7 @@ val autostart = "\r\nC:\\" + GameBundle.DOS_GAMES_DIR + "\\" +
 ```
 
 ▸ The configuration is **regenerated from the asset on every boot**
-(`writeConfig()`, `AdosActivity.kt:886`), so the shipped settings always
+(`writeConfig()`, `WhereqDosboxActivity.kt:886`), so the shipped settings always
 take effect and the file cannot drift. The one thing that survives is the CPU
 core the user picked in the settings, which is written into the template by
 `applyCpuCore()` (a `(?m)^core=.*$` replacement). A hand-edited `dosbox.conf`
@@ -2513,7 +2458,7 @@ would be lost — that is a deliberate trade, documented in the method's comment
 
 ### 8.7 ▸ Why a relaunch, and not "type the command"
 
-`play()` (`AdosActivity.kt:754`) does **not** type into the running
+`play()` (`WhereqDosboxActivity.kt:754`) does **not** type into the running
 DOSBox. It tears the process down and boots a fresh one:
 
 ```
@@ -2550,7 +2495,7 @@ The DOS files live in the persistent app directory, so the *game's* save files
 survive the relaunch. Only the machine is thrown away.
 
 ▸ The pending launch is **read and cleared immediately** in `onCreate()`
-(`AdosActivity.kt:141`), so a crash or a force-quit lands back at a
+(`WhereqDosboxActivity.kt:141`), so a crash or a force-quit lands back at a
 clean `C:\>` prompt instead of looping into the game forever.
 
 ### 8.8 The save-state slots
@@ -2561,7 +2506,7 @@ clean `C:\>` prompt instead of looping into the game forever.
 | File | `slot<n>.sav`, n = 1..3 (`STATE_SLOTS = 3`) |
 | Written by | `DosboxNative.nativeSaveState(path)` — the §5 machine |
 | Read by | `DosboxNative.nativeLoadState(path)` |
-| "newest" | the slot with the greatest `lastModified()`; missing and zero-length files are skipped (`newestSlot()`, `AdosActivity.kt:361`) |
+| "newest" | the slot with the greatest `lastModified()`; missing and zero-length files are skipped (`newestSlot()`, `WhereqDosboxActivity.kt:361`) |
 | label | *"just now"* under a minute, otherwise a relative span |
 | durable mirror | the same slot, gzipped, in the folder the user picked — §8.9 |
 
@@ -2754,7 +2699,7 @@ Three properties of the overlay view (`VirtualKeyboardView.kt:134-146`):
 | `rebuildControls()` | on `onSizeChanged` | the layout depends on the geometry, which is only known after the first layout pass |
 
 ▸ **The SDL surface is never resized to make room for the keyboard.**
-`AdosActivity.onCreate()` says so explicitly: changing the
+`WhereqDosboxActivity.onCreate()` says so explicitly: changing the
 `SurfaceView` size breaks DOSBox's Android texture renderer and the screen
 goes black. The keyboard only uses the letterbox bars that the 4:3 DOS picture
 leaves on either side.
@@ -3046,8 +2991,8 @@ does not know what a bundle is — it only reports that the button was pressed
 (`OnFilesRequestedListener`).
 
 ▸ The **back button** folds the keyboard away before it leaves the app, and
-closes the launcher when it is open (`AdosActivity.onKeyDown()`,
-`AdosActivity.kt:814`). The order matters: the launcher is checked
+closes the launcher when it is open (`WhereqDosboxActivity.onKeyDown()`,
+`WhereqDosboxActivity.kt:814`). The order matters: the launcher is checked
 first, because it is on top of the keyboard.
 
 ### 9.8 ▸ The measured key sizes
@@ -3112,7 +3057,7 @@ by driving the release APK on an emulator.
 | An **older slot** is refused by this build | 5.4 | loading a slot written by 1.0.0.11 (version 8) into 1.0.0.12 | *"That save file is damaged"* — the version is checked before the payload size |
 | The three keyboard layouts follow from the geometry | 9.2 | the width formula and the two thresholds | `VirtualKeyboardView.kt:161-167`; measured on the emulator at 420 dpi (§9.8) |
 | The bundle names are rewritten to DOS 8.3 | 8.4 | the naming function read against DOSBox's own name handling | `GameLibrary.kt:551` vs `localDrive.cpp` |
-| A **relaunch** is needed, not a typed command | 8.7 | DOSBox caches the drive listing at mount time | `localDrive.cpp:184`, quoted in `AdosActivity.kt:130-136` |
+| A **relaunch** is needed, not a typed command | 8.7 | DOSBox caches the drive listing at mount time | `localDrive.cpp:184`, quoted in `WhereqDosboxActivity.kt:130-136` |
 | The build produces **three ABIs** | 2.2 | the ABI list is verified in CI and the `.so` files are listed in the APK | `.github/workflows/ci.yml`, the ABI verification step |
 | The APK is **signed** with the release key | 3.5 | `apksigner verify --print-certs` | cert SHA-256 `b16b480d5a1ff6d35baff0b15fa3fc4b0ee815e500861fbff1b062c9bf7d3933` |
 
@@ -3153,7 +3098,7 @@ signed with a different key has to be uninstalled first).
 | A state written by **1.0.0.10** is refused | ✓ — *"That save file is damaged"*, the version guard (§5.4) |
 | A state written by **1.0.0.11** (version 8) is refused | ✓ — *"That save file is damaged"*; the version is checked before the payload size, so the older layout is never read |
 | A **version-10** state round-trips | ✓ — the header of the file carries `WQSS` + `0a`, the OPL phase comes back unchanged (`phase=38780a16`) and the tone does not restart. (The `mode` in the log line is the VGA mode, not the state version) |
-| The app is called **A-DOS** | ✓ — the launcher name, the notification and the system permission dialogs all read *A-DOS* |
+| The app is called **WhereQ-DOSBox** | ✓ — the launcher name, the notification and the system permission dialogs all read *WhereQ-DOSBox* |
 | A **saves folder** is connected | ✓ — the Storage Access Framework picker; the app takes a persistent URI on the folder and writes into it |
 | A slot is **mirrored** into that folder | ✓ — `slot1.gz`, 37 KB for a 16 MB snapshot, next to the game's `bundle.zip` |
 | The app is **uninstalled** and installed again | ✓ — the local games and slots are gone; the durable copy is not |
@@ -3232,7 +3177,7 @@ a tiny program compiled against the *generated* Android `config.h`, so the
 sizes are the ones the NDK build actually sees:
 
 ```sh
-cd /home/whereq/git/A-DOS
+cd /home/whereq/git/whereq-dosbox
 . toolchain/env.sh
 g++ -std=c++17 -I build/android/x86_64/include -I include -I src /tmp/sz.cpp -o /tmp/sz
 ```
@@ -3302,12 +3247,12 @@ visible in the UI.
 | 1 | The `src/main/jniLibs` staging directory is vestigial | `android/app/src/main/` | the Gradle path stages the `.so` files from `build/android/<abi>/`; the old directory is only a leftover |
 | 2 | The shipped asset sets `nosound=false` in the `[dosbox]` section | `android/app/src/main/assets/dosbox.conf` | DOSBox registers `nosound` in `[mixer]`, so the setting in `[dosbox]` is ignored and the mixer runs with its default. The line is harmless but does nothing |
 | 3 | A bundle's own `dosbox.conf` is ignored | §8.11 | the app regenerates its configuration from its own asset on every boot; the launcher reports *"ships its own dosbox.conf"* instead of pretending to use it |
-| 4 | `DosboxTyper.kt` is dead code | `android/app/src/main/java/com/whereq/ados/DosboxTyper.kt` | the real launch mechanism is the `[autoexec]` line in the generated configuration (§8.6). The typer is left in the tree but is not referenced |
+| 4 | `DosboxTyper.kt` is dead code | `android/app/src/main/java/com/whereq/dosbox/DosboxTyper.kt` | the real launch mechanism is the `[autoexec]` line in the generated configuration (§8.6). The typer is left in the tree but is not referenced |
 
 Two defects that used to be listed here were fixed in **1.0.0.12**:
 
 * The **native version** was a literal `1.0.0.1` in
-  `android/cmake/config-android.h.in`, so the emulator reported *A-DOS
+  `android/cmake/config-android.h.in`, so the emulator reported *WhereQ-DOSBox
   version 1.0.0.1* in the DOS startup banner and in the window title whatever
   release was installed, the BIOS machine string said 1.0.0.1, and the mapper
   file was always `mapper-1.0.0.1.map`. It is now substituted from the
@@ -3648,8 +3593,8 @@ fields are and why the *file* handles need a whole subsystem.
 ## Appendix C — the log-line reference
 
 Every line the port can print, and where it comes from. The tag is
-`a-dos` for the native layer (`android/jni/dosbox_log.h`) and
-`a-dos` for the Kotlin layer.
+`whereq-dosbox` for the native layer (`android/jni/dosbox_log.h`) and
+`whereq-dosbox` for the Kotlin layer.
 
 ### C.1 The save-state machine (`src/gui/savestate.cpp`)
 
@@ -3724,7 +3669,7 @@ was actually restored.
 | `unknown key name "%s"` | the keyboard asked for a key the table does not have |
 | `could not push key event: %s` | `SDL_PushEvent()` failed |
 
-### C.6 The Kotlin layer (`android/app/src/main/java/com/whereq/ados/`)
+### C.6 The Kotlin layer (`android/app/src/main/java/com/whereq/dosbox/`)
 
 | Line | When |
 |---|---|
