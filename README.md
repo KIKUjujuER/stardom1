@@ -39,6 +39,26 @@ verified. What follows is maintenance — bug fixes and documentation.
 installing a game, playing it, saving a state and keeping your saves safe, one
 step at a time, with a screenshot of every screen. No DOS knowledge needed.
 
+New in 1.0.0.15
+---------------
+
+A release with a **feature**: **Game Mode**, a console-style gamepad for the
+action games that want one — a direction pad, a trackball and the buttons a
+DOS game fires, jumps and strafes with.
+
+| | |
+|---|---|
+| **Game Mode** | With the keyboard pads showing, switch **Caps Lock** on (double-tap **Shift**) and type the Konami code — **↑ ↑ ↓ ↓ ← → ← → B A** — and the pads flip into a gamepad: an eight-way D-pad, a trackball, and Y, X, CTRL, ALT, SPACE and ENT. The same code on the D-pad (then **X, Y**) takes you back, and the phone's Back button does it too. |
+| **The B and A must be capital** | The code is matched on the case the letters are actually typed in, so a lowercase *"ba"* just types *"ba"* into the DOS prompt. |
+| **Every button can be remapped** | Long-press the gold profile button and pick **Remap buttons…**. The remap belongs to that one game and is remembered, so the same title always plays the same way. |
+| **The gamepad is a keyboard** | The gamepad sends the same SDL events the on-screen keyboard sends, so the guest cannot tell the two apart — there is no new input path to teach a game. The trackball sends the relative mouse events the SDL layer now accepts. |
+| **Leaving the app is clean** | A shutdown that failed used to abort the process with SIGABRT while it was only shutting down. The error is caught now and the exit carries on. |
+| **The save-state format did not change** | The Game Mode is a new way to press the same keys, so every save state written by the earlier releases loads normally. |
+
+The documentation gained a chapter on the gamepad and a case study of a finger
+that becomes a DOS keystroke, and every box-drawing diagram in the docs is
+now an SVG with straight borders.
+
 New in 1.0.0.14
 ---------------
 
@@ -480,7 +500,7 @@ A **milestone tag** marks a phase rather than a release: `milestone/<name>`,
 annotated, and deliberately outside the `vX.Y.Z.A` scheme so the release
 script never picks it up. `milestone/android-migration-complete` marks the end
 of the Android migration phase — from there the project is in maintenance. It
-rides on the current release, `v1.0.0.14`.
+rides on the current release, `v1.0.0.15`.
 
 The production APK is signed with the release key, which is never committed:
 

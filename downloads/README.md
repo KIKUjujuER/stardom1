@@ -16,12 +16,38 @@ repository's history, at their own tag — for example
 
 | version | file | size |
 |---|---|---|
-| 1.0.0.14 | [`whereq-dosbox-1.0.0.14.apk`](https://github.com/whereq/whereq-dosbox/releases/download/v1.0.0.14/whereq-dosbox-1.0.0.14.apk) | 16 482 965 bytes (15.7 MB) |
+| 1.0.0.15 | [`whereq-dosbox-1.0.0.15.apk`](https://github.com/whereq/whereq-dosbox/releases/download/v1.0.0.15/whereq-dosbox-1.0.0.15.apk) | 16 500 506 bytes (15.7 MB) |
 
-* SHA-256 of the 1.0.0.14 APK:
-  `2bf4d58b8e59413fa1795f7a2baa65b13f642daa76d9696a062d70893ad2d628`
+* SHA-256 of the 1.0.0.15 APK:
+  `dbf776abe6b69541194fa5bded5d2c807a94add4733a74ea2620b03227263f42`
 * Signing certificate (SHA-256):
   `b16b480d5a1ff6d35baff0b15fa3fc4b0ee815e500861fbff1b062c9bf7d3933`
+
+## What changed in 1.0.0.15
+
+A release with a **feature**: **Game Mode**, a console-style gamepad for the
+action games that want one.
+
+* **Game Mode.** With the keyboard pads showing, switch **Caps Lock** on
+  (double-tap **Shift**) and type the Konami code — **↑ ↑ ↓ ↓ ← → ← → B A** —
+  and the pads flip into a gamepad: an eight-way D-pad, a trackball, and Y, X,
+  CTRL, ALT, SPACE and ENT. The same code on the D-pad (then **X, Y**) takes
+  you back, and the phone's Back button does it too.
+* **The B and A must be capital.** The code is matched on the case the letters
+  are actually typed in, so a lowercase *"ba"* just types *"ba"* into the DOS
+  prompt.
+* **Every button can be remapped.** Long-press the gold profile button and
+  pick **Remap buttons…**. The remap belongs to that one game and is
+  remembered.
+* **The gamepad is a keyboard.** The gamepad sends the same SDL events the
+  on-screen keyboard sends, so the guest cannot tell the two apart. The
+  trackball sends the relative mouse events the SDL layer now accepts.
+* **Leaving the app is clean.** A shutdown that failed used to abort the
+  process with SIGABRT while it was only shutting down; the error is caught
+  now.
+* **The save-state format did not change.** The Game Mode is a new way to
+  press the same keys, so every save state written by the earlier releases
+  loads normally.
 
 ## What changed in 1.0.0.14
 
