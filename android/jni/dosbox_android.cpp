@@ -222,6 +222,16 @@ static const struct {
     K("home", SDL_SCANCODE_HOME) K("end", SDL_SCANCODE_END)
     K("pageup", SDL_SCANCODE_PAGEUP) K("pagedown", SDL_SCANCODE_PAGEDOWN)
 
+    /* The numeric keypad - the Game Mode D-pad can map to it (Num 8/2/4/6 and
+     * the diagonals 7/9/1/3), which is how many DOS games read a joystick. */
+    K("kp_0", SDL_SCANCODE_KP_0) K("kp_1", SDL_SCANCODE_KP_1)
+    K("kp_2", SDL_SCANCODE_KP_2) K("kp_3", SDL_SCANCODE_KP_3)
+    K("kp_4", SDL_SCANCODE_KP_4) K("kp_5", SDL_SCANCODE_KP_5)
+    K("kp_6", SDL_SCANCODE_KP_6) K("kp_7", SDL_SCANCODE_KP_7)
+    K("kp_8", SDL_SCANCODE_KP_8) K("kp_9", SDL_SCANCODE_KP_9)
+    K("kp_enter", SDL_SCANCODE_KP_ENTER) K("kp_period", SDL_SCANCODE_KP_PERIOD)
+    K("kp_plus", SDL_SCANCODE_KP_PLUS) K("kp_minus", SDL_SCANCODE_KP_MINUS)
+
     { NULL, SDL_SCANCODE_UNKNOWN }
 };
 #undef K
@@ -381,6 +391,45 @@ Java_com_whereq_dosbox_DosboxNative_nativePushMouseButton(JNIEnv *env,
 
     if (SDL_PushEvent(&ev) < 0) {
         DOSBOX_LOG("could not push mouse button event: %s", SDL_GetError());
+        return JNI_FALSE;
+    }
+    return JNI_TRUE;
+}
+
+/*
+ * Injects RELATIVE mouse motion (the Game Mode trackball). The motion is tagged
+ * with a magic device id (WHEREQ_REL_MOUSE) so GFX_Events() can tell it apart
+ * from a real/absolute move and feed it to the mouse as emulated relative
+ * movement - DOSBox's own HandleMouseMotion() drops relative motion while the
+ * phone's auto-capture is on. SDL_PushEvent() is thread safe (Java UI thread).
+ *
+ * WHEREQ_REL_MOUSE must match the value in src/gui/sdlmain.cpp.
+ */
+#define WHEREQ_REL_MOUSE 0x57515242u  /* "WQRB" */
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_whereq_dosbox_DosboxNative_nativePushMouseMotion(JNIEnv *env,
+                                                          jclass clazz,
+                                                          jint dx,
+                                                          jint dy)
+{
+    (void)env;
+    (void)clazz;
+
+    if ((SDL_WasInit(SDL_INIT_VIDEO) & SDL_INIT_VIDEO) == 0) {
+        return JNI_FALSE;
+    }
+
+    SDL_Event ev;
+    SDL_zero(ev);
+    ev.type = SDL_MOUSEMOTION;
+    ev.motion.which = WHEREQ_REL_MOUSE;
+    ev.motion.xrel = (Sint32)dx;
+    ev.motion.yrel = (Sint32)dy;
+    ev.motion.timestamp = SDL_GetTicks();
+
+    if (SDL_PushEvent(&ev) < 0) {
+        DOSBOX_LOG("could not push mouse motion event: %s", SDL_GetError());
         return JNI_FALSE;
     }
     return JNI_TRUE;

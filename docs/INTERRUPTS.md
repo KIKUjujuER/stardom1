@@ -21,9 +21,10 @@ said explicitly, because "the emulator answers this call with a log line" and
 3. [The software interrupts](#3-the-software-interrupts)
 4. [The hardware interrupts](#4-the-hardware-interrupts)
 5. [Case study: a finger becomes a DOS mouse](#5-case-study-a-finger-becomes-a-dos-mouse)
-6. [Case study: which interrupt state belongs in a save state](#6-case-study-which-interrupt-state-belongs-in-a-save-state)
-7. [What this port did not change](#7-what-this-port-did-not-change)
-8. [Watching the interrupts yourself](#8-watching-the-interrupts-yourself)
+6. [Case study: a finger becomes a DOS keystroke](#6-case-study-a-finger-becomes-a-dos-keystroke)
+7. [Case study: which interrupt state belongs in a save state](#7-case-study-which-interrupt-state-belongs-in-a-save-state)
+8. [What this port did not change](#8-what-this-port-did-not-change)
+9. [Watching the interrupts yourself](#9-watching-the-interrupts-yourself)
 
 ---
 
@@ -246,6 +247,11 @@ sectnum = ( (cylinder * heads + head) * sectors ) + sector - 1L;
 | 10h | get a keystroke (enhanced) | implemented (`:511`) |
 | 11h | is a keystroke waiting? (enhanced) | implemented (`:545`) |
 | 12h | get the extended shift states | implemented (`:577`) |
+
+▸ **Who fills that buffer.** Not the app. A keystroke reaches it through the
+whole hardware path — the SDL event, the mapper, `KEYBOARD_AddKey()`, the
+emulated 8042, **IRQ 1**, **INT 09h**, `DOS_LayoutKey()` — and only then does
+INT 16h hand it to the guest. §6 follows that chain end to end.
 
 The BIOS data area layout (`include/bios.h:35-42`):
 
@@ -472,7 +478,7 @@ Three facts about this driver drive the rest of this document:
 3. **The whole driver state lives in one file-static struct** in the host
    process (`src/ints/mouse.cpp:81-130`), not in the emulated memory. A guest
    that configured the mouse once at boot cannot rebuild that configuration
-   after a restore — which is exactly the bug in §6.
+   after a restore — which is exactly the bug in §7.
 
 ### INT 67h — EMS, and INT 2Fh — XMS
 
@@ -530,6 +536,10 @@ failure (`src/ints/bios.cpp:755-758`), so DOSBox keeps the scancode.
 bytes and the LEDs, runs `DOS_LayoutKey()`, and then walks a scancode switch
 that handles the `0xE0`/`0xE1` prefixes, the modifiers, the three lock keys,
 the extended keypad and the normal keys.
+
+▸ **This is the path the on-screen keyboard and the Game Mode gamepad take.**
+They do not write into the BIOS buffer; they push an SDL key event and let the
+emulated controller raise this interrupt like real hardware does. §6.
 
 ### The unexpected IRQ
 
@@ -628,7 +638,33 @@ Both are *held* buttons, exactly like the left one. And note the last one is
 not a gesture at all: it is a second event type injected into the same SDL
 queue the emulator already reads.
 
-### Step 5 — the driver state and the save state
+### Step 5 — the trackball is relative by construction
+
+The Game Mode gamepad has a **trackball**: a round pad that moves the pointer
+the way a laptop touchpad does, instead of jumping it to where you touch. That
+is *relative* movement, and DOSBox has no way to receive relative movement
+from a phone — SDL's own relative mode is tied to a captured mouse, which does
+not exist here (Step 2 above).
+
+So the app sends the motion itself, tagged with a magic device id
+(`WHEREQ_REL_MOUSE`, `android/jni/dosbox_android.cpp:400-436`), and
+`GFX_Events()` picks the tagged event out of the queue before the normal
+mouse handling can drop it (`src/gui/sdlmain.cpp:2850-2861`):
+
+```c
+if (event.motion.which == 0x57515242u /* WHEREQ_REL_MOUSE "WQRB" */) {
+    Mouse_CursorMoved((float)event.motion.xrel, (float)event.motion.yrel, 0.0f, 0.0f, true);
+    break;
+}
+```
+
+The last argument, `emulate = true`, is what makes the movement *relative*:
+`Mouse_CursorMoved()` adds the deltas to the current position instead of
+placing the cursor at an absolute one (`src/ints/mouse.cpp:582-632`). From
+there it is the ordinary mouse path again — the event queue, IRQ 12, INT 74h
+and the INT 33h driver.
+
+### Step 6 — the driver state and the save state
 
 And here the story turns. The INT 33h driver's state lives in a **host
 file-static struct**, not in guest memory (`src/ints/mouse.cpp:81-130`). Three
@@ -667,7 +703,148 @@ cursor (type 2) uses the restored masks, anything else uses the built-in arrow.
 
 ---
 
-## 6. Case study: which interrupt state belongs in a save state
+## 6. Case study: a finger becomes a DOS keystroke
+
+The mouse (§5) is the part of the interrupt layer the port rewrote. The
+keyboard is the opposite: **the port changed nothing in the interrupt layer
+for it**, and that is the point — a virtual key that took a shortcut would be
+visible to the guest.
+
+### Step 1 — the app cannot call INT 16h, so it pushes SDL events
+
+The on-screen keyboard and the Game Mode gamepad live *outside* the guest, so
+they cannot call a BIOS service. What they can do is push an **SDL key event**
+into the queue DOSBox already reads.
+
+- `VirtualKeyboardView.push()` (the keyboard) and `GameModeView.push()` (the
+  gamepad) both resolve a key name to an **SDL scancode** through
+  `DosboxNative.nativeScancodeFromName()` and call
+  `DosboxNative.nativePushKey(scancode, pressed)`.
+- The JNI function builds an `SDL_KEYDOWN` / `SDL_KEYUP` event whose
+  `keysym.scancode` is that scancode, and pushes it with `SDL_PushEvent()`
+  (`android/jni/dosbox_android.cpp:282-314`). `SDL_PushEvent()` is thread
+  safe, so the Java UI thread may push while the emulator runs on its own
+  thread. A press before SDL is up is dropped.
+
+The key names are not an invention. The JNI table `key_name_map[]`
+(`android/jni/dosbox_android.cpp:174-235`) uses **DOSBox's own key names** —
+the same names as the mapper's `DefaultKeys[]`
+(`src/gui/sdl_mapper.cpp:2146-2237`) — so every key the app can send has a
+1:1 counterpart in the mapper's bind list.
+
+### Step 2 — the mapper turns a scancode into a DOSBox key
+
+DOSBox's SDL2 back end does not decode `SDL_KEYDOWN` itself. `GFX_Events()`
+hands the event to the mapper, and the mapper indexes its bind list **by the
+scancode** (`src/gui/sdl_mapper.cpp:558-570`):
+
+```c
+Bitu key = event->key.keysym.scancode;
+if (event->type==SDL_KEYDOWN) ActivateBindList(&lists[key],0x7fff,true);
+else DeactivateBindList(&lists[key],true);
+```
+
+The default bind for that list is a `CKeyEvent` holding a `KBD_KEYS` value,
+and its `Active()` calls `KEYBOARD_AddKey(key, yesno)`
+(`src/gui/sdl_mapper.cpp:1555-1561`).
+
+### Step 3 — KEYBOARD_AddKey *is* the emulated keyboard controller
+
+`KEYBOARD_AddKey()` (`src/hardware/keyboard.cpp:228-374`) is where the SDL
+world meets the PC world. A big switch turns `KBD_a`, `KBD_enter`, `KBD_up`,
+`KBD_kp7`, … into **PC scancodes** (1…88); the extended keys get their `E0h`
+prefix; a release adds `0x80`; and the byte goes into the emulated **8042
+output buffer** (`KEYBOARD_AddBuffer`, `src/hardware/keyboard.cpp:81-95`).
+
+The buffer is drained by a PIC event, and each byte lands in port `0x60` with
+**IRQ 1** raised (`KEYBOARD_SetPort60`, `src/hardware/keyboard.cpp:55-60`).
+
+### Step 4 — INT 09h, then the layout, then the BIOS buffer
+
+IRQ 1 is vector `0x09`: the master PIC's vector base is `0x08` and IRQ 1 is
+its second line (`src/hardware/pic.cpp:612-613`). The `CB_IRQ1` stub reads the
+scancode from port `0x60` and **offers it to the guest first** through
+INT 15h AH=4Fh (`src/cpu/callback.cpp:262-265`); only if the guest declines —
+carry clear — does the emulated handler run. The BIOS's own side of that hook
+always reports failure (`src/ints/bios.cpp:755-758`), so DOSBox keeps the
+scancode.
+
+`IRQ1_Handler` (`src/ints/bios_keyboard.cpp:233-470`) then runs
+`DOS_LayoutKey()` (`src/dos/dos_keyboard_layout.cpp:1049`), which is where the
+**layout** is applied: the code-page mapping, a dead key, a diacritic, the
+shift flags at `0x417`/`0x418`, the `E0h` flag at `0x496`, and finally
+`BIOS_AddKeyToBuffer()` (`src/ints/bios_keyboard.cpp:140-163`) — the BIOS
+keyboard buffer at `0x41E`, with the head and tail pointers at `0x41A` and
+`0x41C`.
+
+### Step 5 — INT 16h hands it to the guest
+
+Now, and only now, a guest that calls **INT 16h AH=00h** gets the keystroke.
+If the buffer is empty, the `CB_INT16` stub spins (§1) until the next IRQ 1 —
+the same wait a real BIOS imposes.
+
+The whole chain, then:
+
+![Step 5 — INT 16h hands it to the guest](diagrams/int01-step-5-int-16h-hands-it-to-the-guest.svg)
+
+<details>
+<summary>The same diagram as text (the SVG above is the aligned version)</summary>
+
+```
+  a finger (or a thumb on the gamepad)
+      │
+      ▼
+  VirtualKeyboardView / GameModeView → nativePushKey(scancode, pressed)
+      ▼  SDL_PushEvent(SDL_KEYDOWN / SDL_KEYUP)
+  GFX_Events → sdl_mapper: lists[scancode] → CKeyEvent::Active()
+      ▼
+  KEYBOARD_AddKey(KBD_KEYS) → the 8042 output buffer (port 0x60)
+      ▼  PIC_ActivateIRQ(1)
+  IRQ 1 → INT 09h → IRQ1_Handler → DOS_LayoutKey() → BIOS_AddKeyToBuffer()
+      ▼
+  the BIOS keyboard buffer at 0x41E (head/tail at 0x41A/0x41C)
+      ▼
+  INT 16h AH=00h — the guest's keystroke
+```
+
+</details>
+
+### What the guest can tell, and what it cannot
+
+- It **can** install its own INT 09h vector, and it will see the virtual keys.
+- It **can** intercept keys through INT 15h AH=4Fh, and it will see them
+  first.
+- It **can** read the shift flags with INT 16h AH=02h, and the modifiers are
+  real — the app presses Shift, so the BIOS sees Shift. But the app's own
+  **Caps Lock** is *not* the BIOS's: it never sends the `0x3a` scancode, so the
+  caps bit in the flags at `0x417` (`flags1 |= 0x40`,
+  `src/ints/bios_keyboard.cpp:316`) stays clear, and a capital letter is
+  produced by holding Shift around the letter instead. A guest that watches
+  the caps flag sees it clear while the app is in caps mode.
+- It **cannot** tell a virtual key from a real one. There is no "this key came
+  from a touchscreen" bit anywhere in the chain, and that is deliberate.
+
+### The gamepad is the same chain
+
+Game Mode's D-pad and its buttons push **the same** SDL key events, so the
+chain above is unchanged for them. The D-pad's three output modes only change
+*which* key names are sent: the arrows, the WASD letters, or the numeric
+keypad (`kp_8`, `kp_2`, …) — the last because a DOS game written for a
+joystick reads the keypad, not the arrows.
+
+The **trackball** and the mouse buttons do not use this chain at all: the
+motion is a tagged `SDL_MOUSEMOTION` and the buttons are real
+`SDL_MOUSEBUTTONDOWN`/`UP` events, so they land in the INT 33h driver's world
+(§5).
+
+One consequence is worth stating plainly: **the gamepad is a keyboard, not a
+joystick**. DOSBox's own joystick support is not used by the app at all — the
+tree references no `SDL_CONTROLLER*` — so a game that insists on a joystick is
+served by the NUMPAD mode instead.
+
+---
+
+## 7. Case study: which interrupt state belongs in a save state
 
 A save state is a snapshot of a machine. "A machine" includes its interrupt
 subsystem, and the interesting question is not *whether* to snapshot it but
@@ -720,7 +897,7 @@ misread.
 
 ---
 
-## 7. What this port did not change
+## 8. What this port did not change
 
 Worth stating plainly, because it is the more surprising answer: **the BIOS
 interrupt layer is upstream code.**
@@ -777,7 +954,7 @@ drive, the code page, the current directories — lives in a new file,
 
 ---
 
-## 8. Watching the interrupts yourself
+## 9. Watching the interrupts yourself
 
 The cheapest way to see this layer work is the **MOUSE** log group
 (`src/debug/debug_gui.cpp:251`), enabled from `dosbox.conf`:
@@ -822,7 +999,7 @@ what a game is actually asking for.
 
 - **[TECHNICAL-REFERENCE.md](TECHNICAL-REFERENCE.md)** — the native build, the
   save-state machine, the exact OPL snapshot, the bundle launcher, the
-  on-screen keyboard, and the throughput benchmark.
+  on-screen keyboard, the Game Mode gamepad, and the throughput benchmark.
 - **[USER-GUIDE.md](USER-GUIDE.md)** — the guide for the person holding the
   phone.
 - The DOSBox core is imported from the **[Em-DOSBox](https://github.com/dreamlayers/em-dosbox)**

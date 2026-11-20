@@ -10,6 +10,7 @@ import android.view.Gravity
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
@@ -79,6 +80,22 @@ class VirtualKeyboardView(context: Context) : FrameLayout(context) {
         launcherListener = listener
     }
 
+    /** Told when the Konami code (↑↑↓↓←→←→BA) is typed, to enter Game Mode. */
+    fun interface OnGameModeRequestedListener {
+        fun onGameModeRequested()
+    }
+
+    private var gameModeListener: OnGameModeRequestedListener? = null
+
+    fun setOnGameModeRequestedListener(listener: OnGameModeRequestedListener?) {
+        gameModeListener = listener
+    }
+
+    /** Watches the typed keys for the Konami code; a match enters Game Mode. */
+    private val konami = GameModeView.KonamiDetector(GameModeView.KEYBOARD_ENTER_SEQUENCE) {
+        gameModeListener?.onGameModeRequested()
+    }
+
     /** key name -> numeric SDL scancode. */
     private val scancodes = HashMap<String, Int>()
 
@@ -113,6 +130,12 @@ class VirtualKeyboardView(context: Context) : FrameLayout(context) {
 
     /** key name -> every view showing that modifier, to show the armed state. */
     private val modifierViews = HashMap<String, ArrayList<TextView>>()
+
+    /** Whether Caps Lock is on (toggled by double-tapping Shift). */
+    private var capsOn = false
+
+    /** uptimeMillis of the last Shift tap-release, for double-tap detection. */
+    private var lastShiftUp = 0L
 
     /** The fold-up QWERTY; null in the pads layout, which does not need one. */
     private var panel: LinearLayout? = null
@@ -225,6 +248,12 @@ class VirtualKeyboardView(context: Context) : FrameLayout(context) {
         }
         mode = newMode
         builtBarWidth = barWidth
+        // The views were just rebuilt with default (lower-case) labels; restore
+        // the Caps Lock indicator and the upper-case letters if it is on.
+        if (capsOn) {
+            updateShiftLabels()
+            updateLetterLabels()
+        }
     }
 
     /* --------------------------------------------------------------- pads */
@@ -862,7 +891,26 @@ class VirtualKeyboardView(context: Context) : FrameLayout(context) {
 
     /** A key went down. */
     private fun keyDown(keyName: String, kind: Int) {
+        // Watch every key-down for the Konami code; a match enters Game Mode.
+        // Letters count in the case they are typed, so the code needs capitals.
+        konami.feed(konamiToken(keyName, kind))
         if (kind == KIND_MODIFIER) {
+            // Double-tap Shift (two quick taps, no finger still down) toggles
+            // Caps Lock — a hidden gesture, so no dedicated Caps key is needed.
+            // A slower second tap still un-arms Shift as before.
+            if (isShift(keyName) && (heldCount[keyName] ?: 0) == 0 &&
+                SystemClock.uptimeMillis() - lastShiftUp < DOUBLE_TAP_MS) {
+                lastShiftUp = 0L
+                // The first tap left Shift armed and pressed; take it back so the
+                // caps toggle does not leave a stray Shift down.
+                if (isArmed(keyName)) {
+                    setArmed(keyName, false)
+                    push(keyName, false)
+                }
+                toggleCaps()
+                refreshModifier(keyName)
+                return
+            }
             val fingers = (heldCount[keyName] ?: 0) + 1
             heldCount[keyName] = fingers
             if (fingers > 1) {
@@ -883,9 +931,10 @@ class VirtualKeyboardView(context: Context) : FrameLayout(context) {
             refreshModifier(keyName)
             return
         }
-        if (kind == KIND_SHIFTED) {
-            // Shift is wrapped around the key so that the character comes out
-            // shifted — but not re-pushed if it is already down (armed or held).
+        // A shifted key (":", "!") — and, with Caps Lock on, a letter — comes out
+        // shifted: Shift is wrapped around it, unless Shift is already armed. Caps
+        // Lock affects letters only, so digits and symbols are left alone.
+        if (kind == KIND_SHIFTED || (kind == KIND_KEY && capsOn && isLetterKey(keyName))) {
             if (!isArmed(SHIFT)) {
                 push(SHIFT, true)
             }
@@ -908,6 +957,9 @@ class VirtualKeyboardView(context: Context) : FrameLayout(context) {
                 return
             }
             heldCount.remove(keyName)
+            // Remember when a Shift tap lifted, so the next quick tap can be read
+            // as a double-tap (the Caps Lock gesture).
+            if (isShift(keyName)) lastShiftUp = SystemClock.uptimeMillis()
             val heldFor = SystemClock.uptimeMillis() - (heldSince.remove(keyName) ?: 0L)
             val used = usedWhileHeld.remove(keyName)
             if (disarmedByTouch.remove(keyName)) {
@@ -923,7 +975,7 @@ class VirtualKeyboardView(context: Context) : FrameLayout(context) {
             }
             return
         }
-        if (kind == KIND_SHIFTED) {
+        if (kind == KIND_SHIFTED || (kind == KIND_KEY && capsOn && isLetterKey(keyName))) {
             push(keyName, false)
             // Leave Shift alone if the user is holding it down anyway.
             if (!isArmed(SHIFT)) {
@@ -962,8 +1014,74 @@ class VirtualKeyboardView(context: Context) : FrameLayout(context) {
     }
 
     private fun refreshModifier(keyName: String) {
-        val color = if (isArmed(keyName)) COLOR_KEY_ARMED else COLOR_KEY
+        // Shift stays lit while Caps Lock is on, so the keyboard shows the state.
+        val lit = isArmed(keyName) || (isShift(keyName) && capsOn)
+        val color = if (lit) COLOR_KEY_ARMED else COLOR_KEY
         modifierViews[keyName]?.forEach { it.background = keyBackground(color) }
+    }
+
+    private fun isShift(keyName: String): Boolean = keyName == "lshift" || keyName == "rshift"
+
+    private fun isLetterKey(keyName: String): Boolean =
+        keyName.length == 1 && keyName[0] in 'a'..'z'
+
+    /**
+     * The token a key press contributes to the Konami detector.
+     *
+     * A letter counts in the case it is *actually* typed: Caps Lock (toggled by
+     * double-tapping Shift) and a tapped or held Shift both make it capital.
+     * The Konami code therefore needs capital **B** and **A** — the user has to
+     * switch Caps Lock on first, which makes the gesture deliberate instead of
+     * accidental. Every other key contributes its own name.
+     */
+    private fun konamiToken(keyName: String, kind: Int): String {
+        if (kind != KIND_KEY || !isLetterKey(keyName)) return keyName
+        val capital = capsOn || isArmed(SHIFT) || isArmed("rshift")
+        return if (capital) keyName.uppercase() else keyName
+    }
+
+    /**
+     * Toggles Caps Lock. The case is applied in the app — letters are sent with
+     * Shift while it is on (see [keyDown]) — rather than via DOSBox's CapsLock
+     * key, whose SDL "state not toggle" handling does not survive a synthetic
+     * press+release. Only the label changes here.
+     */
+    private fun toggleCaps() {
+        capsOn = !capsOn
+        updateShiftLabels()
+        updateLetterLabels()
+    }
+
+    /**
+     * Shows the letter keys in the case they will actually type — upper while
+     * Caps Lock is on, lower otherwise — like a phone keyboard. The label of a
+     * letter key equals its (lower-case) key name, so the key's tag is the
+     * source of truth; symbols and digits are left untouched.
+     */
+    private fun updateLetterLabels() {
+        updateLetterLabelsIn(this)
+    }
+
+    private fun updateLetterLabelsIn(view: View) {
+        if (view is TextView) {
+            (view.tag as? String)?.let { name ->
+                if (isLetterKey(name)) view.text = if (capsOn) name.uppercase() else name
+            }
+        }
+        if (view is ViewGroup) {
+            for (i in 0 until view.childCount) updateLetterLabelsIn(view.getChildAt(i))
+        }
+    }
+
+    /**
+     * Relabels every Shift key to show the Caps Lock state — "CAPS" (lit) when
+     * on, "Shift" when off. "CAPS" is no wider than "Shift", so no key grows.
+     */
+    private fun updateShiftLabels() {
+        for (name in arrayOf("lshift", "rshift")) {
+            modifierViews[name]?.forEach { it.text = if (capsOn) "CAPS" else "Shift" }
+            refreshModifier(name)
+        }
     }
 
     /** Pushes a key press or release into DOSBox. */
@@ -1046,6 +1164,9 @@ class VirtualKeyboardView(context: Context) : FrameLayout(context) {
 
         /** A modifier down for at least this long was held, not tapped. */
         private const val HOLD_MILLIS = 350L
+
+        /** Two Shift taps within this long toggle Caps Lock. */
+        private const val DOUBLE_TAP_MS = 300L
 
         private const val MODE_PADS = 0
         private const val MODE_COLUMNS = 1

@@ -30,6 +30,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.libsdl.app.SDLActivity
+import org.json.JSONException
+import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -246,6 +248,8 @@ class WhereqDosboxActivity : SDLActivity() {
     private fun installVirtualKeyboard() {
         val keyboard = VirtualKeyboardView(this)
         keyboard.setOnFilesRequestedListener { showLauncher() }
+        // The Konami code (↑↑↓↓←→←→BA) on the keyboard flips into Game Mode.
+        keyboard.setOnGameModeRequestedListener { showGameMode() }
 
         // Full-screen overlay: the keyboard positions its keys beside the DOS
         // picture itself and leaves the picture free (a tap there falls
@@ -256,6 +260,101 @@ class WhereqDosboxActivity : SDLActivity() {
         )
         addContentView(keyboard, lp)
         this.keyboard = keyboard
+    }
+
+    /* --------------------------------------------------------- Game Mode */
+
+    /** The touch gamepad overlay; created lazily the first time it is shown. */
+    private var gameMode: GameModeView? = null
+
+    /**
+     * Swaps the keyboard pads for the Game Mode gamepad. The game's remembered
+     * profile and D-pad output are restored; Hybrid is the default. Reached from
+     * the keyboard's Konami code.
+     */
+    private fun showGameMode() {
+        val view = gameMode ?: GameModeView(this).also { gm ->
+            gm.setListener(object : GameModeView.Listener {
+                override fun onExitToKeyboard() = showKeyboard()
+                override fun onFilesRequested() = showLauncher()
+                override fun onProfileChanged(profile: GameModeView.Profile) = saveGameProfile(profile)
+                override fun onDpadChanged(dpad: GameModeView.Dpad) = saveGameDpad(dpad)
+                override fun onRemapsChanged(remaps: Map<String, String>) = saveGameRemaps(remaps)
+            })
+            val lp = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT
+            )
+            addContentView(gm, lp)
+            gameMode = gm
+        }
+        // Restore the per-game choice before showing, without notifying back.
+        view.setProfile(loadGameProfile(), notify = false)
+        view.setDpad(loadGameDpad(), notify = false)
+        view.setRemaps(loadGameRemaps())
+        keyboard?.visibility = View.GONE
+        view.visibility = View.VISIBLE
+    }
+
+    /** Back to the keyboard pads (Game Mode's KBD button or reverse Konami). */
+    private fun showKeyboard() {
+        gameMode?.let { it.exitRemapMode(); it.releaseAll(); it.visibility = View.GONE }
+        keyboard?.visibility = View.VISIBLE
+    }
+
+    private fun isGameModeVisible(): Boolean = gameMode?.visibility == View.VISIBLE
+
+    /* --- per-game memory of the profile and D-pad output (keyed by folder) --- */
+
+    private fun gameKey(prefix: String): String = prefix + (currentGameFolder ?: "_")
+
+    private fun saveGameProfile(profile: GameModeView.Profile) {
+        getSharedPreferences(LAUNCH_PREFS, MODE_PRIVATE)
+            .edit().putString(gameKey(KEY_PROFILE_PREFIX), profile.name).apply()
+    }
+
+    private fun loadGameProfile(): GameModeView.Profile {
+        val name = getSharedPreferences(LAUNCH_PREFS, MODE_PRIVATE)
+            .getString(gameKey(KEY_PROFILE_PREFIX), null) ?: return GameModeView.Profile.HYBRID
+        return runCatching { GameModeView.Profile.valueOf(name) }.getOrDefault(GameModeView.Profile.HYBRID)
+    }
+
+    private fun saveGameDpad(dpad: GameModeView.Dpad) {
+        getSharedPreferences(LAUNCH_PREFS, MODE_PRIVATE)
+            .edit().putString(gameKey(KEY_DPAD_PREFIX), dpad.name).apply()
+    }
+
+    private fun loadGameDpad(): GameModeView.Dpad {
+        val name = getSharedPreferences(LAUNCH_PREFS, MODE_PRIVATE)
+            .getString(gameKey(KEY_DPAD_PREFIX), null) ?: return GameModeView.Dpad.ARROWS
+        return runCatching { GameModeView.Dpad.valueOf(name) }.getOrDefault(GameModeView.Dpad.ARROWS)
+    }
+
+    /* --- per-game Game Mode button remaps (a small JSON blob) --- */
+
+    /**
+     * The button remaps of the current game, keyed by "<profile>:<default key>".
+     * One map covers every profile, so a game remembers what each button sends
+     * whichever profile it is played in.
+     */
+    private fun loadGameRemaps(): Map<String, String> {
+        val raw = getSharedPreferences(LAUNCH_PREFS, MODE_PRIVATE)
+            .getString(gameKey(KEY_REMAPS_PREFIX), null) ?: return emptyMap()
+        return try {
+            val obj = JSONObject(raw)
+            val map = HashMap<String, String>()
+            for (slot in obj.keys()) map[slot] = obj.getString(slot)
+            map
+        } catch (e: JSONException) {
+            Log.w(TAG, "cannot read the Game Mode remaps", e)
+            emptyMap()
+        }
+    }
+
+    private fun saveGameRemaps(remaps: Map<String, String>) {
+        val obj = JSONObject()
+        for ((slot, key) in remaps) obj.put(slot, key)
+        getSharedPreferences(LAUNCH_PREFS, MODE_PRIVATE)
+            .edit().putString(gameKey(KEY_REMAPS_PREFIX), obj.toString()).apply()
     }
 
     /* --------------------------------------------------------- the launcher */
@@ -1045,6 +1144,11 @@ class WhereqDosboxActivity : SDLActivity() {
                 keyboard.hidePanel()
                 return true
             }
+            // In Game Mode, Back returns to the keyboard pads rather than leaving.
+            if (isGameModeVisible()) {
+                showKeyboard()
+                return true
+            }
         }
         return super.onKeyDown(keyCode, event)
     }
@@ -1222,6 +1326,12 @@ class WhereqDosboxActivity : SDLActivity() {
 
         /** The last game Played — offered as "Resume" after a cold start. */
         private const val KEY_LAST_GAME = "last_game"
+
+        /** Per-game Game Mode memory: the folder is appended to each prefix. */
+        private const val KEY_PROFILE_PREFIX = "gm_profile_"
+        private const val KEY_DPAD_PREFIX = "gm_dpad_"
+        /** Per-game Game Mode button remaps, stored as a small JSON blob. */
+        private const val KEY_REMAPS_PREFIX = "gm_remaps_"
 
         /** Whether the "keep saves across reinstalls" offer was already shown. */
         private const val KEY_SAVES_FOLDER_OFFERED = "saves_folder_offered"

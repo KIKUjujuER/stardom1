@@ -773,11 +773,30 @@ Section_prop* Config::AddSection_prop(char const * const _name,void (*_initfunct
 }
 
 Section_prop::~Section_prop() {
-	//ExecuteDestroy should be here else the destroy functions use destroyed properties
-	ExecuteDestroy(true);
-	/* Delete properties themself (properties stores the pointer of a prop */
-	for(it prop = properties.begin(); prop != properties.end(); prop++)
-		delete (*prop);
+	/* A destroy function that fails calls E_Exit, which throws the error
+	 * message as a char*. Throwing out of a destructor calls std::terminate:
+	 * the process would abort with SIGABRT while it is only shutting down.
+	 * That is not a corner case here - the back button leaving the app tears
+	 * the emulator down exactly this way, and every exit aborted the app.
+	 * So the error is caught and printed, and the shutdown carries on.
+	 *
+	 * The message goes to stderr and not to the DOSBox logger: the logger is
+	 * one of the sections being torn down here, so it is already gone by the
+	 * time a later section fails. On Android stderr ends up in logcat under
+	 * the "DOSBox" tag. */
+	try {
+		//ExecuteDestroy should be here else the destroy functions use destroyed properties
+		ExecuteDestroy(true);
+		/* Delete properties themself (properties stores the pointer of a prop */
+		for(it prop = properties.begin(); prop != properties.end(); prop++)
+			delete (*prop);
+	} catch (char* msg) {
+		fprintf(stderr, "TEARDOWN: %s\n", msg);
+	} catch (const char* msg) {
+		fprintf(stderr, "TEARDOWN: %s\n", msg);
+	} catch (...) {
+		fprintf(stderr, "TEARDOWN: a destroy function failed\n");
+	}
 }
 
 

@@ -101,6 +101,11 @@ Each game in the list has four buttons:
 
 A game for this app is a `.zip` with a small, fixed shape:
 
+![Where do I get a game?](diagrams/ug01-where-do-i-get-a-game.svg)
+
+<details>
+<summary>The same diagram as text (the SVG above is the aligned version)</summary>
+
 ```
   the bundle
   ─────────
@@ -108,6 +113,8 @@ A game for this app is a `.zip` with a small, fixed shape:
   <the game files>  whatever the game needs
   __meta.json       the name the app shows in the list
 ```
+
+</details>
 
 That is it. The repository ships one, so you can see the shape and try the app
 immediately: [`examples/game-bundle`](https://github.com/whereq/whereq-dosbox/tree/main/examples/game-bundle)
@@ -179,6 +186,10 @@ the next key — Ctrl, then C. *Hold* it and it behaves like a real key for as
 long as your finger is down, which is what a game expects of its fire and
 strafe keys while the other thumb steers.
 
+**Double-tap Shift for Caps Lock.** Two quick taps on Shift turn Caps Lock on;
+the key reads **CAPS** and stays lit. Double-tap again to turn it off. (A slower
+second tap just cancels an armed Shift, as before.)
+
 **The mouse is the screen.** Your finger is the mouse: drag to move the
 pointer, tap to click, and the on-screen **RMB** key (on the left pad, next
 to **Tab**) is the right mouse button — in most DOS games that is *cancel* or
@@ -187,6 +198,77 @@ own position.
 
 Turn the phone to portrait and the pads fold into a single strip along the
 bottom, for the games that are taller than they are wide.
+
+---
+
+## Game Mode — a gamepad for action games
+
+Some games want a gamepad, not a typewriter. **Game Mode** replaces the keyboard
+pads with a console-style controller: a direction pad and a trackball, with the
+buttons a DOS game actually fires, jumps and strafes with.
+
+**Getting in and out is a nod to the old days.** With the keyboard pads showing,
+switch **Caps Lock** on first — double-tap **Shift**, and the key turns blue and
+reads *CAPS* — then enter the **Konami code** on the pads —
+**↑ ↑ ↓ ↓ ← → ← → B A** — and the pads flip into Game Mode. The **B** and **A**
+must be *capital*: the code watches the letters in the case you actually type
+them, so a lowercase "ba" just types "ba" into the DOS prompt. To go back,
+enter it again on the gamepad: the **↑ ↑ ↓ ↓ ← → ← →**
+on the D-pad, then **X, Y** (the two face buttons stand in for B and A). The
+phone's **Back** button also returns you to the keyboard.
+
+The gold button at the top-left names the current **profile**; tap it to cycle,
+long-press for a picker. Each game remembers the profile and D-pad you last used
+with it.
+
+| profile | left thumb | right thumb | for |
+|---|---|---|---|
+| **Hybrid** (default) | 8-way D-pad | trackball | games that mix keys and mouse — Dune II, X-COM, Doom with a mouse |
+| **Action** | 8-way D-pad | FIRE / JUMP / USE / ENT buttons | keyboard arcade/shooters — Wolf3D, Keen, Prince of Persia |
+| **Point** | big LEFT / RIGHT mouse buttons | trackball | mouse-only games — Monkey Island, Civilization, Lemmings |
+
+The **trackball** moves the pointer the way a laptop touchpad does — stroke to
+move, **tap to click** — rather than jumping it to where you touch. In Hybrid,
+holding **L-CLICK** (left shoulder) while you roll the trackball is a drag-select.
+
+### The D-pad output — ARROWS, NUMPAD, WASD
+
+DOS games don't agree on which keys "up" is. The **ARROWS** button under the
+D-pad cycles what the pad sends, and the app remembers your choice per game:
+
+| mode | up / down / left / right | a diagonal (e.g. up-right) | choose it for |
+|---|---|---|---|
+| **ARROWS** | the arrow keys ↑ ↓ ← → | **two keys at once** (↑ + →) | most games — anything that reads the cursor keys |
+| **NUMPAD** | the numeric keypad 8 / 2 / 4 / 6 | a **single** key — 7 / 9 / 1 / 3 | games built for the numpad, where a diagonal is its own key (many roguelikes and joystick-via-keypad games) |
+| **WASD** | the letters W / A / S / D | **two keys at once** (W + D) | later shooters and anything mapped to WASD |
+
+So the difference is both *which* keys the pad presses and *how a diagonal is
+sent*: ARROWS and WASD press the two neighbouring keys together, while NUMPAD has
+a real key for each of the eight directions. If your game ignores the D-pad, it is
+almost always the wrong mode — switch with the ARROWS button until it responds.
+
+### Remapping a button
+
+Sometimes a game wants a key the pad does not have — **F** to fire, **SPACE** to
+jump, the **numeric keypad** to shoot. You can teach any Game Mode button to
+send a different key, and the app remembers it for that game.
+
+**Long-press the gold profile button** (top-left, the one that names the
+profile) and choose **Remap buttons…**. The screen enters *remap mode*: a banner
+along the top says *"Tap a button to remap"*, and the buttons you can change are
+outlined in gold. **Tap one** and a list of keys opens — pick the one you want.
+**DONE** (or the banner) leaves remap mode.
+
+| you can change | you cannot change |
+|---|---|
+| **CTRL, ALT, SHIFT, TAB, STR ◂, STR ▸, SPACE, ENT, USE, JUMP** and **FIRE** | the **X** and **Y** buttons (they answer the game's *Quit? (Y/N)* prompts and the Konami code), **ESC**, the D-pad, the trackball, the mouse buttons, and the function chips (**ARROWS**, **Fn**, **1–9**, **TURBO**, **SPEED**, **DRAG**, **DBL**) |
+
+A changed button shows the new key instead of its old name — **FIRE** keeps its
+name and shows the key under it. **Reset to default**, the first entry in the
+list, puts the button back.
+
+Remaps are per game and cover every profile, so a game remembers what each
+button sends whichever profile you play it in.
 
 ---
 
@@ -285,6 +367,11 @@ folder on a fresh install.
 
 ## Where everything lives
 
+![Where everything lives](diagrams/ug02-where-everything-lives.svg)
+
+<details>
+<summary>The same diagram as text (the SVG above is the aligned version)</summary>
+
 ```
   inside the app                    the folder you picked
   ────────────                      ───────────────────
@@ -296,6 +383,8 @@ folder on a fresh install.
 
   gone when the app is removed     stays until you delete it
 ```
+
+</details>
 
 ---
 

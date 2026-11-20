@@ -2848,6 +2848,18 @@ void GFX_Events() {
 			break;
 #endif
 		case SDL_MOUSEMOTION:
+#if defined(__ANDROID__)
+			/* The Game Mode trackball injects relative motion tagged with a
+			 * magic device id (see nativePushMouseMotion in dosbox_android.cpp).
+			 * HandleMouseMotion() drops relative motion while the phone's
+			 * auto-capture is on, so feed it straight to the mouse as emulated
+			 * relative movement. WHEREQ_REL_MOUSE must match the JNI side. */
+			if (event.motion.which == 0x57515242u /* WHEREQ_REL_MOUSE "WQRB" */) {
+				Mouse_CursorMoved((float)event.motion.xrel,
+				                  (float)event.motion.yrel, 0.0f, 0.0f, true);
+				break;
+			}
+#endif
 			HandleMouseMotion(&event.motion);
 			break;
 		case SDL_MOUSEBUTTONDOWN:

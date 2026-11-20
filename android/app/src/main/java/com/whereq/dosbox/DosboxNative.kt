@@ -85,7 +85,18 @@ object DosboxNative {
     @JvmStatic
     external fun nativePushMouseButton(button: Int, pressed: Boolean): Boolean
 
-    /** SDL's right mouse button number (SDL_BUTTON_RIGHT). */
+    /**
+     * Injects relative mouse motion — the Game Mode trackball. [dx]/[dy] are a
+     * relative delta in DOS pixels (positive = right/down); they move the cursor
+     * like a laptop touchpad rather than jumping it to an absolute spot.
+     *
+     * @return true if the event was queued.
+     */
+    @JvmStatic
+    external fun nativePushMouseMotion(dx: Int, dy: Int): Boolean
+
+    /** SDL's left/right mouse button numbers (SDL_BUTTON_LEFT/RIGHT). */
+    const val SDL_BUTTON_LEFT = 1
     const val SDL_BUTTON_RIGHT = 3
 
     /**

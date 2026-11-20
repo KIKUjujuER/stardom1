@@ -24,7 +24,7 @@ each one is for, and which code answers it.
 `milestone/android-migration-complete` marks it, and it rides on the current
 release, `v1.0.0.14` (the phase itself ended with `v1.0.0.10`). From there the
 project is in **maintenance**: bug fixes and documentation polish, no new
-features. §11 is therefore a list of known gaps, not a roadmap.
+features. §12 is therefore a list of known gaps, not a roadmap.
 
 **Reading conventions.**
 
@@ -35,7 +35,7 @@ features. §11 is therefore a list of known gaps, not a roadmap.
   diff and on GitHub.
 * Numbers quoted in this document were measured, not estimated: the chip
   struct sizes come from a compile-time probe (§2.3, §6.2), the emulator
-  numbers from the log of a release APK on an x86_64 AVD (§10).
+  numbers from the log of a release APK on an x86_64 AVD (§11).
 
 ---
 
@@ -52,8 +52,9 @@ features. §11 is therefore a list of known gaps, not a roadmap.
 | [7](#7-the-dos-layer-in-the-snapshot) | The DOS layer in the snapshot | Why the open file handles need a whole subsystem |
 | [8](#8-the-bundle-launcher) | The bundle launcher | From a `.zip` on the phone to a running DOS program |
 | [9](#9-the-on-screen-keyboard) | The on-screen keyboard | The layout model, the modifier model, the stuck-key rule |
-| [10](#10-verification) | Verification | How each claim in this document was proven, and the log lines that prove it |
-| [11](#11-known-limitations-and-open-items) | Known limitations and open items | What is still not captured, what is still open |
+| [10](#10-the-game-mode-gamepad) | The Game Mode gamepad | The profiles, the D-pad and its three output modes, the trackball, the remapper, the key path |
+| [11](#11-verification) | Verification | How each claim in this document was proven, and the log lines that prove it |
+| [12](#12-known-limitations-and-open-items) | Known limitations and open items | What is still not captured, what is still open |
 | [A](#appendix-a--the-opl-register-map-as-implemented) | A: the OPL register map | The address decoding of the chip this build actually uses |
 | [B](#appendix-b--the-state-file-block-table) | B: the state file block table | Every block, its order and its size |
 | [C](#appendix-c--the-log-line-reference) | C: the log-line reference | Every diagnostic line the port can print |
@@ -71,6 +72,11 @@ em-dosbox fork) plus a thin WhereQ layer**. The port does not rewrite the
 emulator; it makes it build for Android, gives it a private writable home, adds
 a disk save-state machine that upstream does not have, and puts a phone-shaped
 shell around it.
+
+![1.1 What the app is](diagrams/tr01-1-1-what-the-app-is.svg)
+
+<details>
+<summary>The same diagram as text (the SVG above is the aligned version)</summary>
 
 ```
 ┌───────────────────────────────────────────────────────────────────────────┐
@@ -105,10 +111,17 @@ shell around it.
 └───────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ### 1.2 The three threads
 
 There are exactly three threads that matter, and the save-state machine is
 defined by how they meet.
+
+![1.2 The three threads](diagrams/tr02-1-2-the-three-threads.svg)
+
+<details>
+<summary>The same diagram as text (the SVG above is the aligned version)</summary>
 
 ```
 ┌─────────────────────────┐
@@ -139,6 +152,8 @@ defined by how they meet.
 │ SDL event / audio       │  SDL's own threads
 └─────────────────────────┘
 ```
+
+</details>
 
 The **logcat pump** is a fourth, trivial thread: `android/jni/dosbox_android.cpp`
 starts a detached pthread that reads DOSBox's `stdout`/`stderr` out of a pipe
@@ -202,6 +217,23 @@ not part of the diff above):
 | `android/jni/dosbox_android.cpp` | 387 | the JNI bridge and the sandbox setup (§4.3) |
 | `android/jni/dosbox_log.h` | 14 | `DOSBOX_LOG` → `__android_log_print(ANDROID_LOG_INFO, "whereq-dosbox", …)` |
 
+**The Kotlin app layer** is a third thing, and it is neither upstream nor part
+of the `src/` diff: it is a whole Android application (`android/app/`) that
+drives the emulator from the outside. The files that matter for this document:
+
+| File | Lines | What it is |
+|---|---|---|
+| `WhereqDosboxActivity.kt` | 1400 | the `SDLActivity` subclass: the overlays, the launcher, the per-game preferences (§8, §10.9) |
+| `VirtualKeyboardView.kt` | 1262 | the on-screen keyboard (§9) |
+| `GameModeView.kt` | 1042 | the touch gamepad (§10) — **not yet committed** |
+| `GameLibrary.kt`, `GameLauncherView.kt` | 816, 603 | the bundle import and the launcher panel (§8) |
+| `SaveStore.kt`, `BundleFolder.kt`, `GameBundle.kt` | — | the durable save store and the bundle model (§8.9) |
+| `DosboxNative.kt` | — | the Kotlin side of the JNI bridge (§4.3) |
+
+Everything in that layer reaches the emulator through the same three JNI calls
+— `nativePushKey`, `nativePushMouseButton`, `nativePushMouseMotion` — so the
+app adds **no** emulator-core behaviour beyond what §10.7 describes.
+
 **Upstream files with a WhereQ change:**
 
 | File | Change | Why |
@@ -232,6 +264,11 @@ project that never reuses them (§2.1).
 
 ### 1.4 The repository map
 
+![1.4 The repository map](diagrams/tr03-1-4-the-repository-map.svg)
+
+<details>
+<summary>The same diagram as text (the SVG above is the aligned version)</summary>
+
 ```
 whereq-dosbox/
 ├── src/ include/            upstream DOSBox (em-dosbox fork of r4305) + the
@@ -251,10 +288,14 @@ whereq-dosbox/
 ├── examples/                 game-bundle (STARFALL) and opl-test-bundle
 ├── docs/                      this document + the screenshot gallery, next to
 │                              DOSBox's own man page and porting guide
+│   └── diagrams/              the SVG drawings of this document and the
+│                              generator that makes them
 ├── bin/release.sh            the release script (tag → VERSION → APK)
 ├── downloads/                the link to the published release APK
 └── build/                    gitignored: the native build, SDL2, the APK
 ```
+
+</details>
 
 ---
 
@@ -264,6 +305,11 @@ whereq-dosbox/
 kernel, the hardware, the shell — plus the SDL2 back end. SDL2 itself is
 linked **statically**, so the APK ships exactly one native library per ABI and
 has no SDL2 dependency at runtime.
+
+![2. The native build](diagrams/tr04-2-the-native-build.svg)
+
+<details>
+<summary>The same diagram as text (the SVG above is the aligned version)</summary>
 
 ```
    third_party/SDL2-2.30.0/          android/src/… + upstream src/
@@ -282,6 +328,8 @@ has no SDL2 dependency at runtime.
                                                         ▼
                                              app-release.apk  →  lib/<abi>/libdosbox.so
 ```
+
+</details>
 
 ### 2.1 The project
 
@@ -680,13 +728,18 @@ only needs 3 M instr/s and the core can do >120 M instr/s.
 
 ▸ **The conclusion that mattered:** the "no JIT on Android" risk is **not** a
 blocker at the interpreter level. Real-device ARM64 numbers are still missing
-(§11.3).
+(§12.3).
 
 ---
 
 ## 3. The build and release pipeline
 
 ### 3.1 The two workflows
+
+![3.1 The two workflows](diagrams/tr05-3-1-the-two-workflows.svg)
+
+<details>
+<summary>The same diagram as text (the SVG above is the aligned version)</summary>
 
 ```
       push to main  /  pull request
@@ -719,6 +772,8 @@ blocker at the interpreter level. Real-device ARM64 numbers are still missing
         └──────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 The native build is the expensive part — SDL2 plus the whole DOSBox core,
 three times — so it runs as a **parallel matrix** and the libraries are handed
 to the packaging job as artifacts. The CI workflow reads **no repository
@@ -749,7 +804,7 @@ secrets**; only the release workflow does.
 | **`VERSION`** (repo root) | the single source of truth, written by `bin/release.sh` from the git tag |
 | `android/app/build.gradle` | reads `VERSION`, falls back to `1.0.0.1` if the file is missing |
 | `AndroidManifest.xml` | a fallback literal (`versionCode="1000011"`, `versionName="1.0.0.11"`), kept in step by the release script |
-| `android/cmake/config-android.h.in` | reads `VERSION` too — `android/CMakeLists.txt` substitutes it into the template (it was a stale literal, see §11.1) |
+| `android/cmake/config-android.h.in` | reads `VERSION` too — `android/CMakeLists.txt` substitutes it into the template (it was a stale literal, see §12.1) |
 
 The encoding is `versionCode = major*1e6 + minor*1e4 + patch*1e2 + build`,
 implemented identically in three places (`bin/release.sh:219-225`,
@@ -873,6 +928,11 @@ later anyway.
 
 ### 4.2 The output path
 
+![4.2 The output path](diagrams/tr06-4-2-the-output-path.svg)
+
+<details>
+<summary>The same diagram as text (the SVG above is the aligned version)</summary>
+
 ```
  SurfaceView (SDLSurface)          ← the Android surface
         │
@@ -888,6 +948,8 @@ later anyway.
         │
  src/gui/sdlmain.cpp  GFX_EndUpdate() → SDL_RenderClear / Copy / Present
 ```
+
+</details>
 
 Two Android-specific details in `src/gui/sdlmain.cpp` matter:
 
@@ -1106,6 +1168,11 @@ the template. The effective values are DOSBox's built-in defaults registered in
 
 Those defaults are what §6 depends on. The chain is:
 
+![4.5 The configuration](diagrams/tr07-4-5-the-configuration.svg)
+
+<details>
+<summary>The same diagram as text (the SVG above is the aligned version)</summary>
+
 ```
  sbtype=sb16  ──►  type = SBT_16, but a machine without a second DMA
                     controller falls back to SBT_PRO2
@@ -1114,6 +1181,8 @@ Those defaults are what §6 depends on. The chain is:
         │                              (the log shows mode=2)
  oplemu=default ─►  DBOPL::Handler      ("fast" selects the same handler)
 ```
+
+</details>
 
 So this build runs the **DBOPL** handler in **OPL3** mode — which is exactly
 the chip the exact snapshot of §6.3 describes. (`oplemu=compat` and
@@ -1167,6 +1236,11 @@ So the conversion is done inside DOSBox instead —
 `android_handle_touch()` in `src/gui/sdlmain.cpp`, fenced by
 `#if defined(__ANDROID__)`:
 
+![4.7 ▸ Touch, the mouse and the relative-mouse trap](diagrams/tr08-4-7-touch-the-mouse-and-the-relative-mouse-trap.svg)
+
+<details>
+<summary>The same diagram as text (the SVG above is the aligned version)</summary>
+
 ```
   SDL_FINGERDOWN / SDL_FINGERMOTION / SDL_FINGERUP
         │
@@ -1185,6 +1259,8 @@ So the conversion is done inside DOSBox instead —
         ▼
   Mouse_CursorMoved(0, 0, rx, ry, sdl.mouse.locked)
 ```
+
+</details>
 
 ▸ **A click is a held button, not a tap.** The first finger presses the LEFT
 button on `SDL_FINGERDOWN` and releases it on `SDL_FINGERUP`, so the button is
@@ -1260,6 +1336,11 @@ and six result codes:
 
 The UI thread never touches the machine. It posts a request and blocks.
 
+![5.2 The request lifecycle](diagrams/tr09-5-2-the-request-lifecycle.svg)
+
+<details>
+<summary>The same diagram as text (the SVG above is the aligned version)</summary>
+
 ```
  Android UI thread                DOSBox thread                    the file
  ───────────────────               ─────────────                    ────────
@@ -1296,6 +1377,8 @@ The UI thread never touches the machine. It posts a request and blocks.
        return rc
      setStatus(message)
 ```
+
+</details>
 
 Two consequences of the split:
 
@@ -1360,6 +1443,11 @@ A request is only serviced when the machine is in a state where replacing it is
 safe. There are **three gates**, and a request that fails any of them simply
 waits — it is not failed.
 
+![5.3 ▸ The safe point](diagrams/tr10-5-3-the-safe-point.svg)
+
+<details>
+<summary>The same diagram as text (the SVG above is the aligned version)</summary>
+
 ```
                    ┌──────────────────────────────────────┐
    request ───────►│ gate 1: has the guest started?       │
@@ -1390,6 +1478,8 @@ waits — it is not failed.
                    │ do_save() / do_load()                 │
                    └──────────────────────────────────────┘
 ```
+
+</details>
 
 **Why gate 1.** DOSBox paints its start-up banner and the autoexec's output
 through the BIOS, and the BIOS runs the machine loop while it does so. The
@@ -1450,6 +1540,11 @@ exactly that.
 
 ### 5.4 The file format
 
+![5.4 The file format](diagrams/tr11-5-4-the-file-format.svg)
+
+<details>
+<summary>The same diagram as text (the SVG above is the aligned version)</summary>
+
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
 │ SSHeader  (24 bytes)                                                     │
@@ -1479,6 +1574,8 @@ exactly that.
 │ DOS             the DOS layer (handles, drive, code page, current dirs)   │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 The file is a **fixed-order sequence of raw blocks**. There is no
 tag/length framing: the order *is* the format, and the payload size is
@@ -1748,6 +1845,11 @@ Both are FNV-1a over the bytes.
 "Resume" is not a save-state feature — it is a launcher feature that happens to
 use one.
 
+![5.9 The Resume path](diagrams/tr12-5-9-the-resume-path.svg)
+
+<details>
+<summary>The same diagram as text (the SVG above is the aligned version)</summary>
+
 ```
   Files panel
      │  "▶ Resume STARFALL · slot 1 · 5 min ago"
@@ -1772,6 +1874,8 @@ use one.
                └─ failure → relaunch(folder, null) so the player is never
                             left staring at a bare DOS prompt
 ```
+
+</details>
 
 ▸ The **process is killed and restarted** for every launch. DOSBox's whole
 machine lives in RAM, and there is no way to hand a running emulator over to a
@@ -1816,6 +1920,11 @@ the chip is snapshotted wholesale.
 The handler that runs by default is `DBOPL::Handler` (`oplemu=default`,
 §4.5). Its state is one struct:
 
+![6.2 The chip, as built](diagrams/tr13-6-2-the-chip-as-built.svg)
+
+<details>
+<summary>The same diagram as text (the SVG above is the aligned version)</summary>
+
 ```
 struct Chip {
     Channel chan[18];              // 9 channels per bank × 2 banks
@@ -1858,6 +1967,8 @@ struct Operator {
     Bit8u   tremoloMask, vibStrength, ksr;
 };
 ```
+
+</details>
 
 Measured sizes on the x86_64 build:
 
@@ -1942,6 +2053,11 @@ static bool load_chip_exact( Chip& chip, FILE* f ) {
 }
 ```
 
+![6.4 ▸ The pointer re-derivation](diagrams/tr14-6-4-the-pointer-re-derivation.svg)
+
+<details>
+<summary>The same diagram as text (the SVG above is the aligned version)</summary>
+
 ```
         the file                        the live chip
      ┌──────────────┐                ┌──────────────────────┐
@@ -1957,6 +2073,8 @@ static bool load_chip_exact( Chip& chip, FILE* f ) {
                                      │  lfoCounter, old[]   │      point of the
                                      └──────────────────────┘      whole exercise
 ```
+
+</details>
 
 Two details are easy to get wrong and are worth stating explicitly:
 
@@ -2132,6 +2250,11 @@ DOSBox keeps the open files in **one global table**, `Files[]`
 pointer: the guest's **Job File Table** — which lives in the PSP, i.e. in the
 guest's own memory — stores the **index** of the entry in that table.
 
+![7.1 The problem](diagrams/tr15-7-1-the-problem.svg)
+
+<details>
+<summary>The same diagram as text (the SVG above is the aligned version)</summary>
+
 ```
    the guest's memory (restored with the RAM)
    ┌────────────────────────────────┐
@@ -2152,6 +2275,8 @@ guest's own memory — stores the **index** of the entry in that table.
    │ Files[12] → the console device                │
    └──────────────────────────────────────────────┘
 ```
+
+</details>
 
 The table therefore has to be **rebuilt in exactly the same order** after a
 restore. Otherwise the guest reads through a handle that points at nothing
@@ -2315,6 +2440,11 @@ The DOS block is read **after** everything else, on purpose:
 
 So the order in the file is not arbitrary — it is a dependency order:
 
+![7.4 Why the DOS block comes last](diagrams/tr16-7-4-why-the-dos-block-comes-last.svg)
+
+<details>
+<summary>The same diagram as text (the SVG above is the aligned version)</summary>
+
 ```
    CPU → RAM → paging → VGA → clock → PIC/TIMER → FPU → speaker → OPL → DOS
                                                                     └── last:
@@ -2325,6 +2455,8 @@ So the order in the file is not arbitrary — it is a dependency order:
                                                                         block itself
                                                                         restores
 ```
+
+</details>
 
 ▸ This is also why the OPL block must be consumed even when the handler
 cannot restore itself (§6.6): a block that is skipped shifts everything behind
@@ -2338,6 +2470,11 @@ A **bundle** is a `.zip` archive with a DOS game in it. The launcher turns it
 into a running DOS program through five steps, each of which exists because of
 a specific limitation of DOSBox on Android.
 
+![8. The bundle launcher](diagrams/tr17-8-the-bundle-launcher.svg)
+
+<details>
+<summary>The same diagram as text (the SVG above is the aligned version)</summary>
+
 ```
  ① pick              ② unpack             ③ rename            ④ write          ⑤ boot
  ───────             ──────               ───────             ───────          ─────
@@ -2346,6 +2483,8 @@ a specific limitation of DOSBox on Android.
   + EXTRA_           path traversal,      truncated,                        process,
     MIME_TYPES       512 MB cap           spaces removed                    [autoexec]
 ```
+
+</details>
 
 The three files that carry the whole launcher:
 
@@ -2356,6 +2495,11 @@ The three files that carry the whole launcher:
 | `WhereqDosboxActivity.kt` | 1050 | the picker, the relaunch, the slot files, the `[autoexec]` line |
 
 ### 8.1 The on-disk layout
+
+![8.1 The on-disk layout](diagrams/tr18-8-1-the-on-disk-layout.svg)
+
+<details>
+<summary>The same diagram as text (the SVG above is the aligned version)</summary>
 
 ```
  /data/data/com.whereq.dosbox/
@@ -2379,6 +2523,8 @@ The three files that carry the whole launcher:
          ├── G1/slot3.sav
          └── G2/slot1.sav …
 ```
+
+</details>
 
 ▸ **The slot files are outside the C: mount.** They live under `noBackupFilesDir`
 (`WhereqDosboxActivity.kt:386`), not under `filesDir`, so they never appear
@@ -2425,6 +2571,11 @@ filtered out by the type list alone.
 `GameLibrary.install()` (`GameLibrary.kt:117`) unpacks the archive with
 `ZipInputStream`. Three guards run while it does:
 
+![8.3 ▸ Installing: the three guards](diagrams/tr19-8-3-installing-the-three-guards.svg)
+
+<details>
+<summary>The same diagram as text (the SVG above is the aligned version)</summary>
+
 ```
   entry ──► isDirectory? ──► skip
       │
@@ -2448,6 +2599,8 @@ filtered out by the type list alone.
   the folder is deleted again and the install fails cleanly
 ```
 
+</details>
+
 | Limit | Value | Rationale |
 |---|---|---|
 | `MAX_UNPACKED_BYTES` | 512 MB | a DOS game is a few megabytes; more is a broken archive or a zip bomb |
@@ -2470,6 +2623,11 @@ characters plus three and drops the spaces
 `RESOURCE.CFG` therefore ends up at `RESOURC.CFG` — so the app writes the files
 under exactly that name.
 
+![8.4 ▸ The DOS naming rule](diagrams/tr20-8-4-the-dos-naming-rule.svg)
+
+<details>
+<summary>The same diagram as text (the SVG above is the aligned version)</summary>
+
 ```
   zip entry name            stored as            why
   ───────────────────────── ──────────────────── ──────────────────────────────
@@ -2481,6 +2639,8 @@ under exactly that name.
   "LONG1.CFG"               LONG.CFG             the base is cut to 8
   "LONG2.CFG"               LONG~1.CFG           the second one gets a number
 ```
+
+</details>
 
 Two rules make this safe:
 
@@ -2506,6 +2666,11 @@ cosmetic; it is the reason an installer inside the game finds its own data.
 starts the game. Only the **root** of the bundle is considered first — a start-up
 file deeper in the tree is data, not the entry point.
 
+![8.5 ▸ The entry-point heuristic](diagrams/tr21-8-5-the-entry-point-heuristic.svg)
+
+<details>
+<summary>The same diagram as text (the SVG above is the aligned version)</summary>
+
 ```
   the root of the bundle
         │
@@ -2528,6 +2693,8 @@ file deeper in the tree is data, not the entry point.
         └─► nothing in the root → the whole bundle:
               the first .bat, else the biggest file
 ```
+
+</details>
 
 ▸ **The driver filter is the important part.** A bundle like 三国志英杰传 ships
 `INSTALL.EXE`, `GRPDRV.EXE` and `MAIN.EXE` side by side. Auto-running the
@@ -2582,6 +2749,11 @@ val autostart = "\r\nC:\\" + GameBundle.DOS_GAMES_DIR + "\\" +
     pendingLaunch + "\\RUN.BAT\r\n"
 ```
 
+![8.6 `RUN.BAT` and the `[autoexec]`](diagrams/tr22-8-6-run-bat-and-the-autoexec.svg)
+
+<details>
+<summary>The same diagram as text (the SVG above is the aligned version)</summary>
+
 ```
  dosbox.conf (from the asset, regenerated every boot)
  ─────────────────────────────────────────────────────
@@ -2590,6 +2762,8 @@ val autostart = "\r\nC:\\" + GameBundle.DOS_GAMES_DIR + "\\" +
  c:
  C:\GAMES\G1\RUN.BAT          ◄── appended by the app
 ```
+
+</details>
 
 ▸ The configuration is **regenerated from the asset on every boot**
 (`writeConfig()`, `WhereqDosboxActivity.kt:886`), so the shipped settings always
@@ -2602,6 +2776,11 @@ would be lost — that is a deliberate trade, documented in the method's comment
 
 `play()` (`WhereqDosboxActivity.kt:754`) does **not** type into the running
 DOSBox. It tears the process down and boots a fresh one:
+
+![8.7 ▸ Why a relaunch, and not "type the command"](diagrams/tr23-8-7-why-a-relaunch-and-not-type-the-command.svg)
+
+<details>
+<summary>The same diagram as text (the SVG above is the aligned version)</summary>
 
 ```
   play(bundle)
@@ -2623,6 +2802,8 @@ DOSBox. It tears the process down and boots a fresh one:
       └─ Runtime.getRuntime().exit(0)
             the new process boots DOSBox from scratch
 ```
+
+</details>
 
 Two reasons, both about DOSBox:
 
@@ -2670,6 +2851,11 @@ every save". `SaveStore` (`SaveStore.kt`) adds a second layer outside the
 sandbox: a folder the **user** picks on their phone, reached through the
 Storage Access Framework.
 
+![8.9 ▸ The durable saves folder](diagrams/tr24-8-9-the-durable-saves-folder.svg)
+
+<details>
+<summary>The same diagram as text (the SVG above is the aligned version)</summary>
+
 ```
   the app                        the phone's own storage
   ──────                        ─────────────────────
@@ -2679,6 +2865,8 @@ Storage Access Framework.
                                      slot2.gz
                                      bundle.zip      (the game itself)
 ```
+
+</details>
 
 | | |
 |---|---|
@@ -2734,6 +2922,11 @@ graphics and font TSRs of the Chinese and KOEI releases). The "Launch…" editor
 (`GameLauncherView.showLaunchEditor()`, `GameLauncherView.kt:359`) lets the user
 write the DOS commands that run after the `CD`:
 
+![8.10 The launch editor](diagrams/tr25-8-10-the-launch-editor.svg)
+
+<details>
+<summary>The same diagram as text (the SVG above is the aligned version)</summary>
+
 ```
   Launch STARFALL                          ┌──────────────────────────┐
   ┌──────────────────────────────┐        │ Clear   A:   C:          │
@@ -2743,6 +2936,8 @@ write the DOS commands that run after the `CD`:
    Tap a file below to add it as a line.      ← horizontally scrolling
    A:/B: are already mounted to the game.
 ```
+
+</details>
 
 The chips are **inserts**, not replacements: tapping one appends the file's name
 (without its extension) as a new line. Typing on a phone is painful, so the
@@ -2814,6 +3009,11 @@ DOS input.
 
 ### 9.1 The overlay
 
+![9.1 The overlay](diagrams/tr26-9-1-the-overlay.svg)
+
+<details>
+<summary>The same diagram as text (the SVG above is the aligned version)</summary>
+
 ```
  ┌──────────────────────────────────────────────────────────────────────────┐
  │                                                                          │
@@ -2831,6 +3031,8 @@ DOS input.
  │   its own mouse input                                                      │
  └──────────────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 Three properties of the overlay view (`VirtualKeyboardView.kt:134-146`):
 
@@ -2858,6 +3060,11 @@ val barWidth = if (w > h) maxOf(0, (w - h * 4 / 3) / 2) else 0
 
 and the layout follows from it:
 
+![9.2 ▸ Three layouts, chosen by geometry](diagrams/tr27-9-2-three-layouts-chosen-by-geometry.svg)
+
+<details>
+<summary>The same diagram as text (the SVG above is the aligned version)</summary>
+
 ```
   barWidth  (dp)
       │
@@ -2871,12 +3078,19 @@ and the layout follows from it:
             a slim bar at the bottom + the fold-up QWERTY
 ```
 
+</details>
+
 | Constant | Value | Meaning |
 |---|---|---|
 | `DP_MIN_PAD_WIDTH` | 116 dp | below this a bar cannot hold five keys in a row |
 | `DP_MAX_PAD_WIDTH` | 210 dp | a wider pad puts its inner keys out of a thumb's reach |
 | `DP_MIN_COLUMN_WIDTH` | 56 dp | below this a bar cannot hold even a column of keys |
 | `DP_MAX_COLUMN_WIDTH` | 132 dp | |
+
+![9.2 ▸ Three layouts, chosen by geometry](diagrams/tr28-9-2-three-layouts-chosen-by-geometry.svg)
+
+<details>
+<summary>The same diagram as text (the SVG above is the aligned version)</summary>
 
 ```
  MODE_PADS — the left pad                    the right pad
@@ -2915,6 +3129,8 @@ and the layout follows from it:
  └──────┴──────────────────────┴──────┘
 ```
 
+</details>
+
 The left column carries **File**, **⌨**, **Esc**, **Tab** and **RMB** above the
 arrows; the right one carries the action keys. **RMB** is in all three layouts,
 so a right click is always one tap away.
@@ -2947,6 +3163,11 @@ button — RIGHT down on touch, up on release, at the current DOS cursor (§4.7)
 
 The three layers are the two halves of a split QWERTY:
 
+![9.3 The key model](diagrams/tr29-9-3-the-key-model.svg)
+
+<details>
+<summary>The same diagram as text (the SVG above is the aligned version)</summary>
+
 ```
   LAYER_LETTERS (0)              LAYER_SYMBOLS (1)             LAYER_FUNCTIONS (2)
   ┌─────────────────┐            ┌─────────────────┐           ┌─────────────────┐
@@ -2963,6 +3184,8 @@ The three layers are the two halves of a split QWERTY:
   └─────────────────┘            └─────────────────┘           └─────────────────┘
 ```
 
+</details>
+
 ▸ **The letters carry `: . / \` along.** The right-hand third row is
 `h j k l ;` and the bottom row is `n m . / \`, so a DOS path — `C:\GAMES\G1` —
 needs no layer switch at all. That is the difference between a keyboard you can
@@ -2977,6 +3200,11 @@ tapping it again switches back (`showLayer()` is called with the other layer).
 `Fn` does the same for the function layer.
 
 ### 9.4 ▸ The path of a key press
+
+![9.4 ▸ The path of a key press](diagrams/tr30-9-4-the-path-of-a-key-press.svg)
+
+<details>
+<summary>The same diagram as text (the SVG above is the aligned version)</summary>
 
 ```
   the finger
@@ -3004,13 +3232,36 @@ tapping it again switches back (`showLayer()` is called with the other layer).
       │  the mapper indexes its bind list by the *scancode*
       │  and activates the matching CKeyEvent
       ▼
-  KEYBOARD_AddKey()  →  the BIOS keyboard buffer the DOS shell reads
+  KEYBOARD_AddKey(KBD_KEYS, pressed)   src/hardware/keyboard.cpp:228
+      │  the KBD_KEYS → PC scancode table, then the emulated 8042 buffer
+      ▼
+  PIC_ActivateIRQ(1)                   src/hardware/keyboard.cpp:55-60
+      ▼
+  IRQ 1 → INT 09h → IRQ1_Handler       src/ints/bios_keyboard.cpp:233
+      │  DOS_LayoutKey() → BIOS_AddKeyToBuffer()
+      ▼
+  the BIOS keyboard buffer at 0x41A/0x41C + 0x41E
+      ▼
+  INT 16h AH=00h — the guest reads the keystroke
 ```
+
+</details>
 
 ▸ **No DOSBox patch is involved.** The virtual keyboard is just another
 producer of SDL key events, exactly like the hardware keyboard. That is why
 the keyboard needs nothing from the emulator except the scancode table in the
 JNI layer.
+
+▸ **The keystroke takes the whole hardware path.** It does *not* shortcut
+into the BIOS buffer: it goes through the emulated 8042, raises **IRQ 1**, and
+is delivered by **INT 09h** like a real keystroke. A guest that installs its
+own INT 09h hook, or that intercepts keys through INT 15h AH=4Fh, therefore
+sees the virtual keys too. The interrupt-level version of this chain is in
+`docs/INTERRUPTS.md` §6.
+
+▸ **The Game Mode gamepad takes exactly the same path** — it pushes the same
+SDL key events, so a thumb on the gamepad and a finger on the keyboard are
+indistinguishable to the guest (§10.7).
 
 ▸ **A press before SDL is up is dropped.** `nativePushKey` checks
 `SDL_WasInit(SDL_INIT_VIDEO)` and returns `false` when SDL has not started yet
@@ -3049,6 +3300,11 @@ The state is five pieces per modifier:
 | `usedWhileHeld[key]` | `Set` | a key was typed while the finger was down |
 | `disarmedByTouch[key]` | `Set` | the user tapped it a second time to cancel it |
 
+![9.5 ▸ The modifier model](diagrams/tr31-9-5-the-modifier-model.svg)
+
+<details>
+<summary>The same diagram as text (the SVG above is the aligned version)</summary>
+
 ```
   DOWN on a modifier
       │
@@ -3071,6 +3327,8 @@ The state is five pieces per modifier:
                  ├─ yes ──► release it with the finger (push(up), armed = false)
                  └─ no  ──► leave it ARMED: a short tap arms the next key
 ```
+
+</details>
 
 ▸ **The 350 ms threshold (`HOLD_MILLIS`) is what separates the two gestures.**
 A short tap arms the modifier for the next key; a longer hold behaves like a
@@ -3096,6 +3354,11 @@ guest with a stuck key.
 
 The rebuild releases everything first (`rebuildControls()`, `VirtualKeyboardView.kt:172`):
 
+![9.6 ▸ The stuck-key rule](diagrams/tr32-9-6-the-stuck-key-rule.svg)
+
+<details>
+<summary>The same diagram as text (the SVG above is the aligned version)</summary>
+
 ```
   releaseModifiers(force = true)      every armed modifier is pushed up
       │
@@ -3109,6 +3372,8 @@ The rebuild releases everything first (`rebuildControls()`, `VirtualKeyboardView
       ▼
   removeAllViews(); the state maps are cleared; layer = LAYER_LETTERS
 ```
+
+</details>
 
 ▸ `downScancodes` is a **set of scancodes**, not a list of keys. Two keys that
 map to the same scancode are held once in DOSBox, so the set holds it once —
@@ -3174,20 +3439,308 @@ the emulator with the display resized to 2160×1080.
 
 ---
 
-## 10. Verification
+## 10. The Game Mode gamepad
+
+The on-screen keyboard (§9) is for **typing**. Game Mode is for **playing**:
+the same letterbox bars, the same geometry, a different set of controls. It is
+a **WhereQ-only** feature — nothing in `src/` or `include/` knows it exists,
+and that is deliberate (§10.7).
+
+The whole feature is one Kotlin file,
+`android/app/src/main/java/com/whereq/dosbox/GameModeView.kt` (1042 lines),
+plus the hosting in `WhereqDosboxActivity.kt`.
+
+```
+  10.1  The shape: three profiles over one skeleton
+  10.2  The geometry: the same bars as the keyboard
+  10.3  The D-pad: eight octants, three output modes
+  10.4  The trackball: relative motion, tap = click
+  10.5  The buttons: hold, tap, and FIRE
+  10.6  The remapper: one map per game
+  10.7  The key path: the gamepad is a keyboard
+  10.8  The Konami code, in and out
+  10.9  The per-game memory
+```
+
+### 10.1 The shape: three profiles over one skeleton
+
+One layout is built for each pad — a top bar, an upper row, a big centre
+control and a bottom row (`GameModeView.kt:184`) — and the **profile** only
+changes the labels and the centre control. The DOS picture is never touched:
+switching profile rebuilds the two pads and nothing else.
+
+| profile | left thumb | right thumb | for |
+|---|---|---|---|
+| **HYBRID** (default) | 8-way D-pad | trackball, L/R-CLICK shoulders | games that mix keys and mouse — Dune II, X-COM, Doom with a mouse |
+| **ACTION** | 8-way D-pad | face diamond: **FIRE** (Ctrl), **JUMP** (Alt), **USE** (Space), **ENT**; shoulders **SHIFT**/**TAB**, strafe **,** / **.** | keyboard arcade/shooters — Wolf3D, Keen, Prince of Persia |
+| **POINT & CLICK** | big LEFT/RIGHT mouse buttons | trackball, DRAG lock, DBL, SHIFT/CTRL modifiers, pointer speed | mouse-only games — Monkey Island, Civilization, Lemmings |
+
+The profile is chosen from the gold button in the top-left corner: a **tap**
+cycles it, a **long press** opens a picker with the three profiles plus the
+remap entry (`GameModeView.kt:324`). The D-pad output mode is a chip in the
+bottom row of the left pad — **ARROWS**, **NUMPAD** or **WASD**.
+
+The two face buttons at the top right are **Y** and **X**. They are not
+remappable, and they are not decoration: they answer the *Quit? (Y/N)* prompt
+of a DOS game, and they are the last two tokens of the exit code (§10.8).
+
+### 10.2 The geometry: the same bars as the keyboard
+
+The pads live in the letterbox bars beside the 4:3 DOS picture, and the bar
+width is computed the same way as in §9.2:
+
+```kotlin
+val barWidth = if (w > h) maxOf(0, (w - h * 4 / 3) / 2) else 0   // GameModeView.kt:146
+```
+
+Two differences from the keyboard:
+
+- the pad is **capped** at `DP_MAX_PAD_WIDTH` (230 dp) so the controls do not
+  stretch across a wide screen (`GameModeView.kt:171`);
+- below `DP_MIN_PAD_WIDTH` (120 dp) there is no room for a gamepad at all, so
+  the view shows one line — *"Rotate to landscape for Game Mode — press Back
+  for the keyboard"* (`GameModeView.kt:156-169`). Game Mode is a landscape
+  feature; the hardware Back button returns to the keyboard.
+
+### 10.3 The D-pad: eight octants, three output modes
+
+The D-pad is a circle, not four buttons (`DpadView`, `GameModeView.kt:742`).
+The touch point is reduced to one of **eight octants** — 0=E, 1=NE, 2=N, 3=NW,
+4=W, 5=SW, 6=S, 7=SE — with a dead zone of 30 % of the radius
+(`DEADZONE`, `GameModeView.kt:994`). A cardinal octant emits **one** key; a
+diagonal emits **two** keys at once, because that is what a keyboard does when
+you hold two arrows.
+
+The three output modes differ exactly here:
+
+| mode | E | NE | N | NW | W | SW | S | SE |
+|---|---|---|---|---|---|---|---|---|
+| **ARROWS** | right | up+right | up | up+left | left | down+left | down | down+right |
+| **WASD** | d | w+d | w | w+a | a | s+a | s | s+d |
+| **NUMPAD** | kp_6 | kp_9 | kp_8 | kp_7 | kp_4 | kp_1 | kp_2 | kp_3 |
+
+(`ARROWS_OCT` / `WASD_OCT` / `NUMPAD_OCT`, `GameModeView.kt:1009-1020`.)
+
+▸ **Why NUMPAD is not "arrows, but numeric".** A DOS game that was written for
+a joystick reads the **numeric keypad**, not the arrow keys: Num 8 is up, Num 2
+is down, and the diagonals are the single keys 7, 9, 1 and 3 — exactly how the
+IBM PC's keyboard cluster was laid out so a joystick could be read through the
+keypad. That is why the NUMPAD row has *one* key per diagonal where the other
+two rows have two: the diagonals are single keys in the BIOS layout too, so
+pressing kp_7 and kp_9 together would be wrong.
+
+### 10.4 The trackball: relative motion, tap = click
+
+The trackball (`TrackballView`, `GameModeView.kt:866`) is **relative**, the way
+a laptop touchpad is: the pointer does not jump to where you touch, it moves by
+the distance you drag. The motion is scaled by `trackSpeed` (the SPEED chip in
+the POINT profile) and sent to DOSBox as an SDL mouse-motion event tagged with
+the magic device id `WHEREQ_REL_MOUSE` (`android/jni/dosbox_android.cpp:400-436`).
+
+That tag is what makes it work at all. DOSBox's own `HandleMouseMotion()` drops
+relative motion while the phone's auto-capture is on, so `GFX_Events()` picks
+the tagged event out of the queue and feeds it straight to the emulated mouse
+(`src/gui/sdlmain.cpp:2850-2861`):
+
+```c
+if (event.motion.which == 0x57515242u /* WHEREQ_REL_MOUSE "WQRB" */) {
+    Mouse_CursorMoved((float)event.motion.xrel, (float)event.motion.yrel, 0.0f, 0.0f, true);
+    break;
+}
+```
+
+A **tap** — down and up within `TAP_MS` (220 ms) and less than `TAP_SLOP_DP`
+(10 dp) of movement — is a left click. On the DOS side that is the same
+held-button semantics as §4.7: the button is a *level*, so the click is real
+for as long as the finger is down.
+
+### 10.5 The buttons: hold, tap, and FIRE
+
+Three button kinds, one key path:
+
+| kind | behaviour | used by |
+|---|---|---|
+| `holdKey` | the key is held down while the finger is down, released on lift | CTRL, ALT, SHIFT, TAB, SPACE, ENT, USE, JUMP, STR ◂/▸, and the POINT profile's SHIFT/CTRL click modifiers |
+| `tapKey` | a press and a release, with a haptic tick | **Y**, **X**, ESC, the Fn/1–9 strip |
+| `fireButton` | the fire key held down — and re-struck every `TURBO_PERIOD_MS` (70 ms) **when the TURBO toggle is on** | **FIRE** in the ACTION profile |
+
+`holdKey` and `tapKey` differ only in that `tapKey` also feeds the exit-code
+detector (§10.8). The FIRE button keeps its own name and shows the key it
+sends as its sub-label, because "FIRE" is what the profile means by it — the
+key underneath is Ctrl, unless a remap says otherwise
+(`GameModeView.kt:419-452`).
+
+▸ **Nothing sticks.** Every key the gamepad holds is tracked in `downKeys`, and
+`releaseAll()` pushes the release for each one when the view is hidden or the
+pads are rebuilt (`GameModeView.kt:90`, `:128-131`, `:149`). A rebuild happens
+on a profile change, a D-pad change and a remap — so a thumb that was down
+during a remap would otherwise leave a key stuck down inside DOSBox.
+
+### 10.6 The remapper: one map per game
+
+A DOS game wants a different key for "fire" than the next one, and the owner
+should not have to pick a global compromise. So the gamepad's key-sending
+buttons are **remappable**, per game.
+
+The model is a flat map from a **slot** to a key name:
+
+```
+slot = "<profile>:<defaultKey>"        e.g. "ACTION:ctrl"  →  "f5"
+```
+
+(`slotFor`, `GameModeView.kt:546`.) One map covers all three profiles, because
+the slot names the profile it belongs to.
+
+The gesture is a **mode**, not a long press per button — a long press would
+collide with hold-to-fire. It is entered from the gold profile button's
+long-press menu, whose fourth entry is *"Remap buttons…"* (it becomes *"Done
+remapping"* while the mode is on, so the mode always has an exit):
+
+- while the mode is on, a **gold outline** marks the buttons that can be
+  remapped (`markRemappable`, `GameModeView.kt:577`) — the key-sending buttons
+  and FIRE, and *not* Y/X, ESC, the D-pad, the trackball, the mouse buttons or
+  the function chips;
+- a tap on an outlined button opens a **picker**: *"Reset to default"* first,
+  then the curated `REMAP_CHOICES` — the action keys, F1–F12, A–Z, 0–9, the
+  four arrows and eight symbols (`GameModeView.kt:585-602`, `:982-992`);
+- a **banner** at the top of the picture area shows *DONE* and *"Tap a button
+  to remap"* (`GameModeView.kt:624`). It is at the top, mirroring the Fn/1–9
+  strip at the bottom, so it can never cover a control.
+
+The map is stored per game as a small JSON blob, `gm_remaps_<folder>`, in the
+`LAUNCH_PREFS` shared preferences
+(`WhereqDosboxActivity.kt:339-358`, `:1334`).
+
+▸ **Two bugs that only driving the UI could find.** The first version of the
+banner was added once, when remap mode was entered — so the rebuild that a
+remap itself triggers destroyed it, and the user was stuck in remap mode with
+no way out. The banner is now rebuilt with the pads whenever `remapMode` is on
+(`GameModeView.kt:180`). The second: a long press on the profile button while
+in remap mode *re-entered* remap mode instead of leaving it; the menu entry now
+toggles.
+
+### 10.7 The key path: the gamepad is a keyboard
+
+This is the design decision that matters most, and it is the reason Game Mode
+needs **nothing** from the emulator core.
+
+The gamepad pushes the same SDL key events as the on-screen keyboard
+(`GameModeView.kt:651`, `DosboxNative.nativePushKey`), so the whole path of
+§9.4 applies unchanged — and that path ends in an *interrupt*, not in a
+shortcut:
+
+![10.7 The key path: the gamepad is a keyboard](diagrams/tr33-10-7-the-key-path-the-gamepad-is-a-keyboard.svg)
+
+<details>
+<summary>The same diagram as text (the SVG above is the aligned version)</summary>
+
+```
+  the thumb
+      │
+      ▼
+  GameModeView.push(keyName, pressed)          GameModeView.kt:651
+      │  scancode = nativeScancodeFromName(keyName)
+      ▼
+  SDL_PushEvent(SDL_KEYDOWN / SDL_KEYUP)       android/jni/dosbox_android.cpp:282-314
+      ▼
+  GFX_Events() → sdl_mapper
+      │  the bind list is indexed by the *scancode*;
+      │  the default bind for it is a CKeyEvent
+      ▼
+  KEYBOARD_AddKey(KBD_KEYS, pressed)           src/hardware/keyboard.cpp:228
+      │  the KBD_KEYS → PC scancode table, then the emulated 8042 buffer
+      ▼
+  PIC_ActivateIRQ(1)                           src/hardware/keyboard.cpp:55-60
+      ▼
+  IRQ 1 → INT 09h → IRQ1_Handler               src/ints/bios_keyboard.cpp:233
+      │  DOS_LayoutKey() → BIOS_AddKeyToBuffer()
+      ▼
+  the BIOS keyboard buffer at 0x41A/0x41C + 0x41E
+      ▼
+  INT 16h AH=00h — the guest reads the keystroke
+```
+
+</details>
+
+The full chain, with the interrupt-level consequences, is in
+`docs/INTERRUPTS.md` §6.
+
+▸ **What the guest can tell, and what it cannot.** The guest sees a keyboard.
+A game that reads the BIOS keyboard buffer, that installs its own INT 09h hook,
+or that intercepts keys through INT 15h AH=4Fh cannot distinguish a thumb on
+the gamepad from a finger on the virtual keyboard from a real Bluetooth
+keyboard. That is a feature: a DOS game that was written for a keyboard works
+with the gamepad, and one that was written for a joystick wants the **NUMPAD**
+mode, which is the keyboard's own joystick-emulation layout.
+
+▸ **The mouse is a separate path.** The trackball and the mouse buttons do not
+go through the keyboard at all: the motion becomes a tagged SDL mouse-motion
+event and the buttons become real `SDL_MOUSEBUTTONDOWN`/`UP` events, which is
+the INT 33h driver's business, not INT 16h's (`docs/INTERRUPTS.md` §5).
+
+### 10.8 The Konami code, in and out
+
+Game Mode is entered by the **Konami code** on the keyboard, and left by the
+reverse code on the gamepad — the same gesture, mirrored.
+
+**In** (on the on-screen keyboard): `↑ ↑ ↓ ↓ ← → ← → B A`. The **B and A must
+be capital**. The keyboard watches every key-down, and a letter contributes the
+case it is *actually* typed in — Caps Lock on (double-tap Shift), or a tapped
+or held Shift, makes it capital (`konamiToken`,
+`VirtualKeyboardView.kt:1037-1041`; the sequence itself is
+`GameModeView.KonamiDetector.KEYBOARD_ENTER_SEQUENCE`, `GameModeView.kt:975`).
+A lowercase "ba" is just "ba" in the DOS prompt.
+
+▸ **Why the case is decided in the app.** Caps Lock is *not* DOSBox's
+CapsLock scancode: SDL only reports lock *states*, and DOSBox's handling of a
+synthetic press+release does not survive it, so the app applies the case
+itself by wrapping Shift around the letter (`VirtualKeyboardView.kt:936-941`).
+The app therefore always knows the effective case — which is what lets the
+detector match on capitals. The guest-side consequence is that the BIOS's own
+caps flag stays clear: a capital letter reaches the guest as **Shift + a
+letter**, not as a locked state (`docs/INTERRUPTS.md` §6).
+
+**Out** (on the gamepad): the D-pad's `↑ ↑ ↓ ↓ ← → ← →` and then the **X, Y**
+buttons, which stand in for B and A (`GAME_EXIT_SEQUENCE`,
+`GameModeView.kt:967`). The D-pad feeds the detector on the cardinals only
+(`cardinalToken`, `GameModeView.kt:1005`, fed from `setActive`, `:844`), and
+the hardware Back button returns to the keyboard as well
+(`WhereqDosboxActivity.kt:1147-1151`).
+
+Both detectors are the same nested class — `KonamiDetector`, a 10-token
+ring buffer that fires on an exact match (`GameModeView.kt:952-961`).
+
+### 10.9 The per-game memory
+
+Three things are remembered per game, each keyed by the game folder and stored
+in `LAUNCH_PREFS`:
+
+| prefix | value | written by |
+|---|---|---|
+| `gm_profile_<folder>` | the profile name | `onProfileChanged` |
+| `gm_dpad_<folder>` | the D-pad output mode | `onDpadChanged` |
+| `gm_remaps_<folder>` | the remap map, as a JSON blob | `onRemapsChanged` |
+
+(`WhereqDosboxActivity.kt:306-358`, `:1330-1334`.) They are restored when the
+game is shown and saved when they change, so a game that needs the keypad and
+the fire key on F5 keeps that setup and another game is untouched.
+
+---
+
+## 11. Verification
 
 This section records **how each claim in this document was proven**, so a
 reviewer can tell a measured fact from an inference. The short version: the
 native side is verified by the log lines the port itself writes; the app side
 by driving the release APK on an emulator.
 
-### 10.1 The verification matrix
+### 11.1 The verification matrix
 
 | Claim | § | How it was proven | Evidence |
 |---|---|---|---|
 | The OPL chip is restored **exactly** | 6.3 | the same state file loaded twice, the two log lines compared field by field | `savestate: OPL chip saved:` vs `… restored:` — identical `state`, `rate`, `phase`, `vol`, `lfo` |
 | The register replay is **not** exact | 6.8 | the same file loaded by a build with the exact snapshot disabled | `… OPL chip replayed: … attack … phase=80000000 … vol=000001ff … lfo=00000000` |
-| The chip struct is 5176 bytes | 6.2 | a compile-time probe (`sizeof`) | see §10.4 |
+| The chip struct is 5176 bytes | 6.2 | a compile-time probe (`sizeof`) | see §11.4 |
 | The OPL has **two ports** (388h/389h) | 6.1, App. A | a test program that wrote both bytes to 388h programmed nothing | the chip stayed idle in `release` — the bug that was found and fixed |
 | The save-state file is a fixed-order block sequence | 5.4 | the source of `do_save()` / `do_load()` read against the payload-size function | `src/gui/savestate.cpp:257-294` vs `:147` |
 | The restore is a **dependency order**, not an arbitrary one | 7.4 | the DOS block re-opens files through the drive it restores | `src/dos/dos_state.cpp` |
@@ -3202,8 +3755,14 @@ by driving the release APK on an emulator.
 | A **relaunch** is needed, not a typed command | 8.7 | DOSBox caches the drive listing at mount time | `localDrive.cpp:184`, quoted in `WhereqDosboxActivity.kt:130-136` |
 | The build produces **three ABIs** | 2.2 | the ABI list is verified in CI and the `.so` files are listed in the APK | `.github/workflows/ci.yml`, the ABI verification step |
 | The APK is **signed** with the release key | 3.5 | `apksigner verify --print-certs` | cert SHA-256 `b16b480d5a1ff6d35baff0b15fa3fc4b0ee815e500861fbff1b062c9bf7d3933` |
+| The **Konami code** enters Game Mode | 10.8 | the ten tokens typed on the emulator's keyboard, with the detector's own log line | `konami feed 'up' … 'B' 'A'` → `KONAMI MATCH`, and the pads flip to the gamepad |
+| The code needs **capital** B and A | 10.8 | the same sequence typed twice, once with Caps Lock off and once on | lowercase: *"ba"* lands in the DOS prompt and **nothing** happens; Caps on (the key turns blue and reads CAPS): *"BA"* and Game Mode appears |
+| The **reverse code** leaves Game Mode | 10.8 | the D-pad's eight cardinals plus X, Y | the app is back on the keyboard, and the X/Y keys land in the prompt as *"xy"* |
+| A **remap** survives a restart | 10.6 | CTRL → F5, then the app was killed and relaunched | the stored blob `gm_remaps__` still holds the slot → key mapping, and the button is relabelled |
+| Only the **remappable** buttons are outlined | 10.6 | remap mode on the ACTION profile | SHIFT/TAB/STR/ENT/USE/JUMP outlined; Y/X/ESC/D-pad/trackball/chips not |
+| The gamepad is **a keyboard** to the guest | 10.7 | the whole path read in the source, and the keystrokes landing in the DOS prompt | SDL_KEYDOWN → mapper → `KEYBOARD_AddKey` → IRQ 1 → INT 09h → INT 16h (`docs/INTERRUPTS.md` §6) |
 
-### 10.2 The emulator runs
+### 11.2 The emulator runs
 
 | | |
 |---|---|
@@ -3231,7 +3790,7 @@ signed with a different key has to be uninstalled first).
 | The bundle is unpacked and the entry point detected | ✓ |
 | "Play" relaunches into the game | ✓ — the process restarts, `[autoexec]` runs `RUN.BAT` |
 | The OPL test bundle plays a tone | ✓ |
-| Save → load → the log lines are identical | ✓ (§10.3) |
+| Save → load → the log lines are identical | ✓ (§11.3) |
 | The DOS layer is restored (the open handles come back) | ✓ |
 | The keyboard survives a rotation | ✓ — no stuck key |
 | The **RMB** key is in all three layouts | ✓ — the left pad, the key column and the bottom bar |
@@ -3248,7 +3807,7 @@ signed with a different key has to be uninstalled first).
 | The **save state** comes back with them | ✓ — loaded out of the mirror with the header version 10 and the OPL phase unchanged (`phase=38780a16`) |
 | Two archives with the **same name** stay apart | ✓ — the second one installs as *whereq-opl-test-bundle (2)*, and the two keep separate durable folders and separate slots |
 
-### 10.3 ▸ The OPL test: the proof in two lines
+### 11.3 ▸ The OPL test: the proof in two lines
 
 `examples/opl-test-bundle/` is a small 16-bit DOS program
 (`src/opltest.asm`) that programs **one sustained tone on channel 0** of the FM
@@ -3312,7 +3871,7 @@ own power-up clearing — `Chip::Setup()` writes `0xff` and then `0x00` to every
 register, which keys every channel on and immediately off again — and a log
 that only showed that would hide the real note.
 
-### 10.4 The size probe
+### 11.4 The size probe
 
 The struct sizes quoted in §6.2 were **measured**, not estimated. The probe is
 a tiny program compiled against the *generated* Android `config.h`, so the
@@ -3334,11 +3893,16 @@ The `Chip` is `Channel chan[18]` plus the chip-wide counters, and 18 × 248 =
 4464 — the rest is the LFO/noise counters, the rate tables and the mode
 registers.
 
-### 10.5 The contrast build
+### 11.5 The contrast build
 
 A claim that a fix works is only as good as the build that shows the old
 behaviour. The exact snapshot was therefore **disabled in a scratch build**,
 the *same* saved state was loaded, and the difference was read off the log:
+
+![11.5 The contrast build](diagrams/tr34-11-5-the-contrast-build.svg)
+
+<details>
+<summary>The same diagram as text (the SVG above is the aligned version)</summary>
 
 ```
  exact snapshot (this build)      register replay (the old path)
@@ -3349,6 +3913,8 @@ the *same* saved state was loaded, and the difference was read off the log:
         lfo=0008774c                     lfo=00000000
 ```
 
+</details>
+
 | | register replay | exact snapshot |
 |---|---|---|
 | envelope state | `attack` — the note starts again | `decay` — where it was |
@@ -3358,9 +3924,9 @@ the *same* saved state was loaded, and the difference was read off the log:
 
 ▸ The scratch patch was **reverted** afterwards and all three ABIs and the
 release APK were rebuilt from the clean tree. The APK whose hash is quoted in
-§10.2 is that clean build.
+§11.2 is that clean build.
 
-### 10.6 What was **not** verified
+### 11.6 What was **not** verified
 
 Stated explicitly, because a technical reference that hides its gaps is worse
 than one that names them:
@@ -3376,9 +3942,9 @@ than one that names them:
 
 ---
 
-## 11. Known limitations and open items
+## 12. Known limitations and open items
 
-### 11.1 Defects that are known and not fixed
+### 12.1 Defects that are known and not fixed
 
 These are **documented rather than fixed**, because the fix belongs to a
 different milestone and each of them is currently harmless or is already
@@ -3409,7 +3975,7 @@ repository** — the upstream core was taken verbatim, and the changes to `src/`
 and `include/` are the list in §1.3, which also covers the Android layer the
 import commit itself carried.
 
-### 11.2 What the snapshot does not capture
+### 12.2 What the snapshot does not capture
 
 | Not captured | Consequence |
 |---|---|
@@ -3431,11 +3997,11 @@ restore. The button state and the click counters are still *not* captured: a
 restored game starts with the mouse released, and a click that was held down
 across the save has to be pressed again.
 
-### 11.3 The open items
+### 12.3 The open items
 
 | Item | Note |
 |---|---|
-| A **fork-versus-plain** diff | needs the plain 0.74 tree next to this one (§11.1) |
+| A **fork-versus-plain** diff | needs the plain 0.74 tree next to this one (§12.1) |
 | The **bundle `dosbox.conf`** | using it would need a configuration that is not regenerated on every boot — a different design, not a patch |
 | **More ABIs on a device** | the `arm64` and `armeabi-v7a` builds are untested on real hardware |
 | A **frozen** guest | `SAVESTATE` does not restore the "frozen" flag; a frozen machine that is saved and loaded continues running |
@@ -3443,8 +4009,11 @@ across the save has to be pressed again.
 | The **letter keys are small on an 18:9 screen** | 23.6 dp wide against 32.8 dp on a 20:9 one (§9.8). The emulator says they hit the right characters; a fingertip says something else. More columns per half, or a smaller picture, would be the way out |
 | **Nothing has been run on a real device** | every measurement in this document — the dp sizes, the OPL save/load, the layouts — comes from an emulator at 420 dpi |
 | **ARM64 throughput numbers** | the desktop baseline measures 127 M instr/s on x86_64 (§2.12); the real-device ARM64 figure is still missing |
+| The **feel of the Game Mode pads** | the D-pad's dead zone, the trackball's speed, the button sizes and the FIRE turbo rate are all measured on an emulator, never on a thumb (§10) |
+| The **reverse Konami** on a finger | the exit code is verified end to end on the emulator (§10.8), but the D-pad's octant accuracy under a real thumb is not |
+| The Game Mode is **not committed yet** | `GameModeView.kt` is still an untracked file and the whole feature ships in the next release, not in 1.0.0.14 (§1.3) |
 
-### 11.4 The house rules that keep coming back
+### 12.4 The house rules that keep coming back
 
 The four rules that a reviewer will find most often in this codebase:
 
@@ -3468,10 +4037,17 @@ auto-detected OPL3; the log of a save shows `mode=2` = `MODE_OPL3`.
 
 ### A.1 ▸ The two ports
 
+![A.1 ▸ The two ports](diagrams/tr35-a-1-the-two-ports.svg)
+
+<details>
+<summary>The same diagram as text (the SVG above is the aligned version)</summary>
+
 ```
   388h  ──►  the ADDRESS port: the value written here is the register number
   389h  ──►  the DATA port:   the value written here goes into the latched register
 ```
+
+</details>
 
 `Module::PortWrite()` (`src/hardware/adlib.cpp:555`) splits on `port & 1`:
 
@@ -3536,11 +4112,18 @@ selected automatically when the chip is in OPL3 mode, or explicitly by writing
 The operator map follows the canonical YM3812 layout — the *same* addresses
 cover different operators depending on the channel:
 
+![A.3 The register map](diagrams/tr36-a-3-the-register-map.svg)
+
+<details>
+<summary>The same diagram as text (the SVG above is the aligned version)</summary>
+
 ```
         $20  $21  $22  $23  $24  $25  $26  $27  $28  $29  $2A  $2B  $2C  $2D
         ───  ───  ───  ───  ───  ───  ───  ───  ───  ───  ───  ───  ───  ───
         C0o0 C1o0 C2o0 C0o1 C1o1 C2o1  —   —   C3o0 C4o0 C5o0 C3o1 C4o1 C5o1
 ```
+
+</details>
 
 and the same for `40`, `60`, `80` (the operator registers) and for `E0`-`F5`
 (the waveform select).
@@ -3567,6 +4150,11 @@ The macros that implement the map (`src/hardware/dbopl.cpp:1095`):
 
 The operator index:
 
+![A.4 ▸ The decode arithmetic](diagrams/tr37-a-4-the-decode-arithmetic.svg)
+
+<details>
+<summary>The same diagram as text (the SVG above is the aligned version)</summary>
+
 ```
   index = (reg & 0x1f) | ((reg >> 3) & 0x20)      the 0x20 bit = the second bank
      │
@@ -3577,7 +4165,14 @@ The operator index:
      └─ index % 8 >= 6     → unused (0x26, 0x27 and their counterparts)
 ```
 
+</details>
+
 The channel index:
+
+![A.4 ▸ The decode arithmetic](diagrams/tr38-a-4-the-decode-arithmetic.svg)
+
+<details>
+<summary>The same diagram as text (the SVG above is the aligned version)</summary>
 
 ```
   index = (reg & 0x0f) | ((reg >> 4) & 0x10)      the 0x10 bit = the second bank
@@ -3588,6 +4183,8 @@ The channel index:
      │        0→0  1→2  2→4  3→1  4→3  5→5
      └─ index >= 16       → the second bank adds 9 to the physical channel
 ```
+
+</details>
 
 The offset tables are built once, in `Chip::Setup()`
 (`src/hardware/dbopl.cpp:1444`), and they point into the flat `chan[18]`
@@ -3832,6 +4429,7 @@ was actually restored.
 | `could not write dosbox.conf` | the configuration could not be written |
 | `ignoring unknown key <name>` | the keyboard asked for an unknown key |
 | `could not push <key> down` / `up` | the key could not be pushed into SDL |
+| `unknown key <name>` | the **gamepad** asked for an unknown key (§10.7) |
 | `a command is already being typed` | the (dead) typer was busy |
 | `cannot type '<c>'` | the (dead) typer could not type a character |
 
@@ -3871,7 +4469,7 @@ Each one is a *silent* failure — no error, just something that does not work.
 
 Every picture the port produced, with what it shows. All of them were taken on
 the **x86_64 emulator (API 37)** running a release APK — that is a limit of the
-evidence, not of the app (§10.6).
+evidence, not of the app (§11.6).
 
 | Picture | What it shows |
 |---|---|
@@ -3890,7 +4488,7 @@ evidence, not of the app (§10.6).
 | [`android-n6-starfall-playing.png`](screenshots/android-n6-starfall-playing.png) | STARFALL running |
 | [`android-n6-starfall-gameover.png`](screenshots/android-n6-starfall-gameover.png) | the game-over screen |
 | [`android-n6-f1-running.png`](screenshots/android-n6-f1-running.png) | F1 Formula One |
-| [`android-n6-ultima8-running.png`](screenshots/android-n6-ultima8-running.png) | Ultima VIII — the extender whose abort is §11.2 |
+| [`android-n6-ultima8-running.png`](screenshots/android-n6-ultima8-running.png) | Ultima VIII — the extender whose abort is §12.2 |
 | [`android-n7-pads-letters.png`](screenshots/android-n7-pads-letters.png) | the console pads, **letter layer**, on a 22:9 phone |
 | [`android-n7-pads-symbols.png`](screenshots/android-n7-pads-symbols.png) | the console pads, **symbol layer** (`#+=`), 20:9 |
 | [`android-n7-pads-functions.png`](screenshots/android-n7-pads-functions.png) | the console pads, **function layer** (`Fn`), 20:9 |
