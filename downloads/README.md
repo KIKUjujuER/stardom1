@@ -16,12 +16,35 @@ repository's history, at their own tag — for example
 
 | version | file | size |
 |---|---|---|
-| 1.0.0.15 | [`whereq-dosbox-1.0.0.15.apk`](https://github.com/whereq/whereq-dosbox/releases/download/v1.0.0.15/whereq-dosbox-1.0.0.15.apk) | 16 500 506 bytes (15.7 MB) |
+| 1.0.0.16 | [`whereq-dosbox-1.0.0.16.apk`](https://github.com/whereq/whereq-dosbox/releases/download/v1.0.0.16/whereq-dosbox-1.0.0.16.apk) | 16 510 058 bytes (15.8 MB) |
 
-* SHA-256 of the 1.0.0.15 APK:
-  `dbf776abe6b69541194fa5bded5d2c807a94add4733a74ea2620b03227263f42`
+* SHA-256 of the 1.0.0.16 APK:
+  `183f16ee3fd219a878b56b6a08758a184370b834a0fef63b63a7aea7f4faa773`
 * Signing certificate (SHA-256):
   `b16b480d5a1ff6d35baff0b15fa3fc4b0ee815e500861fbff1b062c9bf7d3933`
+
+## What changed in 1.0.0.16
+
+A **maintenance** release: the phone's **Back button works again**, the app
+runs on the devices that need **16 KB memory pages**, and the **licence
+travels with the app**.
+
+* **The Back button works again.** From Android 13 on, the system stopped
+  sending the back key to the activity, and SDL's surface swallowed what did
+  arrive — so the button did nothing at all. The app now handles the back
+  gesture itself, the way Android expects it to.
+* **The presses walk out in order.** Back closes the launcher, then leaves
+  **Game Mode**, then folds the keyboard panel, and only then leaves the app.
+* **16 KB memory pages.** Every loadable segment of `libdosbox.so` is aligned
+  for the 64-bit devices that require them (Android 15 and newer). CI checks
+  it on every build now.
+* **The DRAG lock no longer holds the mouse.** Leaving Game Mode while the
+  **DRAG** button was locked used to leave the left mouse button *down* inside
+  DOSBox — a game saw a click that never ended.
+* **The licence travels with the app.** The app is GPLv2, so the licence and
+  the copyright notices have to travel with the program: the full **GPL v2**
+  text and the **NOTICE** are in the APK, and the launcher's footer links to
+  them, next to the link to the complete source.
 
 ## What changed in 1.0.0.15
 
