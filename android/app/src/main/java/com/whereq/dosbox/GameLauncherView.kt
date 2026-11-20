@@ -70,6 +70,16 @@ class GameLauncherView(context: Context, private val listener: Listener) : Frame
 
         /** Close the panel. */
         fun onCloseRequested()
+
+        /**
+         * Open the licence screen.
+         *
+         * WhereQ-DOSBox embeds the DOSBox core, which is GPLv2: the licence and
+         * the copyright notices have to travel with the program, and the
+         * complete source has to be reachable from the app. The screen carries
+         * both.
+         */
+        fun onOpenSourceLicensesRequested()
     }
 
     private val panel: LinearLayout
@@ -208,6 +218,56 @@ class GameLauncherView(context: Context, private val listener: Listener) : Frame
         status.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
         status.setPadding(0, dp(10), 0, 0)
         panel.addView(status)
+
+        // ---------------------------------------------------------- footer ---
+        // The version, and the licence screen.
+        //
+        // The GPL asks for the licence and the notices to travel with the
+        // program, and for the complete source to be reachable from it. The
+        // launcher is the one screen that is always reachable, so the link to
+        // the licence screen lives in its footer.
+        val footer = LinearLayout(context)
+        footer.orientation = LinearLayout.HORIZONTAL
+        footer.gravity = Gravity.CENTER_VERTICAL
+        val footerParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        )
+        footerParams.topMargin = dp(4)
+        panel.addView(footer, footerParams)
+
+        val version = TextView(context)
+        version.text = appVersion()
+        version.setTextColor(COLOR_DIM)
+        version.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
+        footer.addView(
+            version,
+            LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        )
+
+        val licences = TextView(context)
+        licences.text = "Licences"
+        licences.setTextColor(COLOR_ACCENT)
+        licences.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+        licences.setPadding(dp(8), dp(6), 0, dp(2))
+        licences.setOnClickListener { listener.onOpenSourceLicensesRequested() }
+        footer.addView(licences)
+    }
+
+    /**
+     * The version of the installed app, e.g. "WhereQ-DOSBox 1.0.0.16".
+     *
+     * Read from the package manager rather than from a constant, so the
+     * footer can never claim a version the build does not have.
+     */
+    private fun appVersion(): String {
+        val name = try {
+            @Suppress("DEPRECATION")
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName
+        } catch (e: Exception) {
+            null
+        }
+        return if (name.isNullOrEmpty()) "WhereQ-DOSBox" else "WhereQ-DOSBox $name"
     }
 
     /** Rebuilds the list of bundles. */

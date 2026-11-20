@@ -67,6 +67,31 @@ jobs:
           . toolchain/env.sh
           ./android/build-android.sh "${{ matrix.abi }}"
 
+      - name: check the 16 KB page alignment
+        run: |
+          # Google Play requires every app that targets API 35 or higher to
+          # support 16 KB memory pages on 64 bit devices: every PT_LOAD
+          # segment of the shipped library has to be aligned to 16 KB.
+          # A library that is only 4 KB aligned is rejected by the Play
+          # Console rather than by the compiler, so it is checked here.
+          #
+          # env.sh has to be sourced again here: every step runs in its own
+          # shell, so the NDK path the build step exported is not carried
+          # over.
+          export WQ_ANDROID_SDK="$ANDROID_SDK_ROOT"
+          . toolchain/env.sh
+          readelf="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf"
+          so="build/android/${{ matrix.abi }}/libdosbox.so"
+          aligns=$("$readelf" -lW "$so" | awk '$1 == "LOAD" { print $NF }')
+          echo "$aligns"
+          for a in $aligns; do
+            if (( a < 0x4000 )); then
+              echo "::error::a PT_LOAD segment of $so is aligned to $a - it needs 0x4000 (16 KB) or more"
+              exit 1
+            fi
+          done
+          echo "all PT_LOAD segments are 16 KB aligned"
+
       - uses: actions/upload-artifact@v4
         with:
           name: libdosbox-${{ matrix.abi }}
@@ -115,6 +140,16 @@ jobs:
         with:
           name: libdosbox-x86_64
           path: build/android/x86_64
+
+      - name: run the unit tests
+        run: |
+          # The unit tests cover the back-button decision and the manifest
+          # rules that the Android 15+ behaviour changes depend on. They run on
+          # the JVM, so they cost seconds and need no device.
+          #
+          # The instrumented test that presses the real back button needs an
+          # emulator on API 33+ and is not run here.
+          ./android/gradlew --project-dir android :app:testDebugUnitTest --console=plain
 
       - name: build the debug APK
         run: ./android/gradlew --project-dir android :app:assembleDebug --console=plain

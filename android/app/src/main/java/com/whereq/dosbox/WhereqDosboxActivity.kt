@@ -16,8 +16,11 @@ import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
 import android.view.WindowManager
+import android.window.OnBackInvokedCallback
+import android.window.OnBackInvokedDispatcher
 import android.widget.FrameLayout
 import android.widget.Toast
+import androidx.annotation.VisibleForTesting
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -76,6 +79,13 @@ class WhereqDosboxActivity : SDLActivity() {
     /** The bundle launcher, drawn on top of everything. */
     private var launcher: GameLauncherView? = null
 
+    /**
+     * The predictive-back callback (API 33+).
+     *
+     * It is kept in a field so it can be unregistered again in [onDestroy].
+     */
+    private var backInvokedCallback: OnBackInvokedCallback? = null
+
     /** The installed bundles. */
     private lateinit var library: GameLibrary
 
@@ -130,6 +140,11 @@ class WhereqDosboxActivity : SDLActivity() {
         super.onCreate(savedInstanceState) // loads the native library
 
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+
+        // On API 33+ the system stops sending KEYCODE_BACK to the activity and
+        // calls the registered back callback instead, so it has to be in place
+        // before anything can go wrong. See registerBackInvokedCallback().
+        registerBackInvokedCallback()
 
         // NOTE: do NOT resize/pad the SDL surface here to make room for the
         // keyboard. Changing the SurfaceView size breaks DOSBox's Android
@@ -359,8 +374,14 @@ class WhereqDosboxActivity : SDLActivity() {
 
     /* --------------------------------------------------------- the launcher */
 
-    /** Opens the game launcher over the emulator. */
-    private fun showLauncher() {
+    /**
+     * Opens the game launcher over the emulator.
+     *
+     * Public so the instrumented test can open it and then press the real
+     * back button on it.
+     */
+    @VisibleForTesting
+    fun showLauncher() {
         var launcher = this.launcher
         if (launcher == null) {
             launcher = GameLauncherView(this, object : GameLauncherView.Listener {
@@ -417,6 +438,8 @@ class WhereqDosboxActivity : SDLActivity() {
                     connectSavesFolder(bundle)
 
                 override fun onCloseRequested() = closeLauncher()
+
+                override fun onOpenSourceLicensesRequested() = openLicenses()
             })
 
             val lp = FrameLayout.LayoutParams(
@@ -495,6 +518,33 @@ class WhereqDosboxActivity : SDLActivity() {
 
     private fun closeLauncher() {
         launcher?.visibility = View.GONE
+    }
+
+    /**
+     * Whether the game launcher is on screen.
+     *
+     * The instrumented test needs this to check what a back press did: with
+     * the launcher open the press must close it, with it closed the press must
+     * leave the app.
+     */
+    @VisibleForTesting
+    fun isLauncherVisible(): Boolean = launcher?.visibility == View.VISIBLE
+
+    /**
+     * Opens the licence screen.
+     *
+     * WhereQ-DOSBox embeds the DOSBox core, which is GPLv2. The licence and the
+     * notices have to travel with the program, and the complete source has to
+     * be reachable from the app - the screen carries the first and links to
+     * the second.
+     */
+    private fun openLicenses() {
+        try {
+            startActivity(Intent(this, LicensesActivity::class.java))
+        } catch (e: Exception) {
+            Log.w(TAG, "could not open the licence screen", e)
+            Toast.makeText(this, "Could not open the licences", Toast.LENGTH_LONG).show()
+        }
     }
 
     /* ------------------------------------------------------------ save states */
@@ -1129,28 +1179,103 @@ class WhereqDosboxActivity : SDLActivity() {
     }
 
     /**
+     * Registers the predictive-back callback (API 33+).
+     *
+     * From Android 13 on, an app that targets API 33 or newer no longer gets
+     * `onBackPressed()` called and no longer receives `KEYCODE_BACK` when the
+     * back gesture or the back key is used. The system hands the gesture to the
+     * callback registered here instead, which is why this is the path that
+     * carries the app's own back handling on modern Android.
+     *
+     * Older systems have no such dispatcher and keep using the key event and
+     * `onBackPressed()` paths below, so the behaviour is the same everywhere.
+     */
+    private fun registerBackInvokedCallback() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            return
+        }
+        val callback = OnBackInvokedCallback { handleBackOrFinish() }
+        backInvokedCallback = callback
+        onBackInvokedDispatcher.registerOnBackInvokedCallback(
+            OnBackInvokedDispatcher.PRIORITY_DEFAULT,
+            callback
+        )
+    }
+
+    /**
+     * Handles one back press.
+     *
+     * @return true if the press was used by the app (the launcher was closed or
+     *   the keyboard folded away), false if there was nothing to dismiss and
+     *   the press should leave the app.
+     */
+    private fun handleBack(): Boolean {
+        val launcher = this.launcher
+        val keyboard = this.keyboard
+        val action = resolveBackAction(
+            launcherVisible = launcher != null && launcher.visibility == View.VISIBLE,
+            gameModeVisible = isGameModeVisible(),
+            keyboardPanelVisible = keyboard != null && keyboard.isPanelVisible()
+        )
+        when (action) {
+            BackAction.CLOSE_LAUNCHER -> {
+                closeLauncher()
+                return true
+            }
+            BackAction.EXIT_GAME_MODE -> {
+                // The gamepad covers the keyboard pads, so it has to go back to
+                // the keyboard before the keyboard can be folded.
+                showKeyboard()
+                return true
+            }
+            BackAction.FOLD_KEYBOARD -> {
+                keyboard?.hidePanel()
+                return true
+            }
+            BackAction.FINISH -> return false
+        }
+    }
+
+    /**
+     * Handles a back press that reached us through the predictive-back
+     * callback: the app dismisses what it can, and leaves otherwise.
+     */
+    private fun handleBackOrFinish() {
+        if (!handleBack()) {
+            finish()
+        }
+    }
+
+    /**
+     * The legacy system back path, for Android 12 and older.
+     *
      * The back button folds the keyboard away before it leaves the app, and
      * closes the launcher when it is open.
      */
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        if (keyCode == KeyEvent.KEYCODE_BACK) {
-            val launcher = this.launcher
-            if (launcher != null && launcher.visibility == View.VISIBLE) {
-                closeLauncher()
-                return true
-            }
-            val keyboard = this.keyboard
-            if (keyboard != null && keyboard.isPanelVisible()) {
-                keyboard.hidePanel()
-                return true
-            }
-            // In Game Mode, Back returns to the keyboard pads rather than leaving.
-            if (isGameModeVisible()) {
-                showKeyboard()
-                return true
-            }
+        if (keyCode == KeyEvent.KEYCODE_BACK && handleBack()) {
+            return true
         }
         return super.onKeyDown(keyCode, event)
+    }
+
+    /**
+     * The legacy system back path, for Android 12 and older.
+     *
+     * SDLActivity's implementation would end the activity straight away, which
+     * would leave the launcher and the keyboard on screen for good, so the
+     * app's own handling gets the first turn.
+     */
+    @Deprecated("The predictive-back callback is the modern path; this keeps the old one working.")
+    @Suppress("DEPRECATION")
+    override fun onBackPressed() {
+        if (handleBack()) {
+            return
+        }
+        // Nothing of ours is open, so the press leaves the app. finish() is
+        // called directly rather than through SDLActivity.onBackPressed(),
+        // which would end up back in the back dispatcher on API 33+.
+        finish()
     }
 
     override fun onDestroy() {
@@ -1158,6 +1283,15 @@ class WhereqDosboxActivity : SDLActivity() {
         // so nothing touches the activity after it is gone.
         DosboxForegroundService.stop(this)
         workScope.cancel()
+        // Let go of every key and mouse button the gamepad is holding, so
+        // nothing stays down inside DOSBox after the activity is gone.
+        gameMode?.releaseAll()
+        backInvokedCallback?.let {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                onBackInvokedDispatcher.unregisterOnBackInvokedCallback(it)
+            }
+        }
+        backInvokedCallback = null
         super.onDestroy()
     }
 

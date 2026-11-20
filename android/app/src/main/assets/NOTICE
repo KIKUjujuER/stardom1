@@ -1,0 +1,107 @@
+WhereQ-DOSBox
+Copyright (C) 2026 The WhereQ authors
+
+This product includes software developed by the DOSBox Team and its
+contributors, imported here unmodified.
+
+--------------------------------------------------------------------------
+DOSBox
+--------------------------------------------------------------------------
+
+The DOSBox emulator core in `src/`, `include/`, `visualc_net/` and `scripts/`
+is DOSBox r4305, imported verbatim from the Em-DOSBox project. The documents
+that came with it - `docs/dosbox.1`, `docs/PORTING` and `docs/README.video` -
+are part of that import and are kept unmodified; the WhereQ documents that
+sit beside them are listed below.
+
+    DOSBox - an open source DOS emulator
+    Copyright (C) 2002-2019 The DOSBox Team
+    https://www.dosbox.com/
+
+    The DOSBox Team:
+        Sjoerd v.d. Berg <harekiet>
+        Peter Veenstra <qbix79>
+        Ulf Wohlers <finsterr>
+        Tommy Frössman <fanskapet>
+        Dean Beeler <canadacow>
+        Sebastian Strohhöcker <c2woody>
+        Ralf Grillenberger <h-a-l-9000>
+
+The full list is in the `AUTHORS` file, which is kept unmodified.
+
+DOSBox is distributed under the terms of the GNU General Public License,
+version 2. The full text is in the `COPYING` file. Every source file of the
+emulator core carries the original copyright and license notice, and those
+notices are preserved unchanged.
+
+--------------------------------------------------------------------------
+Em-DOSBox
+--------------------------------------------------------------------------
+
+The tree this project is based on is Em-DOSBox, the Emscripten/web build of
+DOSBox by Boris Gjenero.
+
+    Em-DOSBox
+    Copyright (C) Boris Gjenero and contributors
+    https://github.com/dreamlayers/em-dosbox
+
+The import is the `em-dosbox-svn-sdl2` branch at tip e1f72dd1 ("Update to
+DOSBox r4305"), with its `ChangeLog`, `NEWS`, `THANKS` and `README` kept as
+they were imported.
+
+--------------------------------------------------------------------------
+whereq changes
+--------------------------------------------------------------------------
+
+Everything outside the emulator core is the whereq porting work:
+
+    android/      native Android application (NDK + CMake + Java)
+    native/       desktop Linux baseline build harness
+    bench/        CPU-core throughput probe
+    toolchain/    rootless dev toolchain
+    third_party/  fetch scripts for the SDL2 sources
+    docs/        the technical reference and the screenshot gallery
+    bin/          release.sh
+
+These are distributed under the same GNU General Public License, version 2,
+because they are combined with the DOSBox core into a single work. GPLv2
+requires that derivative works be distributed under the same license, so
+this project as a whole is GPLv2 - it cannot be relicensed under MIT or any
+other more permissive license.
+
+--------------------------------------------------------------------------
+SDL2
+--------------------------------------------------------------------------
+
+SDL2 is linked into libdosbox.so and is distributed under the zlib licence,
+which requires the notice below to travel with the binary. The sources are
+not part of this tree: `third_party/fetch-sdl2.sh` downloads the exact
+release the build uses (SDL2 2.30.0) from
+
+    https://github.com/libsdl-org/SDL/releases/download/release-2.30.0/SDL2-2.30.0.tar.gz
+
+    SDL - Simple DirectMedia Layer
+    Copyright (C) 1997-2024 Sam Lantinga <slouken@libsdl.org>
+
+    This software is provided 'as-is', without any express or implied
+    warranty.  In no event will the authors be held liable for any damages
+    arising from the use of this software.
+
+    Permission is granted to anyone to use this software for any purpose,
+    including commercial applications, and to alter it and redistribute it
+    freely, subject to the following restrictions:
+
+    1. The origin of this software must not be misrepresented; you must not
+       claim that you wrote the original software. If you use this software
+       in a product, an acknowledgment in the product documentation would be
+       appreciated but is not required.
+    2. Altered source versions must be plainly marked as such, and must not be
+       misrepresented as being the original software.
+    3. This notice may not be removed or altered from any source distribution.
+
+--------------------------------------------------------------------------
+Trademark
+--------------------------------------------------------------------------
+
+"DOSBox" is a trademark of the DOSBox project. This port is not affiliated
+with, sponsored or endorsed by the DOSBox team.

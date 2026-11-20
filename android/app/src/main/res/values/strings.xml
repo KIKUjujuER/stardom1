@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">WhereQ-DOSBox</string>
+
+    <!-- Where the complete corresponding source of this build is published.
+         The GPL requires that it is reachable from the program itself. -->
+    <string name="source_code_url" translatable="false">https://github.com/whereq/whereq-dosbox</string>
 </resources>

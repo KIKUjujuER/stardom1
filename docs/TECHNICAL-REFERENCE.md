@@ -55,6 +55,7 @@ features. §12 is therefore a list of known gaps, not a roadmap.
 | [10](#10-the-game-mode-gamepad) | The Game Mode gamepad | The profiles, the D-pad and its three output modes, the trackball, the remapper, the key path |
 | [11](#11-verification) | Verification | How each claim in this document was proven, and the log lines that prove it |
 | [12](#12-known-limitations-and-open-items) | Known limitations and open items | What is still not captured, what is still open |
+| [13](#13-the-licence-and-the-notices) | The licence and the notices | The GPL screen, the two assets, how it is verified |
 | [A](#appendix-a--the-opl-register-map-as-implemented) | A: the OPL register map | The address decoding of the chip this build actually uses |
 | [B](#appendix-b--the-state-file-block-table) | B: the state file block table | Every block, its order and its size |
 | [C](#appendix-c--the-log-line-reference) | C: the log-line reference | Every diagnostic line the port can print |
@@ -229,6 +230,8 @@ drives the emulator from the outside. The files that matter for this document:
 | `GameLibrary.kt`, `GameLauncherView.kt` | 816, 603 | the bundle import and the launcher panel (§8) |
 | `SaveStore.kt`, `BundleFolder.kt`, `GameBundle.kt` | — | the durable save store and the bundle model (§8.9) |
 | `DosboxNative.kt` | — | the Kotlin side of the JNI bridge (§4.3) |
+| `BackAction.kt` | — | what a back press does, and in which order (§9.7) |
+| `LicensesActivity.kt` | — | the licence screen: the GPL text and the notices (§13) |
 
 Everything in that layer reaches the emulator through the same three JNI calls
 — `nativePushKey`, `nativePushMouseButton`, `nativePushMouseMotion` — so the
@@ -3397,10 +3400,29 @@ reports to the activity, which opens the bundle launcher (§8). The keyboard
 does not know what a bundle is — it only reports that the button was pressed
 (`OnFilesRequestedListener`).
 
-▸ The **back button** folds the keyboard away before it leaves the app, and
-closes the launcher when it is open (`WhereqDosboxActivity.onKeyDown()`,
-`WhereqDosboxActivity.kt:814`). The order matters: the launcher is checked
-first, because it is on top of the keyboard.
+▸ The **back button** walks the app back out, one thing at a time: the
+launcher closes first (it is on top of the keyboard), then **Game Mode** goes
+back to the keyboard, then the keyboard panel folds, and only then does the
+press leave the app. The decision is a pure function —
+`resolveBackAction(launcherVisible, gameModeVisible, keyboardPanelVisible)`
+in `BackAction.kt` — so it is unit-tested on the JVM, and the order is the
+same on every device.
+
+▸ On **Android 13 (API 33) and newer** the system no longer sends
+`KEYCODE_BACK` to the activity, and it no longer calls `onBackPressed()`
+either; it hands the back gesture to the **predictive-back dispatcher**.
+SDL2's `SDLActivity.handleKeyEvent()` returns `true` for every key, so the
+surface swallowed the back key and the button did nothing at all. The app
+therefore registers an `OnBackInvokedCallback`
+(`WhereqDosboxActivity.registerBackInvokedCallback()`) and handles the
+gesture itself. The manifest must **not** opt out of predictive back
+(`android:enableOnBackInvokedCallback="false"`): that restores the legacy
+path, which SDL breaks. A unit test reads the manifest and fails if the
+opt-out ever comes back.
+
+▸ Older systems (Android 12 and before) have no such dispatcher, so the same
+decision is made in `onKeyDown()` and in `onBackPressed()`. The behaviour is
+the same everywhere; only the way the press arrives differs.
 
 ### 9.8 ▸ The measured key sizes
 
@@ -3807,8 +3829,33 @@ signed with a different key has to be uninstalled first).
 | The **save state** comes back with them | ✓ — loaded out of the mirror with the header version 10 and the OPL phase unchanged (`phase=38780a16`) |
 | Two archives with the **same name** stay apart | ✓ — the second one installs as *whereq-opl-test-bundle (2)*, and the two keep separate durable folders and separate slots |
 
-### 11.3 ▸ The OPL test: the proof in two lines
+### 11.3 ▸ The back button, on the device
 
+The back button is the one piece of the app that the **JVM cannot prove**:
+from Android 13 on, the system does not deliver it to the activity as a key
+event, it hands the gesture to the predictive-back dispatcher, and only a
+device can show whether the app receives it at all. So there are two layers
+of test:
+
+| Test | Where it runs | What it proves |
+|---|---|---|
+| `BackActionTest` (7 cases) | the JVM, `:app:testDebugUnitTest` | the decision table: the launcher wins over the gamepad, the gamepad is left before the keyboard, the keyboard folds before the app leaves, and the four presses walk out in that order |
+| `BackActionTest.theManifestDoesNotOptOutOfPredictiveBack` | the JVM | the manifest does not set `android:enableOnBackInvokedCallback="false"` — the opt-out restores the legacy path that SDL swallows |
+| `BackHandlingTest` (2 cases) | the device, `:app:connectedDebugAndroidTest` | the **real** back button: with the launcher open it closes the launcher and the app stays alive; with nothing open it leaves the app |
+| `LicensesActivityTest` (3 cases) | the device | the licence screen carries the GPL, the notices and the link to the source, and the two assets are in the installed app |
+
+The instrumented tests press the back button the way a user does — through the
+system input pipeline (`input keyevent 4`) — and not by calling the activity,
+because only the input pipeline reaches the back dispatcher.
+
+**Measured on the emulator** (`emulator-5554`, API 37, x86_64), 1.0.0.16:
+
+```
+:app:testDebugUnitTest          7 tests, 0 failures
+:app:connectedDebugAndroidTest   5 tests, 0 failures
+```
+
+### 11.4 ▸ The OPL test: the proof in two lines
 `examples/opl-test-bundle/` is a small 16-bit DOS program
 (`src/opltest.asm`) that programs **one sustained tone on channel 0** of the FM
 chip and then waits for a key. It is a real guest program, not a unit test: it
@@ -3871,7 +3918,7 @@ own power-up clearing — `Chip::Setup()` writes `0xff` and then `0x00` to every
 register, which keys every channel on and immediately off again — and a log
 that only showed that would hide the real note.
 
-### 11.4 The size probe
+### 11.5 The size probe
 
 The struct sizes quoted in §6.2 were **measured**, not estimated. The probe is
 a tiny program compiled against the *generated* Android `config.h`, so the
@@ -3893,7 +3940,7 @@ The `Chip` is `Channel chan[18]` plus the chip-wide counters, and 18 × 248 =
 4464 — the rest is the LFO/noise counters, the rate tables and the mode
 registers.
 
-### 11.5 The contrast build
+### 11.6 The contrast build
 
 A claim that a fix works is only as good as the build that shows the old
 behaviour. The exact snapshot was therefore **disabled in a scratch build**,
@@ -3926,7 +3973,7 @@ the *same* saved state was loaded, and the difference was read off the log:
 release APK were rebuilt from the clean tree. The APK whose hash is quoted in
 §11.2 is that clean build.
 
-### 11.6 What was **not** verified
+### 11.7 What was **not** verified
 
 Stated explicitly, because a technical reference that hides its gaps is worse
 than one that names them:
@@ -4025,6 +4072,65 @@ The four rules that a reviewer will find most often in this codebase:
 4. **A request is serviced at a safe point, or not at all.** The three gates
    of §5.3 are not an optimisation; they are the difference between a snapshot
    and a crash.
+
+---
+
+## 13. The licence and the notices
+
+WhereQ-DOSBox embeds the DOSBox core, which is **GPLv2**. GPLv2 section 2 asks
+for two things that have to travel with the *program*, not only with the
+source tree:
+
+1. the licence itself, and the copyright notices, and
+2. a way for every recipient to get the complete corresponding source.
+
+The first is a file that has to be **in** the app; the second is a thing that
+has to be **reachable from** the app.
+
+### 13.1 ▸ The licence screen
+
+`LicensesActivity` is that screen. It is reached from the **footer of the
+bundle launcher** (§8), next to the version, and it carries:
+
+| | |
+|---|---|
+| **What the app is** | one paragraph: the core is the DOSBox r4305 core, imported with its notices intact, and the porting work on top is under the same licence |
+| **The licence, named** | the GPL v2 grant, in the wording the FSF uses |
+| **The complete source** | the link to the repository that holds this build |
+| **The licence text** | the whole of `COPYING`, read from the assets and reflowed to the screen width |
+| **The notices** | the whole of `NOTICE`: the DOSBox and Em-DOSBox attribution, the SDL2 zlib notice, and the trademark note |
+
+The screen is built in code rather than from a layout file, in the same style
+as the rest of the app: a `ScrollView` with a `LinearLayout` of headings
+(accent colour) and paragraphs. The licence text is an 80-column file, which
+is unreadable on a phone, so the **paragraphs** are reflowed — the words are
+unchanged, only the line breaks are. The verbatim file is still what travels
+in the APK.
+
+### 13.2 ▸ The two assets
+
+| Asset | What it is | Where it comes from |
+|---|---|---|
+| `assets/COPYING` | the GNU General Public License, version 2, verbatim | the `COPYING` file at the repository root — the same file that ships with the source |
+| `assets/NOTICE` | the attribution notices: DOSBox, Em-DOSBox, SDL2, the trademark note | written for this port, describing exactly which upstream trees were imported and what was changed |
+
+`NOTICE` is the honest record of the import: the DOSBox core in `src/`,
+`include/`, `visualc_net/` and `scripts/` is DOSBox r4305, imported verbatim
+from the Em-DOSBox web build; everything outside it is the WhereQ porting
+work, distributed under the same licence because it is combined with the core
+into a single work.
+
+### 13.3 ▸ How it is verified
+
+The licence is not a decoration — it is checked:
+
+* the assets are in the APK (`unzip -l app-release.apk` lists `assets/COPYING`
+  and `assets/NOTICE`);
+* an instrumented test (`LicensesActivityTest`) opens the screen on a device
+  and asserts that it carries the licence, the notices and the link to the
+  source;
+* a second test reads the two assets from the installed app and asserts that
+  `NOTICE` names this port and **not** the sibling one.
 
 ---
 

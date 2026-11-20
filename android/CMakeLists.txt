@@ -333,6 +333,29 @@ target_compile_options(dosbox PRIVATE
     $<$<CONFIG:Release>:-O3>
     $<$<CONFIG:Release>:-flto=thin>
     $<$<CONFIG:Release>:-fomit-frame-pointer>)
+
+# 16 KB memory page sizes.
+#
+# Google Play requires every app that targets API 35 or higher to support
+# 16 KB pages on 64 bit devices. The rule has two halves:
+#
+#   1. every PT_LOAD segment of a shipped .so must be aligned to 16 KB
+#      (p_align >= 0x4000), and
+#   2. the .so has to sit uncompressed on a 16 KB boundary inside the APK
+#      (handled by AGP 8.5.1+ with useLegacyPackaging false).
+#
+# The NDK only does (1) by default from r28 onwards. This project builds with
+# NDK r27, so the linker has to be told explicitly - and it has to be told
+# on the link that produces the shipped library, because that is the link
+# that lays out the output segments. SDL2 is linked in statically, so it
+# inherits the alignment of this link; nothing has to be done to its own
+# build for the segments to end up 16 KB aligned.
+#
+# The flags are not Release-only on purpose: a debug build ships the same
+# native library, and it has to be installable on a 16 KB device as well.
+target_link_options(dosbox PRIVATE
+    -Wl,-z,max-page-size=16384
+    -Wl,-z,common-page-size=16384)
 target_link_options(dosbox PRIVATE
     $<$<CONFIG:Release>:-flto=thin>)
 

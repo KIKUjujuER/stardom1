@@ -39,6 +39,25 @@ verified. What follows is maintenance — bug fixes and documentation.
 installing a game, playing it, saving a state and keeping your saves safe, one
 step at a time, with a screenshot of every screen. No DOS knowledge needed.
 
+New in 1.0.0.16
+---------------
+
+A **maintenance** release: the phone's **Back button works again**, the app
+runs on the devices that need **16 KB memory pages**, and the **licence
+travels with the app**.
+
+| | |
+|---|---|
+| **The Back button works again** | From Android 13 on, the system stopped sending the back key to the app — and SDL's surface swallowed what did arrive, so the Back button did **nothing at all**. The app now handles the back gesture itself, the way Android expects it to. |
+| **The presses walk out in order** | Back closes the launcher, then leaves **Game Mode**, then folds the keyboard panel, and only then leaves the app. Before, the first press folded the hidden panel and left Game Mode standing. |
+| **16 KB memory pages** | The native library is now aligned for 16 KB pages, so it loads on the 64-bit devices that require it (Android 15 and newer). Every loadable segment of `libdosbox.so` is checked in CI now. |
+| **The DRAG lock no longer holds the mouse** | Leaving Game Mode while the **DRAG** button was locked used to leave the left mouse button **down** inside DOSBox — a game saw a click that never ended. The lock is released together with the keys and the other buttons. |
+| **The licence travels with the app** | The app is GPLv2, so the licence and the copyright notices have to travel with the program: the full **GPL v2** text and the **NOTICE** are in the APK, and the launcher's footer links to them, next to the link to the complete source. |
+
+The decision about what a back press does now lives in one tested place, and
+the back button is covered by a test that presses the real button on a real
+device.
+
 New in 1.0.0.15
 ---------------
 

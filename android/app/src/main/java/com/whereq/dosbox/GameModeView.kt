@@ -91,6 +91,11 @@ class GameModeView(context: Context) : FrameLayout(context) {
     private val downKeys = HashSet<String>()
     private val scancodeCache = HashMap<String, Int>()
 
+    /** Mouse buttons a finger is holding down. They are released on a rebuild
+     *  and when the view is hidden, so a button that was pressed does not stay
+     *  down inside DOSBox. */
+    private val downMouseButtons = HashSet<Int>()
+
     private val handler = Handler(Looper.getMainLooper())
 
     /** Width of the bar the current layout was built for (−1 = not built). */
@@ -111,6 +116,9 @@ class GameModeView(context: Context) : FrameLayout(context) {
     fun setProfile(p: Profile, notify: Boolean = false) {
         if (p == profile && builtProfile == p) return
         profile = p
+        // The DRAG lock belongs to the POINT profile: leaving it drops the
+        // lock, so the left mouse button is not left down inside DOSBox.
+        if (profile != Profile.POINT) releaseDragLock()
         if (notify) listener?.onProfileChanged(p)
         rebuild(force = true)
     }
@@ -123,11 +131,41 @@ class GameModeView(context: Context) : FrameLayout(context) {
     fun currentProfile(): Profile = profile
     fun currentDpad(): Dpad = dpad
 
-    /** Releases every held key — called when the view is hidden so a thumb that
-     *  was down does not leave a key stuck inside DOSBox. */
+    /** Releases every held key and mouse button — called when the view is
+     *  hidden so a thumb that was down does not leave a key stuck inside
+     *  DOSBox, and a locked mouse button does not stay down either. */
     fun releaseAll() {
+        releaseKeys()
+        releaseMouseButtons()
+        releaseDragLock()
+    }
+
+    /** Releases every key the view holds down. */
+    private fun releaseKeys() {
         for (name in downKeys.toList()) push(name, false)
         downKeys.clear()
+    }
+
+    /** Releases the mouse buttons a finger is on. */
+    private fun releaseMouseButtons() {
+        for (button in downMouseButtons.toList()) {
+            DosboxNative.nativePushMouseButton(button, false)
+        }
+        downMouseButtons.clear()
+    }
+
+    /**
+     * Releases the DRAG lock - the left mouse button that the POINT profile
+     * holds down on purpose.
+     *
+     * The lock only makes sense while the POINT profile is on screen, so it is
+     * dropped when the profile changes and when the view is hidden. Otherwise
+     * the button would stay down inside DOSBox with no way to release it.
+     */
+    private fun releaseDragLock() {
+        if (!dragLocked) return
+        dragLocked = false
+        DosboxNative.nativePushMouseButton(DosboxNative.SDL_BUTTON_LEFT, false)
     }
 
     /* ------------------------------------------------------------- layout */
@@ -146,7 +184,8 @@ class GameModeView(context: Context) : FrameLayout(context) {
         val barWidth = if (w > h) maxOf(0, (w - h * 4 / 3) / 2) else 0
         if (!force && barWidth == builtBarWidth && builtProfile == profile) return
 
-        releaseAll()
+        releaseKeys()
+        releaseMouseButtons()
         removeAllViews()
         strip = null            // the transient Fn/number bar was just removed
         remapBanner = null      // and so was the remap banner
@@ -518,10 +557,12 @@ class GameModeView(context: Context) : FrameLayout(context) {
                     chip.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                     chip.background = keyBg(COLOR_KEY_PRESSED)
                     DosboxNative.nativePushMouseButton(button, true)
+                    downMouseButtons.add(button)
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     chip.background = keyBg(color)
                     DosboxNative.nativePushMouseButton(button, false)
+                    downMouseButtons.remove(button)
                 }
             }
             true
