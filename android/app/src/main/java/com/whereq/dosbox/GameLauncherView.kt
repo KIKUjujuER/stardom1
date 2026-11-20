@@ -4,6 +4,7 @@ import android.app.AlertDialog
 import android.content.Context
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.text.TextUtils
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
@@ -80,6 +81,16 @@ class GameLauncherView(context: Context, private val listener: Listener) : Frame
          * both.
          */
         fun onOpenSourceLicensesRequested()
+
+        /**
+         * Open the privacy policy.
+         *
+         * The app collects no data and asks for no network permission, but the
+         * policy still has to be reachable from inside the app, not only from
+         * a website. WhereQ-DOSBox is published from its own repository, so the
+         * policy is a file in that repository and the footer links to it.
+         */
+        fun onPrivacyPolicyRequested()
     }
 
     private val panel: LinearLayout
@@ -220,12 +231,13 @@ class GameLauncherView(context: Context, private val listener: Listener) : Frame
         panel.addView(status)
 
         // ---------------------------------------------------------- footer ---
-        // The version, and the licence screen.
+        // The version, the licence screen and the privacy policy.
         //
         // The GPL asks for the licence and the notices to travel with the
         // program, and for the complete source to be reachable from it. The
         // launcher is the one screen that is always reachable, so the link to
-        // the licence screen lives in its footer.
+        // the licence screen lives in its footer - next to the link to the
+        // privacy policy, which has to be reachable from inside the app too.
         val footer = LinearLayout(context)
         footer.orientation = LinearLayout.HORIZONTAL
         footer.gravity = Gravity.CENTER_VERTICAL
@@ -240,6 +252,10 @@ class GameLauncherView(context: Context, private val listener: Listener) : Frame
         version.text = appVersion()
         version.setTextColor(COLOR_DIM)
         version.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
+        // The version gives way when the footer is narrow: the links to the
+        // licences and to the privacy policy are the ones that have to stay.
+        version.maxLines = 1
+        version.ellipsize = TextUtils.TruncateAt.END
         footer.addView(
             version,
             LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
@@ -252,6 +268,14 @@ class GameLauncherView(context: Context, private val listener: Listener) : Frame
         licences.setPadding(dp(8), dp(6), 0, dp(2))
         licences.setOnClickListener { listener.onOpenSourceLicensesRequested() }
         footer.addView(licences)
+
+        val privacy = TextView(context)
+        privacy.text = "Privacy policy"
+        privacy.setTextColor(COLOR_ACCENT)
+        privacy.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+        privacy.setPadding(dp(8), dp(6), 0, dp(2))
+        privacy.setOnClickListener { listener.onPrivacyPolicyRequested() }
+        footer.addView(privacy)
     }
 
     /**

@@ -19,6 +19,7 @@ import android.view.View
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.annotation.VisibleForTesting
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.hypot
@@ -123,9 +124,21 @@ class GameModeView(context: Context) : FrameLayout(context) {
         rebuild(force = true)
     }
 
+    /**
+     * Sets the D-pad output mode without notifying the listener (used to
+     * restore the per-game choice); pass [notify] = true for a user-driven
+     * change.
+     *
+     * The bar carries a chip that names the current mode, so a change rebuilds
+     * the bar when it is already on screen - otherwise the chip would keep
+     * naming the mode the bar was built with.
+     */
     fun setDpad(d: Dpad, notify: Boolean = false) {
+        if (d == dpad) return
         dpad = d
         if (notify) listener?.onDpadChanged(d)
+        // A bar that has never been built picks the new mode up by itself.
+        if (builtProfile != null) rebuild(force = true)
     }
 
     fun currentProfile(): Profile = profile
@@ -386,8 +399,7 @@ class GameModeView(context: Context) : FrameLayout(context) {
         val label = when (dpad) { Dpad.ARROWS -> "ARROWS"; Dpad.NUMPAD -> "NUMPAD"; Dpad.WASD -> "WASD" }
         return tapChip(label, "⇄ d-pad", COLOR_KEY_DARK) {
             val next = when (dpad) { Dpad.ARROWS -> Dpad.NUMPAD; Dpad.NUMPAD -> Dpad.WASD; Dpad.WASD -> Dpad.ARROWS }
-            setDpad(next, notify = true)
-            rebuild(force = true)   // relabel the chip
+            setDpad(next, notify = true)   // rebuilds the bar, and relabels this chip
         }
     }
 
@@ -461,7 +473,7 @@ class GameModeView(context: Context) : FrameLayout(context) {
         // FIRE keeps its name; the sub-label shows the key it fires.
         val chip = chip("FIRE", keyLabel(effKey), COLOR_GOLD, textColor = COLOR_TEXT_ON_GOLD)
         if (remapMode) {
-            markRemappable(chip)
+            markRemappable(chip, COLOR_GOLD)
             chip.setOnClickListener { openRemapPicker(slot, "FIRE") }
             return chip
         }
@@ -504,7 +516,7 @@ class GameModeView(context: Context) : FrameLayout(context) {
         val shown = if (remaps.containsKey(slot)) keyLabel(effKey) else label
         val chip = chip(shown, sub, color)
         if (remapMode) {
-            markRemappable(chip)
+            markRemappable(chip, color)
             chip.setOnClickListener { openRemapPicker(slot, label) }
             return chip
         }
@@ -614,9 +626,17 @@ class GameModeView(context: Context) : FrameLayout(context) {
                 else keyName.uppercase()
     }
 
-    /** Marks a button as remappable while remap mode is on: a gold outline. */
-    private fun markRemappable(chip: View) {
-        (chip.background as? GradientDrawable)?.setStroke(maxOf(2, dp(2)), COLOR_GOLD)
+    /**
+     * Marks a button as remappable while remap mode is on: a coloured outline.
+     *
+     * The outline has to stay visible on the chip it marks, so its colour
+     * depends on the chip it goes on: gold on the dark chips, and a dark
+     * brown on the gold FIRE chip. A gold outline on a gold chip would be
+     * invisible - the button would look like any other one. [fill] is the
+     * colour the chip is filled with.
+     */
+    private fun markRemappable(chip: View, fill: Int) {
+        (chip.background as? GradientDrawable)?.setStroke(maxOf(2, dp(2)), outlineFor(fill))
     }
 
     /**
@@ -987,7 +1007,7 @@ class GameModeView(context: Context) : FrameLayout(context) {
     /**
      * Fires [onMatch] when the last N fed tokens equal [sequence]. Used both
      * ways: the keyboard watches for the real code (↑↑↓↓←→←→BA) to enter Game
-     * Mode, and here the D-pad + Y/N watch for ↑↑↓↓←→←→NY (N/Y standing in for
+     * Mode, and here the D-pad + X/Y watch for ↑↑↓↓←→←→XY (X/Y standing in for
      * B/A) to go back.
      */
     class KonamiDetector(private val sequence: List<String>, private val onMatch: () -> Unit) {
@@ -1062,20 +1082,52 @@ class GameModeView(context: Context) : FrameLayout(context) {
 
         private const val COLOR_PANEL = 0xD0202024.toInt()
         private const val COLOR_TOOLBAR = 0xC0202024.toInt()
-        private const val COLOR_KEY = 0xFF3C4043.toInt()
-        private const val COLOR_KEY_DARK = 0xFF2A2D30.toInt()
+        @VisibleForTesting
+        internal const val COLOR_KEY = 0xFF3C4043.toInt()
+        @VisibleForTesting
+        internal const val COLOR_KEY_DARK = 0xFF2A2D30.toInt()
         /** The D-pad base plate — a touch lighter than the black letterbox. */
         private const val COLOR_PLATE = 0xFF303338.toInt()
         private const val COLOR_KEY_PRESSED = 0xFF5F6368.toInt()
-        private const val COLOR_KEY_ARMED = 0xFF1A73E8.toInt()
-        private const val COLOR_GOLD = 0xFFE0A81E.toInt()
+        @VisibleForTesting
+        internal const val COLOR_KEY_ARMED = 0xFF1A73E8.toInt()
+        @VisibleForTesting
+        internal const val COLOR_GOLD = 0xFFE0A81E.toInt()
         /** Translucent gold for the press/touch glow under the D-pad + trackball. */
         private const val COLOR_GOLD_GLOW = 0x66E0A81E.toInt()
         private const val COLOR_TEXT = 0xFFE8EAED.toInt()
         private const val COLOR_TEXT_DIM = 0xFF9AA0A6.toInt()
         /** Title / sub text on the gold chips — dark but high-contrast. */
-        private const val COLOR_TEXT_ON_GOLD = 0xFF241700.toInt()
+        @VisibleForTesting
+        internal const val COLOR_TEXT_ON_GOLD = 0xFF241700.toInt()
         private const val COLOR_SUB_ON_GOLD = 0xCC241700.toInt()
+
+        /**
+         * The outline colour that shows on a chip filled with [fill]: gold on a
+         * dark chip, the dark text colour on a light one.
+         *
+         * The rule exists because the FIRE chip is filled with the gold, and a
+         * gold outline on a gold chip is invisible. It is a companion function
+         * so that the rule can be tested on the JVM, without a device.
+         */
+        @VisibleForTesting
+        internal fun outlineFor(fill: Int): Int =
+            if (isLight(fill)) COLOR_TEXT_ON_GOLD else COLOR_GOLD
+
+        /**
+         * Whether a colour is light enough to need a dark outline.
+         *
+         * The test is the perceived luminance (ITU-R BT.601 weights), which is
+         * what the eye reads as "bright" - a plain average would call the amber
+         * gold dark and give it a gold outline again.
+         */
+        @VisibleForTesting
+        internal fun isLight(color: Int): Boolean {
+            val r = (color shr 16) and 0xFF
+            val g = (color shr 8) and 0xFF
+            val b = color and 0xFF
+            return (r * 299 + g * 587 + b * 114) / 1000 > 140
+        }
 
         private const val DP_MIN_PAD_WIDTH = 120
         private const val DP_MAX_PAD_WIDTH = 230

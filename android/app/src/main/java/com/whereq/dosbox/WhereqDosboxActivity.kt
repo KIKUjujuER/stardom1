@@ -303,8 +303,10 @@ class WhereqDosboxActivity : SDLActivity() {
             gameMode = gm
         }
         // Restore the per-game choice before showing, without notifying back.
-        view.setProfile(loadGameProfile(), notify = false)
+        // The D-pad comes first: it has to be in place before the bar is built,
+        // or the chip that names the mode would name the previous one.
         view.setDpad(loadGameDpad(), notify = false)
+        view.setProfile(loadGameProfile(), notify = false)
         view.setRemaps(loadGameRemaps())
         keyboard?.visibility = View.GONE
         view.visibility = View.VISIBLE
@@ -440,6 +442,8 @@ class WhereqDosboxActivity : SDLActivity() {
                 override fun onCloseRequested() = closeLauncher()
 
                 override fun onOpenSourceLicensesRequested() = openLicenses()
+
+                override fun onPrivacyPolicyRequested() = openPrivacyPolicy()
             })
 
             val lp = FrameLayout.LayoutParams(
@@ -529,6 +533,31 @@ class WhereqDosboxActivity : SDLActivity() {
      */
     @VisibleForTesting
     fun isLauncherVisible(): Boolean = launcher?.visibility == View.VISIBLE
+
+    /**
+     * Opens the privacy policy.
+     *
+     * WhereQ-DOSBox collects no data and has no INTERNET permission, but the
+     * policy still has to be reachable from inside the app and not only from a
+     * website. The app is published from its own repository, so the policy is
+     * a file in that repository - docs/PRIVACY.md - and the launcher footer
+     * links to it. The same text lives in the repository, which is the
+     * authoritative copy.
+     *
+     * The app has no INTERNET permission of its own, so it cannot fetch the
+     * page itself - it hands the URL to the browser, which is the normal way
+     * to do this and keeps the app free of network code.
+     */
+    private fun openPrivacyPolicy() {
+        val url = getString(R.string.privacy_policy_url)
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+        try {
+            startActivity(intent)
+        } catch (e: Exception) {
+            Log.w(TAG, "could not open the privacy policy", e)
+            Toast.makeText(this, "Could not open $url", Toast.LENGTH_LONG).show()
+        }
+    }
 
     /**
      * Opens the licence screen.

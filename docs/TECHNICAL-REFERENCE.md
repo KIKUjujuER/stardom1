@@ -55,7 +55,7 @@ features. §12 is therefore a list of known gaps, not a roadmap.
 | [10](#10-the-game-mode-gamepad) | The Game Mode gamepad | The profiles, the D-pad and its three output modes, the trackball, the remapper, the key path |
 | [11](#11-verification) | Verification | How each claim in this document was proven, and the log lines that prove it |
 | [12](#12-known-limitations-and-open-items) | Known limitations and open items | What is still not captured, what is still open |
-| [13](#13-the-licence-and-the-notices) | The licence and the notices | The GPL screen, the two assets, how it is verified |
+| [13](#13-the-licence-and-the-notices) | The licence and the notices | The GPL screen, the two assets, how it is verified, and the privacy policy |
 | [A](#appendix-a--the-opl-register-map-as-implemented) | A: the OPL register map | The address decoding of the chip this build actually uses |
 | [B](#appendix-b--the-state-file-block-table) | B: the state file block table | Every block, its order and its size |
 | [C](#appendix-c--the-log-line-reference) | C: the log-line reference | Every diagnostic line the port can print |
@@ -3500,7 +3500,11 @@ switching profile rebuilds the two pads and nothing else.
 The profile is chosen from the gold button in the top-left corner: a **tap**
 cycles it, a **long press** opens a picker with the three profiles plus the
 remap entry (`GameModeView.kt:324`). The D-pad output mode is a chip in the
-bottom row of the left pad — **ARROWS**, **NUMPAD** or **WASD**.
+bottom row of the left pad — **ARROWS**, **NUMPAD** or **WASD**. The chip
+carries the name of the mode, so the bar is rebuilt when the mode changes
+(`setDpad()`), and the mode remembered for the game is restored **before** the
+profile, so the first build of the bar already uses it
+(`showGameMode()`, `WhereqDosboxActivity.kt`).
 
 The two face buttons at the top right are **Y** and **X**. They are not
 remappable, and they are not decoration: they answer the *Quit? (Y/N)* prompt
@@ -3618,10 +3622,12 @@ collide with hold-to-fire. It is entered from the gold profile button's
 long-press menu, whose fourth entry is *"Remap buttons…"* (it becomes *"Done
 remapping"* while the mode is on, so the mode always has an exit):
 
-- while the mode is on, a **gold outline** marks the buttons that can be
-  remapped (`markRemappable`, `GameModeView.kt:577`) — the key-sending buttons
+- while the mode is on, an **outline** marks the buttons that can be
+  remapped (`markRemappable`, `GameModeView.kt`) — the key-sending buttons
   and FIRE, and *not* Y/X, ESC, the D-pad, the trackball, the mouse buttons or
-  the function chips;
+  the function chips. The outline is **gold on the dark chips and dark brown on
+  the gold FIRE chip**: it is chosen by the luminance of the chip it marks, so
+  it is never invisible (gold on gold was, before);
 - a tap on an outlined button opens a **picker**: *"Reset to default"* first,
   then the curated `REMAP_CHOICES` — the action keys, F1–F12, A–Z, 0–9, the
   four arrows and eight symbols (`GameModeView.kt:585-602`, `:982-992`);
@@ -3843,6 +3849,9 @@ of test:
 | `BackActionTest.theManifestDoesNotOptOutOfPredictiveBack` | the JVM | the manifest does not set `android:enableOnBackInvokedCallback="false"` — the opt-out restores the legacy path that SDL swallows |
 | `BackHandlingTest` (2 cases) | the device, `:app:connectedDebugAndroidTest` | the **real** back button: with the launcher open it closes the launcher and the app stays alive; with nothing open it leaves the app |
 | `LicensesActivityTest` (3 cases) | the device | the licence screen carries the GPL, the notices and the link to the source, and the two assets are in the installed app |
+| `LauncherFooterTest` (3 cases) | the device | the foot of the launcher carries the link to the licences and to the privacy policy, and each of them asks the app for the right thing |
+| `RemapOutlineTest` (5 cases) | the JVM | the outline that marks a remappable button contrasts with the chip it marks: the gold FIRE chip gets a dark outline, the dark chips get the gold one, and **the outline is never the colour of the chip** |
+| `PrivacyPolicyTest` (3 cases) | the JVM | the privacy policy is in the repository, at `docs/PRIVACY.md`; the link the app hands to the browser names that exact file; and the README links to it |
 
 The instrumented tests press the back button the way a user does — through the
 system input pipeline (`input keyevent 4`) — and not by calling the activity,
@@ -3853,6 +3862,14 @@ because only the input pipeline reaches the back dispatcher.
 ```
 :app:testDebugUnitTest          7 tests, 0 failures
 :app:connectedDebugAndroidTest   5 tests, 0 failures
+```
+
+**Measured on the emulator** (`emulator-5554`, API 37, x86_64), after the
+F5–F8 fixes:
+
+```
+:app:testDebugUnitTest          15 tests, 0 failures
+:app:connectedDebugAndroidTest   8 tests, 0 failures
 ```
 
 ### 11.4 ▸ The OPL test: the proof in two lines
@@ -4090,7 +4107,8 @@ has to be **reachable from** the app.
 ### 13.1 ▸ The licence screen
 
 `LicensesActivity` is that screen. It is reached from the **footer of the
-bundle launcher** (§8), next to the version, and it carries:
+bundle launcher** (§8), next to the version and the privacy-policy link, and
+it carries:
 
 | | |
 |---|---|
@@ -4131,6 +4149,22 @@ The licence is not a decoration — it is checked:
   source;
 * a second test reads the two assets from the installed app and asserts that
   `NOTICE` names this port and **not** the sibling one.
+
+### 13.4 ▸ The privacy policy
+
+The licence says nothing about the user's data, so there is a second document:
+the **privacy policy**, in [`docs/PRIVACY.md`](PRIVACY.md).
+
+| | |
+|---|---|
+| **Where it lives** | in this repository, next to the code and the licences |
+| **Why there** | WhereQ-DOSBox is free and open-source software, published from this repository. A private product has to publish its policy on a site that anyone can open; an open-source project can keep the authoritative copy in the repository, where its whole history is public. |
+| **Where the app points** | the footer of the launcher opens `docs/PRIVACY.md` on the repository, in the browser |
+| **What it says** | the app collects nothing and has no `INTERNET` permission; the tables say what is stored on the device, which permissions are asked for and why, and that the durable saves folder is the user's own |
+
+The app has **no `INTERNET` permission** (see the manifest), so it cannot fetch
+the page itself. It hands the URL to the browser — the normal way to do this,
+and the reason the app itself carries no network code.
 
 ---
 

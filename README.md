@@ -39,6 +39,22 @@ verified. What follows is maintenance — bug fixes and documentation.
 installing a game, playing it, saving a state and keeping your saves safe, one
 step at a time, with a screenshot of every screen. No DOS knowledge needed.
 
+New in 1.0.0.17
+---------------
+
+A **maintenance** release: two things in **Game Mode** that only the screen
+could show, and the **privacy policy**, which now lives in this repository.
+
+| | |
+|---|---|
+| **The FIRE button shows that it can be remapped** | While the remap mode is on, the buttons you can remap get an outline. The FIRE button is filled with the same gold as the outline, so the outline was **invisible** and the button looked like any other one. The outline now follows the button it marks: gold on the dark buttons, dark brown on the gold one. |
+| **The D-pad button names the mode you actually have** | The button in the bottom row of the left pad cycles the D-pad output between **ARROWS**, **NUMPAD** and **WASD**, and it carries the name of the current mode. When the app remembered a different mode for that game, the button could say *ARROWS* while the D-pad was sending *WASD*. It follows the mode now. |
+| **The privacy policy is in the repository** | The app collects no data and does not ask for the `INTERNET` permission, so it cannot send anything anywhere even if it wanted to. The policy says so in full, and now lives in [`docs/PRIVACY.md`](docs/PRIVACY.md) — next to `COPYING` and `NOTICE`, where its whole history is public. The launcher's footer opens it, next to the link to the licence screen. |
+
+The emulator core, the bundle launcher, the keyboard and the save states are
+unchanged — **every save state written by the earlier releases loads
+normally**.
+
 New in 1.0.0.16
 ---------------
 
@@ -549,6 +565,23 @@ project itself is at [dosbox.com][dosbox].
 
 "DOSBox" is a trademark of the DOSBox project. This port is not affiliated
 with or endorsed by the DOSBox team.
+
+Privacy
+-------
+
+**The app collects no data.** See [docs/PRIVACY.md](docs/PRIVACY.md) for the
+full policy.
+
+The app does not request the `INTERNET` permission, so it cannot send anything
+anywhere even if it wanted to. Everything it writes — the game bundles you
+install, the save states, the configuration — stays in the app's own storage,
+except for the saves folder you choose yourself through the system's folder
+picker.
+
+Because the app is free and open-source software, published from this
+repository, the policy lives here in the repository next to the code and the
+licences. The launcher footer links to it, so it is reachable from inside the
+app as well — the same way the licence screen is.
 
 Credits
 -------

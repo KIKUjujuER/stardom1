@@ -3,8 +3,12 @@
 man_MANS = dosbox.1
 # WhereQ-DOSBox: the technical reference that lives next to DOSBox's own
 # documents. It is part of the distribution tarball so that a release carries it.
+# The privacy policy goes with it: the app links to the copy in the repository,
+# and a release tarball that leaves the policy behind would be a release that
+# ships the app without it.
 EXTRA_DIST = $(man_MANS) README.video PORTING \
              TECHNICAL-REFERENCE.md USER-GUIDE.md INTERRUPTS.md \
+             PRIVACY.md \
              $(GUIDE_SCREENSHOTS)
 
 # The screenshots the user guide points at. The guide is distributed with
