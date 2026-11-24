@@ -912,6 +912,8 @@ bool CMscdex::GetChannelControl(Bit8u subUnit, TCtrl& ctrl) {
 
 static CMscdex* mscdex = 0;
 static PhysPt curReqheaderPtr = 0;
+/* The device of this run in the DOS device table. */
+static DOS_Device* mscdex_device = NULL;
 
 #ifdef EMSCRIPTEN
 /* Taken from SDL_cdrom.h */
@@ -1362,6 +1364,13 @@ void MSCDEX_SetCDInterface(int intNr, int numCD) {
 #endif
 
 void MSCDEX_ShutDown(Section* /*sec*/) {
+	/* The device is removed from the device table as well: the table is
+	 * static, and a DOSBox that is started again in the same process would
+	 * otherwise find this run's device still in it. */
+	if (mscdex_device != NULL) {
+		DOS_DelDevice(mscdex_device);
+		mscdex_device = NULL;
+	}
 	delete mscdex;
 	mscdex = 0;
 	curReqheaderPtr = 0;
@@ -1371,8 +1380,8 @@ void MSCDEX_Init(Section* sec) {
 	// AddDestroy func
 	sec->AddDestroyFunction(&MSCDEX_ShutDown);
 	/* Register the mscdex device */
-	DOS_Device * newdev = new device_MSCDEX();
-	DOS_AddDevice(newdev);
+	mscdex_device = new device_MSCDEX();
+	DOS_AddDevice(mscdex_device);
 	curReqheaderPtr = 0;
 	/* Add Multiplexer */
 	DOS_AddMultiplexHandler(MSCDEX_Handler);

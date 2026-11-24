@@ -150,6 +150,8 @@ bool DOS_IOCTL(void);
 bool DOS_GetSTDINStatus();
 Bit8u DOS_FindDevice(char const * name);
 void DOS_SetupDevices(void);
+/* Removes the devices of DOS_SetupDevices() from the device table. */
+void DOS_ClearDefaultDevices(void);
 
 /* Execute and new process creation */
 bool DOS_NewPSP(Bit16u pspseg,Bit16u size);

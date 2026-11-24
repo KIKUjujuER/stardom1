@@ -231,6 +231,8 @@ static const struct {
     K("kp_8", SDL_SCANCODE_KP_8) K("kp_9", SDL_SCANCODE_KP_9)
     K("kp_enter", SDL_SCANCODE_KP_ENTER) K("kp_period", SDL_SCANCODE_KP_PERIOD)
     K("kp_plus", SDL_SCANCODE_KP_PLUS) K("kp_minus", SDL_SCANCODE_KP_MINUS)
+    K("kp_divide", SDL_SCANCODE_KP_DIVIDE)
+    K("kp_multiply", SDL_SCANCODE_KP_MULTIPLY)
 
     { NULL, SDL_SCANCODE_UNKNOWN }
 };

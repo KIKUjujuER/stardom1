@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 600" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect x="0" y="0" width="980" height="600" fill="#FBFAF7"/>
+  <text x="28" y="38" font-size="20" font-weight="700" fill="#22223B">Why it beeps: the loop hunts and bends the pitch</text>
+  <text x="28" y="62" font-size="13.5" fill="#6b6b80">A steady, heavy FM load keeps the buffer near empty, so the loop corrects hard and often.</text>
+
+  <!-- legend -->
+  <rect x="640" y="24" width="14" height="14" fill="#D64545"/>
+  <text x="660" y="36" font-size="12.5" fill="#22223B">prebuffer 25 ms (default) — hunts → beep</text>
+  <rect x="640" y="46" width="14" height="14" fill="#2E9E5B"/>
+  <text x="660" y="58" font-size="12.5" fill="#22223B">prebuffer 50 ms (the fix) — steady</text>
+
+  <!-- ===== TOP PANEL: buffer fill ===== -->
+  <text x="28" y="96" font-size="13.5" font-weight="700" fill="#2B6CB0">buffer fill  (mixer.done)</text>
+  <rect x="80" y="104" width="820" height="172" fill="#fff" stroke="#c9c9d6"/>
+  <!-- underrun / stretch regime band -->
+  <rect x="80" y="236" width="820" height="40" fill="#FBE3E3"/>
+  <text x="92" y="262" font-size="11.5" fill="#B23030">underrun / stretch regime  →  big tick_add corrections (fast pitch swings)</text>
+  <!-- set-point lines -->
+  <line x1="80" y1="222" x2="900" y2="222" stroke="#D64545" stroke-dasharray="5 4"/>
+  <text x="836" y="218" font-size="10.5" fill="#D64545">min_needed₂₅</text>
+  <line x1="80" y1="150" x2="900" y2="150" stroke="#2E9E5B" stroke-dasharray="5 4"/>
+  <text x="836" y="146" font-size="10.5" fill="#2E9E5B">min_needed₅₀</text>
+  <text x="74" y="116" font-size="10.5" fill="#6b6b80" text-anchor="end">full</text>
+  <text x="74" y="272" font-size="10.5" fill="#6b6b80" text-anchor="end">empty</text>
+
+  <!-- red fill trace (hunting, dips into band) -->
+  <polyline fill="none" stroke="#D64545" stroke-width="2.2"
+    points="80,205 120,250 160,200 200,256 240,196 280,249 320,206 360,241 400,198 440,253 480,201 520,246 560,206 600,251 640,199 680,247 720,203 760,251 800,199 840,245 880,206 900,236"/>
+  <!-- green fill trace (gentle, high) -->
+  <polyline fill="none" stroke="#2E9E5B" stroke-width="2.2"
+    points="80,150 140,160 200,142 260,158 320,146 380,156 440,144 500,158 560,146 620,156 680,144 740,157 800,146 860,155 900,150"/>
+
+  <!-- ===== BOTTOM PANEL: effective rate / pitch ===== -->
+  <text x="28" y="360" font-size="13.5" font-weight="700" fill="#2B6CB0">effective output rate  (mixer.tick_add)  =  playback pitch of a held tone</text>
+  <rect x="80" y="368" width="820" height="176" fill="#fff" stroke="#c9c9d6"/>
+  <!-- nominal line -->
+  <line x1="80" y1="456" x2="900" y2="456" stroke="#9aa0a6" stroke-dasharray="3 3"/>
+  <text x="74" y="460" font-size="10.5" fill="#6b6b80" text-anchor="end">nominal</text>
+  <text x="836" y="392" font-size="10.5" fill="#6b6b80">+Δf (sharp)</text>
+  <text x="836" y="534" font-size="10.5" fill="#6b6b80">−Δf (flat)</text>
+
+  <!-- red pitch wobble -->
+  <polyline fill="none" stroke="#D64545" stroke-width="2.2"
+    points="80,456 120,410 160,500 200,414 240,498 280,416 320,496 360,418 400,500 440,414 480,498 520,416 560,496 600,414 640,500 680,418 720,496 760,414 800,500 840,418 880,456"/>
+  <!-- green pitch nearly flat -->
+  <polyline fill="none" stroke="#2E9E5B" stroke-width="2.2"
+    points="80,456 160,450 240,460 320,451 400,459 480,451 560,460 640,451 720,459 800,452 880,456"/>
+
+  <!-- callouts -->
+  <rect x="300" y="392" width="240" height="26" rx="6" fill="#FBE3E3" stroke="#D64545"/>
+  <text x="420" y="410" font-size="12" font-weight="700" fill="#B23030" text-anchor="middle">periodic ±Δf  →  the audible "beep"</text>
+
+  <text x="28" y="580" font-size="12.5" fill="#6b6b80">The ear integrates a sustained FM carrier into a pitch, so its slow drift is heard as a beat tone. A transient SFX ends before any drift accumulates — and a</text>
+  <text x="28" y="596" font-size="12.5" fill="#6b6b80">DMA SFX additionally pins tick_add to nominal (Mixer_irq_important) — so SFX stays clean while the BGM beeps.</text>
+</svg>

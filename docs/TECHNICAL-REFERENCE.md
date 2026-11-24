@@ -22,7 +22,7 @@ each one is for, and which code answers it.
 
 **Status:** the Android migration phase is **complete** — the milestone tag
 `milestone/android-migration-complete` marks it, and it rides on the current
-release, `v1.0.0.16` (the phase itself ended with `v1.0.0.10`). From there the
+release, `v1.0.0.17` (the phase itself ended with `v1.0.0.10`). From there the
 project is in **maintenance**: bug fixes and documentation polish, no new
 features. §12 is therefore a list of known gaps, not a roadmap.
 
@@ -260,6 +260,7 @@ app adds **no** emulator-core behaviour beyond what §10.7 describes.
 | `include/dos_inc.h`, `include/dos_system.h`, `include/vga.h`, `include/video.h` | the new prototypes | the save-state API |
 | `src/gui/Makefile.am`, `include/Makefile.am`, `src/dos/Makefile.am` | the new files | the desktop build stays in sync |
 | `src/Makefile.am` | the dos archive is listed a second time, after the gui archive | the save-state code in `gui/` calls into `dos/`, and a linker walks a static archive only once (§2.12) |
+| `docs/dosbox.1` | the SEE ALSO section, which pointed at `/usr/share/doc/dosbox`, is removed; the date in the `.TH` line is adjusted, as the page itself asks | that path is a Debian one and this build installs no such directory, so the reference pointed at nothing (§13.5) |
 
 The **autoconf build is untouched**: `configure.ac` and the root `Makefile.am`
 have not changed since the import. The Android build is a separate CMake
@@ -3138,6 +3139,20 @@ The left column carries **File**, **⌨**, **Esc**, **Tab** and **RMB** above th
 arrows; the right one carries the action keys. **RMB** is in all three layouts,
 so a right click is always one tap away.
 
+The two layouts that have no full-size capture in the diagram are captured
+here, from the release build on the emulator, with the display narrowed until
+the bar falls into the 56–116 dp band (1964×1080 at 420 dpi — a bar of
+262 px, or 100 dp):
+
+| | the columns | the columns with the QWERTY folded up |
+|---|---|---|
+| | [`android-n8-30-keyboard-columns.png`](screenshots/android-n8-30-keyboard-columns.png) | [`android-n8-30b-keyboard-columns-qwerty.png`](screenshots/android-n8-30b-keyboard-columns-qwerty.png) |
+
+The **⌨** key is the second one down in the left column, and it is the same
+key that folds the QWERTY up in `MODE_BAR`: `makeControlKey` gives it the
+`toggle` kind, and `togglePanel()` swaps the panel between `VISIBLE` and
+`GONE`.
+
 The rebuild happens **only when the mode or the bar width actually changed**
 (`if (newMode == mode && barWidth == builtBarWidth) return`), so a rotation
 that lands on the same geometry does not rebuild the keys.
@@ -3440,6 +3455,11 @@ so nothing falls back to the columns. The keys do get smaller — and the
 D-pad and the action keys are unaffected, keeping their full 44 dp height and
 their double width.
 
+The **columns** layout has no letter keys to measure — the letters live in the
+fold-up panel instead. Its control keys are 34 dp tall (`DP_KEY_HEIGHT`), so
+they are smaller than the pads' 44 dp keys, and they sit in a column rather
+than in a row.
+
 ▸ **23.6 dp is the number to decide on.** It is about 2.9 % of the screen
 width, where a normal phone keyboard key is roughly twice that. It is still
 tappable — the typing test on the 18:9 display confirmed that the keys hit
@@ -3451,13 +3471,14 @@ The three layers, as they run:
 
 | | a wide screen | 18:9 |
 |---|---|---|
-| Letters | [`android-n7-pads-letters.png`](screenshots/android-n7-pads-letters.png) | [`android-n7-pads-18x9-letters.png`](screenshots/android-n7-pads-18x9-letters.png) |
-| Symbols (**#+=**) | [`android-n7-pads-symbols.png`](screenshots/android-n7-pads-symbols.png) | [`android-n7-pads-18x9-symbols.png`](screenshots/android-n7-pads-18x9-symbols.png) |
-| Functions (**Fn**) | [`android-n7-pads-functions.png`](screenshots/android-n7-pads-functions.png) | [`android-n7-pads-18x9-functions.png`](screenshots/android-n7-pads-18x9-functions.png) |
+| Letters | [`android-n8-03-dos-boot-prompt.png`](screenshots/android-n8-03-dos-boot-prompt.png) | [`android-n8-29-keyboard-18x9-letters.png`](screenshots/android-n8-29-keyboard-18x9-letters.png) |
+| Symbols (**#+=**) | [`android-n8-22-keyboard-symbols.png`](screenshots/android-n8-22-keyboard-symbols.png) | [`android-n8-29-keyboard-18x9-symbols.png`](screenshots/android-n8-29-keyboard-18x9-symbols.png) |
+| Functions (**Fn**) | [`android-n8-23-keyboard-functions.png`](screenshots/android-n8-23-keyboard-functions.png) | [`android-n8-29-keyboard-18x9-functions.png`](screenshots/android-n8-29-keyboard-18x9-functions.png) |
 
-The letter layer is captured on a real phone (22:9, 2376×1080); the symbol and
-function layers are emulator captures at 20:9 (2400×1080). The 18:9 column is
-the emulator with the display resized to 2160×1080.
+All six are captures of the release build on the emulator: the wide column at
+20:9 (2400×1080), the 18:9 column with the display resized to 2160×1080. The
+earlier n7 series also kept a real-phone capture of the letter layer (22:9,
+2376×1080), listed below.
 
 ---
 
@@ -3796,11 +3817,11 @@ by driving the release APK on an emulator.
 |---|---|
 | Device | `emulator-5554` — `sdk_gphone64_x86_64` (Android API 37, x86_64) |
 | Build under test | the **release** APK, all three ABIs |
-| APK | the published `whereq-dosbox-1.0.0.16.apk`, 16 510 058 bytes |
-| SHA-256 | `183f16ee3fd219a878b56b6a08758a184370b834a0fef63b63a7aea7f4faa773` |
-| Published asset | `whereq-dosbox-1.0.0.16.apk` on the [v1.0.0.16 release](https://github.com/whereq/whereq-dosbox/releases/tag/v1.0.0.16), SHA-256 `183f16ee3fd219a878b56b6a08758a184370b834a0fef63b63a7aea7f4faa773` |
-| Previous builds | `whereq-dosbox-1.0.0.15.apk` — 16 500 506 bytes (`dbf776ab…`). Before those: `whereq-dosbox-1.0.0.14.apk` — 16 482 965 bytes (`2bf4d58b…`) |
-| Version | `versionCode` 1000016, `versionName` 1.0.0.16 |
+| APK | the published `whereq-dosbox-1.0.0.17.apk`, 16 510 522 bytes |
+| SHA-256 | `796203db84f31e994c45a3965fe3919b5e7a030a5ad8e45e4a9eabbed3f4ac0a` |
+| Published asset | `whereq-dosbox-1.0.0.17.apk` on the [v1.0.0.17 release](https://github.com/whereq/whereq-dosbox/releases/tag/v1.0.0.17), SHA-256 `796203db84f31e994c45a3965fe3919b5e7a030a5ad8e45e4a9eabbed3f4ac0a` |
+| Previous builds | `whereq-dosbox-1.0.0.16.apk` — 16 510 058 bytes (`183f16ee…`). Before those: `whereq-dosbox-1.0.0.15.apk` — 16 500 506 bytes (`dbf776ab…`) |
+| Version | `versionCode` 1000017, `versionName` 1.0.0.17 |
 | Signature | release key, cert SHA-256 `b16b480d5a1ff6d35baff0b15fa3fc4b0ee815e500861fbff1b062c9bf7d3933` (§3.5) |
 | ABIs in the APK | `lib/arm64-v8a/libdosbox.so`, `lib/armeabi-v7a/libdosbox.so`, `lib/x86_64/libdosbox.so` — all three |
 
@@ -3822,7 +3843,7 @@ signed with a different key has to be uninstalled first).
 | The DOS layer is restored (the open handles come back) | ✓ |
 | The keyboard survives a rotation | ✓ — no stuck key |
 | The **RMB** key is in all three layouts | ✓ — the left pad, the key column and the bottom bar |
-| The **native version** is the release version | ✓ — `config -get sdl mapperfile` answers `mapper-1.0.0.16.map`. Until 1.0.0.12 the macro was a literal `1.0.0.1`, so every release answered `mapper-1.0.0.1.map` |
+| The **native version** is the release version | ✓ — `config -get sdl mapperfile` answers `mapper-1.0.0.17.map`. Until 1.0.0.12 the macro was a literal `1.0.0.1`, so every release answered `mapper-1.0.0.1.map` |
 | A **save → load** round trip works with the mouse block | ✓ — the OPL chip comes back field for field, the four DOS handles with it, no payload-size mismatch |
 | A state written by **1.0.0.10** is refused | ✓ — *"That save file is damaged"*, the version guard (§5.4) |
 | A state written by **1.0.0.11** (version 8) is refused | ✓ — *"That save file is damaged"*; the version is checked before the payload size, so the older layout is never read |
@@ -3851,6 +3872,7 @@ of test:
 | `LicensesActivityTest` (3 cases) | the device | the licence screen carries the GPL, the notices and the link to the source, and the two assets are in the installed app |
 | `LauncherFooterTest` (3 cases) | the device | the foot of the launcher carries the link to the licences and to the privacy policy, and each of them asks the app for the right thing |
 | `RemapOutlineTest` (5 cases) | the JVM | the outline that marks a remappable button contrasts with the chip it marks: the gold FIRE chip gets a dark outline, the dark chips get the gold one, and **the outline is never the colour of the chip** |
+| `GameModeRemapOutlineTest` (2 cases) | the device | the **pixels** of the real gamepad: the outline the app draws on the FIRE button is the dark colour, and the outline on a dark button is the gold |
 | `PrivacyPolicyTest` (3 cases) | the JVM | the privacy policy is in the repository, at `docs/PRIVACY.md`; the link the app hands to the browser names that exact file; and the README links to it |
 
 The instrumented tests press the back button the way a user does — through the
@@ -3864,12 +3886,11 @@ because only the input pipeline reaches the back dispatcher.
 :app:connectedDebugAndroidTest   5 tests, 0 failures
 ```
 
-**Measured on the emulator** (`emulator-5554`, API 37, x86_64), after the
-F5–F8 fixes:
+**Measured on the emulator** (`emulator-5554`, API 37, x86_64), 1.0.0.17:
 
 ```
 :app:testDebugUnitTest          15 tests, 0 failures
-:app:connectedDebugAndroidTest   8 tests, 0 failures
+:app:connectedDebugAndroidTest  10 tests, 0 failures
 ```
 
 ### 11.4 ▸ The OPL test: the proof in two lines
@@ -4165,6 +4186,26 @@ the **privacy policy**, in [`docs/PRIVACY.md`](PRIVACY.md).
 The app has **no `INTERNET` permission** (see the manifest), so it cannot fetch
 the page itself. It hands the URL to the browser — the normal way to do this,
 and the reason the app itself carries no network code.
+
+### 13.5 ▸ The man page
+
+`docs/dosbox.1` is the **DOSBox manual page** — the roff source that
+`man dosbox` renders — and it came in with the import, unmodified. It
+documents the *command line* of the desktop `dosbox` binary: `-fullscreen`,
+`-startmapper`, `-conf`, `-machine`, `-c`, `-exit`, `-printconf`, `-editconf`,
+`-resetmapper`, the internal commands and the special keys.
+
+| | |
+|---|---|
+| **Where it comes from** | DOSBox r4305's own `docs/` directory — the same `man_MANS = dosbox.1` line is in upstream's `docs/Makefile.am` |
+| **What the build does with it** | `man_MANS` makes the automake build install it as a real man page: the native desktop build puts it at `$(mandir)/man1/dosbox.1` |
+| **What the app does with it** | nothing — the APK is a Kotlin launcher over an SDLActivity and has no command line; no Android build step reads the file |
+| **The one local change** | the `SEE ALSO` section pointed at `/usr/share/doc/dosbox`, a Debian path that this build never creates, so the section was removed and the date in the `.TH` line adjusted, as the page itself asks |
+
+The change is marked inside the file (a roff comment in the header records
+what was changed and that upstream's last revision was Sep 08, 2015) and in
+`NOTICE`, because GPLv2 requires an altered file to be plainly marked as
+altered — the rest of the text is upstream's, word for word.
 
 ---
 
@@ -4637,6 +4678,18 @@ evidence, not of the app (§11.6).
 | [`android-n7-keyboard-pads-design.png`](screenshots/android-n7-keyboard-pads-design.png) | the to-scale **design drawing** of the letter layer |
 | [`android-n7-keyboard-pads-design-symbols.png`](screenshots/android-n7-keyboard-pads-design-symbols.png) | the design drawing of the symbol layer |
 | [`android-n7-keyboard-pads-design-fn.png`](screenshots/android-n7-keyboard-pads-design-fn.png) | the design drawing of the function layer |
+| [`android-n8-22-keyboard-symbols.png`](screenshots/android-n8-22-keyboard-symbols.png) | the console pads, **symbol layer** (`#+=`), on the release build |
+| [`android-n8-23-keyboard-functions.png`](screenshots/android-n8-23-keyboard-functions.png) | the console pads, **function layer** (`Fn`), on the release build |
+| [`android-n8-24-game-mode-hybrid.png`](screenshots/android-n8-24-game-mode-hybrid.png) | Game Mode, **Hybrid** profile — the D-pad and the trackball |
+| [`android-n8-25-game-mode-action.png`](screenshots/android-n8-25-game-mode-action.png) | Game Mode, **Action** profile — FIRE, JUMP, USE and ENT |
+| [`android-n8-26-game-mode-point.png`](screenshots/android-n8-26-game-mode-point.png) | Game Mode, **Point & click** profile — the big mouse buttons |
+| [`android-n8-27-game-mode-profile-picker.png`](screenshots/android-n8-27-game-mode-profile-picker.png) | the **Game profile** picker, with *Remap buttons…* |
+| [`android-n8-28-game-mode-remap.png`](screenshots/android-n8-28-game-mode-remap.png) | remap mode — the buttons you can change, outlined in gold |
+| [`android-n8-29-keyboard-18x9-letters.png`](screenshots/android-n8-29-keyboard-18x9-letters.png) | the letter layer on an **18:9** display, captured on the release build |
+| [`android-n8-29-keyboard-18x9-symbols.png`](screenshots/android-n8-29-keyboard-18x9-symbols.png) | the symbol layer on 18:9 |
+| [`android-n8-29-keyboard-18x9-functions.png`](screenshots/android-n8-29-keyboard-18x9-functions.png) | the function layer on 18:9 |
+| [`android-n8-30-keyboard-columns.png`](screenshots/android-n8-30-keyboard-columns.png) | the **columns** layout — one column of keys per side, on a 100 dp bar |
+| [`android-n8-30b-keyboard-columns-qwerty.png`](screenshots/android-n8-30b-keyboard-columns-qwerty.png) | the columns layout with the QWERTY folded up from the bottom |
 | [`android-release-apk.png`](screenshots/android-release-apk.png) | the release APK in the file manager |
 | [`android-release-install-boot.png`](screenshots/android-release-install-boot.png) | the release APK booting |
 | [`n5-gradle-release.png`](screenshots/n5-gradle-release.png) | the Gradle release build |

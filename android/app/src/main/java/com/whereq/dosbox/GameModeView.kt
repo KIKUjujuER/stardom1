@@ -78,10 +78,24 @@ class GameModeView(context: Context) : FrameLayout(context) {
      *  sending the key (entered from the profile button's long-press menu). */
     private var remapMode = false
 
-    /** Loads the saved remaps for a game (no rebuild notify). */
-    fun setRemaps(map: Map<String, String>) {
-        remaps.clear()
-        remaps.putAll(map)
+    /**
+     * Restores a game's saved Game Mode state - profile, D-pad output and button
+     * remaps - in one shot, then lays the gamepad out once. Used when the gamepad
+     * is shown; the per-setter paths ([setProfile], [setDpad]) are for later
+     * user-driven changes and notify the listener, which this does not.
+     *
+     * Setting every field before the single rebuild also fixes the ordering the
+     * separate setters needed (the D-pad had to be in place before the bar was
+     * built, or the chip would name the previous mode).
+     */
+    fun restoreState(profile: Profile, dpad: Dpad, remaps: Map<String, String>) {
+        this.profile = profile
+        this.dpad = dpad
+        this.remaps.clear()
+        this.remaps.putAll(remaps)
+        // The DRAG lock only belongs to POINT; restoring another profile drops it
+        // so the left mouse button is not left down inside DOSBox.
+        if (profile != Profile.POINT) releaseDragLock()
         rebuild(force = true)
     }
 
@@ -91,6 +105,16 @@ class GameModeView(context: Context) : FrameLayout(context) {
     /** Scancodes currently held down, released on a rebuild so nothing sticks. */
     private val downKeys = HashSet<String>()
     private val scancodeCache = HashMap<String, Int>()
+
+    /**
+     * The TURBO auto-fire loop while the FIRE button is held, or null. It has to
+     * live here, not inside the FIRE button's touch listener, because a rebuild
+     * (a rotation, or the other thumb cycling a chip) detaches the FIRE view
+     * mid-hold without an ACTION_UP - so the listener would never stop it and the
+     * key would fire forever. [releaseKeys] cancels it, and rebuild/hide/destroy
+     * all go through there.
+     */
+    private var autofire: Runnable? = null
 
     /** Mouse buttons a finger is holding down. They are released on a rebuild
      *  and when the view is hidden, so a button that was pressed does not stay
@@ -153,10 +177,16 @@ class GameModeView(context: Context) : FrameLayout(context) {
         releaseDragLock()
     }
 
-    /** Releases every key the view holds down. */
+    /** Releases every key the view holds down, and stops the TURBO auto-fire. */
     private fun releaseKeys() {
+        stopAutofire()
         for (name in downKeys.toList()) push(name, false)
         downKeys.clear()
+    }
+
+    /** Stops the TURBO auto-fire loop if it is running. */
+    private fun stopAutofire() {
+        autofire?.let { handler.removeCallbacks(it); autofire = null }
     }
 
     /** Releases the mouse buttons a finger is on. */
@@ -477,7 +507,6 @@ class GameModeView(context: Context) : FrameLayout(context) {
             chip.setOnClickListener { openRemapPicker(slot, "FIRE") }
             return chip
         }
-        var autofire: Runnable? = null
         chip.setOnTouchListener { _, e ->
             when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
@@ -489,11 +518,14 @@ class GameModeView(context: Context) : FrameLayout(context) {
                                 handler.postDelayed(this, TURBO_PERIOD_MS)
                             }
                         }
+                        // Replace any previous loop, so a stray one can never pile
+                        // up (the field is cancelled by releaseKeys on a rebuild).
+                        stopAutofire()
                         autofire = r; handler.post(r)
                     } else push(effKey, true)
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    autofire?.let { handler.removeCallbacks(it); autofire = null }
+                    stopAutofire()
                     push(effKey, false)
                 }
             }
@@ -666,6 +698,18 @@ class GameModeView(context: Context) : FrameLayout(context) {
         remapMode = true
         rebuild(force = true)
         showRemapBanner()
+    }
+
+    /**
+     * Puts the gamepad into remap mode.
+     *
+     * The user reaches it from the profile button's long-press menu; this is
+     * the same code path, exposed so that a test can put the gamepad into
+     * that mode and look at the outline it draws.
+     */
+    @VisibleForTesting
+    fun enterRemapModeForTest() {
+        enterRemapMode()
     }
 
     /** Leaves remap mode — the buttons go back to sending their keys. */

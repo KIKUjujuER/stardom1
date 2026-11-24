@@ -1258,6 +1258,12 @@ public:
 	}
 	~DOS(){
 		for (Bit16u i=0;i<DOS_DRIVES;i++) delete Drives[i];
+		/* The devices of the DOS section are removed as well: the device
+		 * table is static, and a DOSBox that is started again in the same
+		 * process (the Android app keeps its process alive between two
+		 * starts) would otherwise find the table of the previous run still
+		 * filled and die with "DOS:Too many devices added". */
+		DOS_ClearDefaultDevices();
 	}
 };
 

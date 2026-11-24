@@ -183,14 +183,44 @@ void DOS_DelDevice(DOS_Device * dev) {
 	}
 }
 
+/* The devices DOS_SetupDevices() creates. They are the only devices of the
+ * DOS section that are not removed by the section that owns them, so they are
+ * freed when the DOS section shuts down. */
+static DOS_Device *dos_default_devices[3] = {0, 0, 0};
+
 void DOS_SetupDevices(void) {
 	DOS_Device * newdev;
 	newdev=new device_CON();
 	DOS_AddDevice(newdev);
+	dos_default_devices[0]=newdev;
 	DOS_Device * newdev2;
 	newdev2=new device_NUL();
 	DOS_AddDevice(newdev2);
+	dos_default_devices[1]=newdev2;
 	DOS_Device * newdev3;
 	newdev3=new device_LPT1();
 	DOS_AddDevice(newdev3);
+	dos_default_devices[2]=newdev3;
+}
+
+/* Removes the devices of DOS_SetupDevices() from the device table.
+ *
+ * The table is a static array with ten slots, and the devices that live in it
+ * are not freed when DOSBox shuts down. A DOSBox that is started again in the
+ * same process - the Android app keeps its process alive between two starts -
+ * would therefore find the table of the previous run still filled and die with
+ * "DOS:Too many devices added" once the slots ran out. Freeing the devices
+ * here keeps the table empty between two runs.
+ *
+ * Only the devices of this function are touched: the EMS and the serial port
+ * remove their own devices while they shut down, and the serial port is shut
+ * down after the DOS section, so its device is still in the table here. */
+void DOS_ClearDefaultDevices(void) {
+	for (Bitu i = 0; i < 3; i++) {
+		if (dos_default_devices[i] == 0) {
+			continue;
+		}
+		DOS_DelDevice(dos_default_devices[i]);
+		dos_default_devices[i] = 0;
+	}
 }

@@ -16,12 +16,83 @@ repository's history, at their own tag — for example
 
 | version | file | size |
 |---|---|---|
-| 1.0.0.16 | [`whereq-dosbox-1.0.0.16.apk`](https://github.com/whereq/whereq-dosbox/releases/download/v1.0.0.16/whereq-dosbox-1.0.0.16.apk) | 16 510 058 bytes (15.8 MB) |
+| 1.0.0.17 | [`whereq-dosbox-1.0.0.17.apk`](https://github.com/whereq/whereq-dosbox/releases/download/v1.0.0.17/whereq-dosbox-1.0.0.17.apk) | 16 510 522 bytes (15.8 MB) |
 
-* SHA-256 of the 1.0.0.16 APK:
-  `183f16ee3fd219a878b56b6a08758a184370b834a0fef63b63a7aea7f4faa773`
+* SHA-256 of the 1.0.0.17 APK:
+  `796203db84f31e994c45a3965fe3919b5e7a030a5ad8e45e4a9eabbed3f4ac0a`
 * Signing certificate (SHA-256):
   `b16b480d5a1ff6d35baff0b15fa3fc4b0ee815e500861fbff1b062c9bf7d3933`
+
+## What changed in 1.0.0.18
+
+A release with a **feature** and four **fixes**: a hardware keyboard finally
+reaches the emulator, the app can start DOSBox again instead of dying, the
+tone that rode on the music is gone, and **Game Mode** comes back the way you
+left it.
+
+* **A Bluetooth keyboard works.** The vendored SDL2 had no path for Android key
+  events, so a key pressed on a Bluetooth keyboard never reached the emulator:
+  the on-screen keyboard was the only input there was. An Android key code is
+  now mapped to a DOSBox key name and resolved through the same native table
+  the on-screen keyboard uses, with **Shift**, **Ctrl** and **Alt** carried
+  along, and only the first press of a held key forwarded - DOSBox does its
+  own auto-repeat. Checked in the emulator with real key events: the letters
+  and **Enter** pass the copy protection of *Mortal Kombat*, **F1** starts the
+  game, **F10** opens its own options menu, and the arrow keys move the menu
+  cursor.
+* **DOSBox can start again in the same app run.** The devices of a run were
+  never removed from the device table, so a second start in the same process
+  ran out of slots and died with *DOS:Too many devices added*. Leaving the app
+  with the Back button and opening it again was enough to hit it.
+* **The tone that rode on the music is gone.** A steady beat tone sat on top
+  of the in-game music on a real phone, and only while the music played. The
+  shipped `dosbox.conf` now runs the mixer the way a phone wants it - at the
+  device's native **48 kHz**, in blocks of **2048**, with a **50 ms**
+  prebuffer - so the rate-tracking loop stops hunting and the warble with it.
+  Audio buffering only: never game speed or logic. The analysis and its three
+  diagrams are in `docs/AUDIO-FM-BEEP.md`.
+* **Game Mode comes back the way you left it.** The profile, the D-pad mode
+  and the remaps are restored in one pass, before the gamepad is built, so the
+  chip that names the mode can no longer name the previous one.
+* **The TURBO auto-fire cannot get stuck.** A rebuild while the FIRE button
+  was held - a rotation, or the other thumb cycling a chip - detached the
+  button without an `ACTION_UP`, so the key fired forever. The loop now lives
+  with the game pad, and every path that releases the keys cancels it.
+
+The **user guide** grew with it: the keyboard's **columns layout** and the
+narrow-screen keyboard are pictured now, and the new **Game Mode** screenshots
+were re-taken from the 1.0.0.17 release build.
+
+The save states, the bundle launcher, the on-screen keyboard and the emulator
+core are unchanged: **every save state written by the earlier releases loads
+normally**.
+
+## What changed in 1.0.0.17
+
+A **maintenance** release: two things in **Game Mode** that were wrong in a way
+only the screen could show, and the **privacy policy**, which now lives in the
+repository next to the code and the licences.
+
+* **The FIRE button shows that it can be remapped.** While the remap mode is
+  on, the buttons that can be remapped get an outline. The FIRE button is
+  filled with the same gold as the outline, so the outline was invisible and
+  the button looked like any other one. The outline now follows the button it
+  marks: gold on the dark buttons, dark brown on the gold FIRE button.
+* **The D-pad button names the mode you actually have.** The button in the
+  bottom row of the left pad cycles the D-pad output between **ARROWS**,
+  **NUMPAD** and **WASD**, and it carries the name of the current mode. When
+  the app remembered a different mode for that game, the button kept the name
+  of the mode the bar had been built with, so it could say *ARROWS* while the
+  D-pad was sending *WASD*.
+* **The privacy policy is in the repository.** The app collects no data and
+  does not ask for the `INTERNET` permission, so it cannot send anything
+  anywhere even if it wanted to. The policy says so in full, and now lives in
+  the repository as `docs/PRIVACY.md` — next to `COPYING` and `NOTICE`, where
+  the whole history of it is public. The README links to it, and the
+  launcher's footer opens it next to the link to the licence screen.
+
+The emulator core, the bundle launcher, the keyboard and the save states are
+unchanged: **every save state written by the earlier releases loads normally**.
 
 ## What changed in 1.0.0.16
 

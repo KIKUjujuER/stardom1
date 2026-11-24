@@ -18,6 +18,7 @@ import android.view.View
 import android.view.WindowManager
 import android.window.OnBackInvokedCallback
 import android.window.OnBackInvokedDispatcher
+import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.annotation.VisibleForTesting
@@ -302,12 +303,9 @@ class WhereqDosboxActivity : SDLActivity() {
             addContentView(gm, lp)
             gameMode = gm
         }
-        // Restore the per-game choice before showing, without notifying back.
-        // The D-pad comes first: it has to be in place before the bar is built,
-        // or the chip that names the mode would name the previous one.
-        view.setDpad(loadGameDpad(), notify = false)
-        view.setProfile(loadGameProfile(), notify = false)
-        view.setRemaps(loadGameRemaps())
+        // Restore the per-game choice before showing, without notifying back, in
+        // one shot (one layout pass).
+        view.restoreState(loadGameProfile(), loadGameDpad(), loadGameRemaps())
         keyboard?.visibility = View.GONE
         view.visibility = View.VISIBLE
     }
@@ -1273,6 +1271,44 @@ class WhereqDosboxActivity : SDLActivity() {
         if (!handleBack()) {
             finish()
         }
+    }
+
+    /**
+     * Forwards the hardware keyboard into DOSBox.
+     *
+     * SDL2's Android back end has no path for hardware keys at all: the Java
+     * layer only feeds the IME, and the native side never sees an `AKEY_EVENT`.
+     * A key pressed on a Bluetooth or USB keyboard therefore never reaches the
+     * emulator - and neither does an injected `adb shell input keyevent`.
+     *
+     * [HardwareKeyboard] pushes those keys into DOSBox's event queue, the same
+     * way the on-screen keyboard does, so a phone with a keyboard can play the
+     * games whose start key is not on the on-screen keyboard face - Mortal
+     * Kombat starts on F1.
+     *
+     * Keys DOSBox does not know - the back button, the volume keys - keep
+     * travelling through the normal Android dispatch, so the app's own
+     * handling of them is unchanged.
+     */
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (forwardHardwareKey(event)) {
+            return true
+        }
+        return super.dispatchKeyEvent(event)
+    }
+
+    /**
+     * Hands one key event to DOSBox.
+     *
+     * @return true if DOSBox took the key.
+     */
+    private fun forwardHardwareKey(event: KeyEvent): Boolean {
+        // The launch-script editor is a text field: its keystrokes belong to
+        // the field and not to the game behind it.
+        if (currentFocus is EditText) {
+            return false
+        }
+        return HardwareKeyboard.forward(event)
     }
 
     /**

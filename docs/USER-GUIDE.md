@@ -135,7 +135,7 @@ Press **Play**.
 The emulator restarts the app and boots the game, and you land at a DOS
 prompt:
 
-![The DOSBox welcome banner and the C:\> prompt, with the on-screen keyboard below it](screenshots/android-n8-03-dos-boot-prompt.png)
+![The DOSBox welcome banner and the C:\> prompt, with the two keyboard pads beside the picture](screenshots/android-n8-03-dos-boot-prompt.png)
 
 Type the game's name and press **Enter**. From then on it is the real game —
 the real keyboard, the real sound, the real mouse.
@@ -181,6 +181,10 @@ Two keys change what the pads show:
 
 The switched key lights up while its layer is on.
 
+![The punctuation layer, with the #+= key lit](screenshots/android-n8-22-keyboard-symbols.png)
+
+![The function layer, with the Fn key lit](screenshots/android-n8-23-keyboard-functions.png)
+
 **Modifiers work two ways.** *Tap* Ctrl, Alt or Shift and it stays armed for
 the next key — Ctrl, then C. *Hold* it and it behaves like a real key for as
 long as your finger is down, which is what a game expects of its fire and
@@ -199,6 +203,30 @@ own position.
 Turn the phone to portrait and the pads fold into a single strip along the
 bottom, for the games that are taller than they are wide.
 
+**The layout follows the screen.** The letterbox bar beside the 4:3 DOS picture
+has to be at least 116 dp wide to carry a full pad. On a narrow landscape
+phone it still does — an 18:9 bar is 137 dp — but the letter keys are squeezed
+to about 24 dp, against 33 dp on a 20:9 screen. The D-pad and the action keys
+keep their full size; it is the letters that get tight. The **#+=** and **Fn**
+layers are tight in the same way.
+
+![The letter layer on an 18:9 display — the same two pads, with the letter keys noticeably smaller](screenshots/android-n8-29-keyboard-18x9-letters.png)
+
+**Below 116 dp the pads give way to columns.** There is no longer room for a
+half-keyboard beside the picture, so the pads become a single column of keys per
+side — arrows on the left, the action keys on the right — and the whole QWERTY
+folds up from the bottom when you want it.
+
+![The columns layout — a single column of keys per side, with the DOS picture in the middle](screenshots/android-n8-30-keyboard-columns.png)
+
+The **⌨** key in the left column opens the QWERTY, which rises from the
+bottom over the picture and closes again with the same key.
+
+![The columns layout with the QWERTY folded up from the bottom](screenshots/android-n8-30b-keyboard-columns-qwerty.png)
+
+Below 56 dp even that is too much, and the keyboard becomes a slim strip along
+the bottom of the screen.
+
 ---
 
 ## Game Mode — a gamepad for action games
@@ -206,6 +234,8 @@ bottom, for the games that are taller than they are wide.
 Some games want a gamepad, not a typewriter. **Game Mode** replaces the keyboard
 pads with a console-style controller: a direction pad and a trackball, with the
 buttons a DOS game actually fires, jumps and strafes with.
+
+![Game Mode in the Hybrid profile — L-CLICK and R-CLICK above an 8-way D-pad on the left, and Y, X, CTRL, ALT, the trackball, SPACE and ENT on the right](screenshots/android-n8-24-game-mode-hybrid.png)
 
 **Getting in and out is a nod to the old days.** With the keyboard pads showing,
 switch **Caps Lock** on first — double-tap **Shift**, and the key turns blue and
@@ -221,11 +251,17 @@ The gold button at the top-left names the current **profile**; tap it to cycle,
 long-press for a picker. Each game remembers the profile and D-pad you last used
 with it.
 
+![The Game profile picker — Hybrid, Action and Point & click, and Remap buttons…](screenshots/android-n8-27-game-mode-profile-picker.png)
+
 | profile | left thumb | right thumb | for |
 |---|---|---|---|
 | **Hybrid** (default) | 8-way D-pad | trackball | games that mix keys and mouse — Dune II, X-COM, Doom with a mouse |
 | **Action** | 8-way D-pad | FIRE / JUMP / USE / ENT buttons | keyboard arcade/shooters — Wolf3D, Keen, Prince of Persia |
 | **Point** | big LEFT / RIGHT mouse buttons | trackball | mouse-only games — Monkey Island, Civilization, Lemmings |
+
+![Game Mode in the Action profile — an 8-way D-pad on the left, and FIRE, JUMP, USE and ENT on the right](screenshots/android-n8-25-game-mode-action.png)
+
+![Game Mode in the Point & click profile — big LEFT and RIGHT mouse buttons on the left, a trackball on the right](screenshots/android-n8-26-game-mode-point.png)
 
 The **trackball** moves the pointer the way a laptop touchpad does — stroke to
 move, **tap to click** — rather than jumping it to where you touch. In Hybrid,
@@ -258,6 +294,8 @@ profile) and choose **Remap buttons…**. The screen enters *remap mode*: a bann
 along the top says *"Tap a button to remap"*, and the buttons you can change are
 outlined in gold. **Tap one** and a list of keys opens — pick the one you want.
 **DONE** (or the banner) leaves remap mode.
+
+![Remap mode in the Action profile — the buttons you can change are outlined in gold, under a banner that says Tap a button to remap](screenshots/android-n8-28-game-mode-remap.png)
 
 | you can change | you cannot change |
 |---|---|

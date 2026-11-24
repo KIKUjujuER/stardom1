@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 460" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect x="0" y="0" width="980" height="460" fill="#FBFAF7"/>
+  <text x="28" y="36" font-size="19" font-weight="700" fill="#22223B">Why a sustained FM note turns the wobble into a tone — and why SFX don't</text>
+
+  <!-- divider -->
+  <line x1="500" y1="70" x2="500" y2="430" stroke="#dcdce6"/>
+
+  <!-- LEFT: sustained carrier with wavelength (pitch) modulation -->
+  <text x="28" y="78" font-size="14" font-weight="700" fill="#D64545">BGM — one held OPL carrier (seconds long)</text>
+  <rect x="28" y="92" width="452" height="150" fill="#fff" stroke="#c9c9d6"/>
+  <line x1="28" y1="167" x2="480" y2="167" stroke="#e6e6ee"/>
+  <!-- the FM-wobbled sine (dense = sharp, sparse = flat) : baseline y=167, A=40 -->
+  <path d="M40,167 Q53,87 66,167 Q79,247 92,167 Q105,87 118,167 Q131,247 144,167 Q157,87 170,167 Q183,247 196,167 Q209,87 222,167 Q243,247 264,167 Q285,87 306,167 Q327,247 348,167 Q369,87 390,167 Q411,247 432,167 Q451,87 470,167"
+        fill="none" stroke="#D64545" stroke-width="2.2"/>
+  <text x="120" y="232" font-size="11" fill="#B23030" text-anchor="middle">pitch ↑</text>
+  <text x="360" y="232" font-size="11" fill="#B23030" text-anchor="middle">pitch ↓</text>
+  <text x="254" y="118" font-size="11.5" fill="#6b6b80" text-anchor="middle">instantaneous frequency follows tick_add</text>
+  <!-- bracket: held long -->
+  <path d="M40,254 L40,262 L470,262 L470,254" fill="none" stroke="#6b6b80"/>
+  <text x="254" y="282" font-size="12.5" fill="#22223B" text-anchor="middle">held long enough for the ear to hear a pitch →</text>
+  <text x="254" y="300" font-size="13" font-weight="700" fill="#B23030" text-anchor="middle">its drift is heard as a beat tone (the "beep")</text>
+
+  <!-- the FM math -->
+  <rect x="28" y="326" width="452" height="104" rx="8" fill="#FFF2CC" stroke="#C8900F"/>
+  <text x="44" y="350" font-size="13" font-weight="700" fill="#8a5a00">The mechanism, as plain FM</text>
+  <text x="44" y="372" font-size="12.5" fill="#5a4a10">carrier f₀ (the music note), slowly frequency-modulated at</text>
+  <text x="44" y="390" font-size="12.5" fill="#5a4a10">rate f_m (how fast the loop hunts, ≈ tens of Hz) →</text>
+  <text x="44" y="412" font-size="13" font-weight="700" fill="#B23030">spectrum gains sidebands at f₀ ± f_m ± 2f_m …</text>
+
+  <!-- RIGHT TOP: SFX transient -->
+  <text x="520" y="78" font-size="14" font-weight="700" fill="#2E9E5B">SFX — a digital burst (~tens of ms)</text>
+  <rect x="520" y="92" width="432" height="120" fill="#fff" stroke="#c9c9d6"/>
+  <line x1="520" y1="152" x2="952" y2="152" stroke="#e6e6ee"/>
+  <polyline fill="none" stroke="#2E9E5B" stroke-width="2.2"
+    points="540,152 549,104 558,196 567,116 576,186 585,126 594,178 603,134 612,172 621,140 630,166 639,146 648,160 657,150 666,156 675,152 690,152 952,152"/>
+  <text x="596" y="96" font-size="11" fill="#6b6b80">burst</text>
+  <text x="800" y="146" font-size="11.5" fill="#6b6b80" text-anchor="middle">silence — ends before any drift accumulates</text>
+  <text x="736" y="202" font-size="12" fill="#2E7D46" text-anchor="middle">no sustained carrier → no beat · DMA also pins the rate (Mixer_irq_important)</text>
+
+  <!-- RIGHT BOTTOM: spectrum -->
+  <text x="520" y="252" font-size="14" font-weight="700" fill="#22223B">spectrum of the beeping BGM</text>
+  <rect x="520" y="264" width="432" height="166" fill="#fff" stroke="#c9c9d6"/>
+  <line x1="560" y1="408" x2="930" y2="408" stroke="#9aa0a6"/>
+  <text x="936" y="412" font-size="11" fill="#6b6b80">freq</text>
+  <!-- carrier -->
+  <rect x="736" y="300" width="10" height="108" fill="#22223B"/>
+  <text x="741" y="294" font-size="11.5" font-weight="700" fill="#22223B" text-anchor="middle">f₀</text>
+  <!-- sidebands -->
+  <rect x="690" y="352" width="8" height="56" fill="#D64545"/>
+  <text x="694" y="346" font-size="10.5" fill="#B23030" text-anchor="middle">f₀−f_m</text>
+  <rect x="784" y="352" width="8" height="56" fill="#D64545"/>
+  <text x="788" y="346" font-size="10.5" fill="#B23030" text-anchor="middle">f₀+f_m</text>
+  <rect x="650" y="378" width="7" height="30" fill="#E8A0A0"/>
+  <rect x="826" y="378" width="7" height="30" fill="#E8A0A0"/>
+  <text x="596" y="384" font-size="10.5" fill="#c08" text-anchor="middle">−2f_m</text>
+  <text x="884" y="384" font-size="10.5" fill="#c08" text-anchor="middle">+2f_m</text>
+  <text x="736" y="426" font-size="11.5" fill="#B23030" text-anchor="middle">the sidebands are the extra tone you hear over the music</text>
+</svg>

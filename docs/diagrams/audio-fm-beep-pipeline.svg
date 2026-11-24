@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 540" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#33334d"/>
+    </marker>
+    <marker id="arrg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#C8900F"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="980" height="540" fill="#FBFAF7"/>
+  <text x="28" y="40" font-size="20" font-weight="700" fill="#22223B">WhereQ-DOSBox audio pipeline: a producer/consumer with a rate-feedback loop</text>
+  <text x="28" y="64" font-size="14" fill="#6b6b80">The consumer re-tunes the producer's sample rate to hold the buffer near its set-point — that loop is the bug.</text>
+
+  <!-- PRODUCER ROW -->
+  <text x="28" y="104" font-size="13" font-weight="700" fill="#2B6CB0">EMULATION THREAD  (DOSBox core, driven by the PIT tick)</text>
+
+  <!-- sources feeding the mix -->
+  <rect x="28" y="120" width="186" height="64" rx="8" fill="#fff" stroke="#D64545" stroke-width="1.6"/>
+  <text x="121" y="146" font-size="13.5" font-weight="700" fill="#D64545" text-anchor="middle">OPL2 / OPL3  (FM)</text>
+  <text x="121" y="164" font-size="12" fill="#6b6b80" text-anchor="middle">OPL_CallBack →</text>
+  <text x="121" y="178" font-size="12" fill="#6b6b80" text-anchor="middle">DBOPL::Generate · heavy, steady</text>
+
+  <rect x="28" y="200" width="186" height="60" rx="8" fill="#fff" stroke="#2E9E5B" stroke-width="1.6"/>
+  <text x="121" y="226" font-size="13.5" font-weight="700" fill="#2E9E5B" text-anchor="middle">SB16 DMA  (digital SFX)</text>
+  <text x="121" y="244" font-size="12" fill="#6b6b80" text-anchor="middle">IRQ-timed · ticksLocked</text>
+
+  <!-- CPU / PIT / producer -->
+  <rect x="268" y="120" width="150" height="60" rx="8" fill="#fff" stroke="#33334d"/>
+  <text x="343" y="146" font-size="13.5" font-weight="700" fill="#22223B" text-anchor="middle">Emulated CPU</text>
+  <text x="343" y="164" font-size="12" fill="#6b6b80" text-anchor="middle">cycles=auto (jittery)</text>
+
+  <rect x="268" y="200" width="150" height="54" rx="8" fill="#fff" stroke="#33334d"/>
+  <text x="343" y="223" font-size="13.5" font-weight="700" fill="#22223B" text-anchor="middle">PIT tick ~1 kHz</text>
+  <text x="343" y="240" font-size="12" fill="#6b6b80" text-anchor="middle">TIMER_AddTickHandler</text>
+
+  <rect x="470" y="150" width="190" height="86" rx="8" fill="#FFF7E2" stroke="#C8900F" stroke-width="1.8"/>
+  <text x="565" y="176" font-size="14" font-weight="700" fill="#22223B" text-anchor="middle">MIXER_Mix()  — producer</text>
+  <text x="565" y="196" font-size="12" fill="#5a4a10" text-anchor="middle">writes ⌊tick_add⌋ samples/tick</text>
+  <text x="565" y="212" font-size="12" fill="#5a4a10" text-anchor="middle">into mixer.work[]</text>
+  <text x="565" y="228" font-size="11.5" fill="#9a7a12" text-anchor="middle">tick_add = the EFFECTIVE output rate</text>
+
+  <!-- arrows producer row -->
+  <line x1="214" y1="150" x2="266" y2="150" stroke="#33334d" marker-end="url(#arr)"/>
+  <line x1="214" y1="230" x2="266" y2="227" stroke="#33334d" marker-end="url(#arr)"/>
+  <line x1="343" y1="180" x2="343" y2="200" stroke="#33334d" marker-end="url(#arr)"/>
+  <line x1="418" y1="210" x2="468" y2="200" stroke="#33334d" marker-end="url(#arr)"/>
+
+  <!-- RING BUFFER -->
+  <rect x="300" y="286" width="420" height="58" rx="10" fill="#EEF3FB" stroke="#2B6CB0" stroke-width="1.6"/>
+  <text x="510" y="309" font-size="14" font-weight="700" fill="#22223B" text-anchor="middle">ring buffer  mixer.work[]</text>
+  <text x="510" y="329" font-size="12" fill="#6b6b80" text-anchor="middle">fill level = mixer.done · set-point = min_needed (prebuffer)</text>
+  <!-- fill gauge -->
+  <rect x="724" y="292" width="150" height="46" rx="6" fill="#fff" stroke="#9aa0a6"/>
+  <rect x="724" y="292" width="54" height="46" rx="6" fill="#cfe0f6"/>
+  <line x1="792" y1="286" x2="792" y2="344" stroke="#2E9E5B" stroke-dasharray="4 3" stroke-width="2"/>
+  <text x="799" y="300" font-size="10.5" fill="#2E9E5B">min_needed</text>
+  <text x="799" y="334" font-size="10.5" fill="#6b6b80">(set-point)</text>
+
+  <line x1="565" y1="236" x2="520" y2="284" stroke="#C8900F" stroke-width="1.6" marker-end="url(#arrg)"/>
+
+  <!-- CONSUMER ROW -->
+  <text x="28" y="396" font-size="13" font-weight="700" fill="#2B6CB0">AUDIO THREAD  (SDL2 callback → Android AudioTrack)</text>
+
+  <rect x="300" y="410" width="220" height="92" rx="8" fill="#FFF7E2" stroke="#C8900F" stroke-width="1.8"/>
+  <text x="410" y="434" font-size="14" font-weight="700" fill="#22223B" text-anchor="middle">MIXER_CallBack()  — consumer</text>
+  <text x="410" y="454" font-size="12" fill="#5a4a10" text-anchor="middle">need = len / 4  (samples SDL wants)</text>
+  <text x="410" y="470" font-size="12" fill="#5a4a10" text-anchor="middle">resamples ‘reduce’ ready → ‘need’ out:</text>
+  <text x="410" y="488" font-size="11.5" font-weight="700" fill="#B23030" text-anchor="middle">index_add = (reduce ≪ SHIFT) / need</text>
+
+  <rect x="560" y="420" width="140" height="72" rx="8" fill="#fff" stroke="#33334d"/>
+  <text x="630" y="446" font-size="13.5" font-weight="700" fill="#22223B" text-anchor="middle">SDL2 audio</text>
+  <text x="630" y="464" font-size="12" fill="#6b6b80" text-anchor="middle">SDL_OpenAudio</text>
+  <text x="630" y="480" font-size="12" fill="#6b6b80" text-anchor="middle">→ AudioTrack</text>
+
+  <rect x="738" y="420" width="150" height="72" rx="8" fill="#fff" stroke="#33334d"/>
+  <text x="813" y="442" font-size="13" font-weight="700" fill="#22223B" text-anchor="middle">AudioFlinger</text>
+  <text x="813" y="460" font-size="11.5" fill="#6b6b80" text-anchor="middle">hidden resample</text>
+  <text x="813" y="475" font-size="11.5" fill="#6b6b80" text-anchor="middle">if 44100 ≠ device</text>
+  <text x="813" y="489" font-size="11.5" fill="#D64545" text-anchor="middle">48000 (2nd beat!)</text>
+
+  <!-- ring -> consumer, consumer-> sdl -> flinger -->
+  <line x1="470" y1="344" x2="430" y2="408" stroke="#2B6CB0" stroke-width="1.6" marker-end="url(#arr)"/>
+  <line x1="520" y1="456" x2="558" y2="456" stroke="#33334d" marker-end="url(#arr)"/>
+  <line x1="700" y1="456" x2="736" y2="456" stroke="#33334d" marker-end="url(#arr)"/>
+  <line x1="888" y1="456" x2="906" y2="456" stroke="#33334d" marker-end="url(#arr)"/>
+  <!-- speaker icon -->
+  <path d="M918 446 L926 446 L934 438 L934 474 L926 466 L918 466 Z" fill="#33334d"/>
+  <path d="M940 446 A10 10 0 0 1 940 466" fill="none" stroke="#33334d" stroke-width="2"/>
+  <path d="M946 440 A17 17 0 0 1 946 472" fill="none" stroke="#33334d" stroke-width="2"/>
+
+  <!-- THE FEEDBACK LOOP -->
+  <path d="M300 456 C 150 456, 150 193, 468 193" fill="none" stroke="#C8900F" stroke-width="2.4" stroke-dasharray="7 4" marker-end="url(#arrg)"/>
+  <rect x="40" y="300" width="236" height="74" rx="8" fill="#FFF2CC" stroke="#C8900F" stroke-width="1.4"/>
+  <text x="158" y="322" font-size="12.5" font-weight="700" fill="#8a5a00" text-anchor="middle">FEEDBACK (the culprit)</text>
+  <text x="158" y="340" font-size="11.5" fill="#6b5a20" text-anchor="middle">tick_add ← calc_tickadd( freq ± f(done−min_needed) )</text>
+  <text x="158" y="356" font-size="11.5" fill="#6b5a20" text-anchor="middle">a software AGC/PLL on the buffer fill —</text>
+  <text x="158" y="370" font-size="11.5" fill="#6b5a20" text-anchor="middle">pinned to nominal only when Mixer_irq_important()</text>
+</svg>
