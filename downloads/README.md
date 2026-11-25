@@ -16,10 +16,10 @@ repository's history, at their own tag — for example
 
 | version | file | size |
 |---|---|---|
-| 1.0.0.18 | [`whereq-dosbox-1.0.0.18.apk`](https://github.com/whereq/whereq-dosbox/releases/download/v1.0.0.18/whereq-dosbox-1.0.0.18.apk) | 16 511 574 bytes (15.8 MB) |
+| 1.0.0.18 | [`whereq-dosbox-1.0.0.18.apk`](https://github.com/whereq/whereq-dosbox/releases/download/v1.0.0.18/whereq-dosbox-1.0.0.18.apk) | 16 511 577 bytes (15.8 MB) |
 
 * SHA-256 of the 1.0.0.18 APK:
-  `b7584588a66a461bc727cdd3f2646ea969dde2d6cf248d89f78c56ee5d8121b5`
+  `80cc3cdfa54a3dff7296d298eef72fffa771c57a992c30bab1793c6f9a97d4d0`
 * Signing certificate (SHA-256):
   `b16b480d5a1ff6d35baff0b15fa3fc4b0ee815e500861fbff1b062c9bf7d3933`
 
@@ -36,10 +36,9 @@ left it.
   now mapped to a DOSBox key name and resolved through the same native table
   the on-screen keyboard uses, with **Shift**, **Ctrl** and **Alt** carried
   along, and only the first press of a held key forwarded - DOSBox does its
-  own auto-repeat. Checked in the emulator with real key events: the letters
-  and **Enter** pass the copy protection of *Mortal Kombat*, **F1** starts the
-  game, **F10** opens its own options menu, and the arrow keys move the menu
-  cursor.
+  own auto-repeat. Checked on a **real phone**: the letters and **Enter** pass
+  the copy protection of *Mortal Kombat*, **F1** starts the game, **F10** opens
+  its own options menu, and the arrow keys move the menu cursor.
 * **DOSBox can start again in the same app run.** The devices of a run were
   never removed from the device table, so a second start in the same process
   ran out of slots and died with *DOS:Too many devices added*. Leaving the app
@@ -62,6 +61,10 @@ left it.
 The **user guide** grew with it: the keyboard's **columns layout** and the
 narrow-screen keyboard are pictured now, and the new **Game Mode** screenshots
 were re-taken from the 1.0.0.17 release build.
+
+The whole of this release - the hardware keyboard, the tone on the music, the
+second start in the same app run, and **Game Mode** coming back the way it was
+left - was checked on a **real phone**, not only in the emulator.
 
 The save states, the bundle launcher, the on-screen keyboard and the emulator
 core are unchanged: **every save state written by the earlier releases loads
