@@ -207,7 +207,7 @@ class WhereqDosboxActivity : SDLActivity() {
         // onResume(), so doing this here is early enough.
         DosboxNative.nativePrepareEnvironment(filesDir.absolutePath)
 
-        installVirtualKeyboard()
+        if (pendingLaunch != null) installStardomControls() else installVirtualKeyboard()
 
         // A bundle that was opened from a file manager is installed right away —
         // the user asked for it with a tap.
@@ -276,6 +276,19 @@ class WhereqDosboxActivity : SDLActivity() {
         )
         addContentView(keyboard, lp)
         this.keyboard = keyboard
+    }
+
+    /** Minimal four-key overlay used while the bundled Stardom game is running. */
+    private var stardomControls: StardomControlsView? = null
+
+    private fun installStardomControls() {
+        val controls = StardomControlsView(this)
+        val lp = FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        )
+        addContentView(controls, lp)
+        stardomControls = controls
     }
 
     /* --------------------------------------------------------- Game Mode */
@@ -1343,6 +1356,11 @@ class WhereqDosboxActivity : SDLActivity() {
         finish()
     }
 
+    override fun onPause() {
+        stardomControls?.releaseAll()
+        super.onPause()
+    }
+
     override fun onDestroy() {
         // Stop keeping the process alive and cancel pending install/import work
         // so nothing touches the activity after it is gone.
@@ -1351,6 +1369,7 @@ class WhereqDosboxActivity : SDLActivity() {
         // Let go of every key and mouse button the gamepad is holding, so
         // nothing stays down inside DOSBox after the activity is gone.
         gameMode?.releaseAll()
+        stardomControls?.releaseAll()
         backInvokedCallback?.let {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 onBackInvokedDispatcher.unregisterOnBackInvokedCallback(it)
