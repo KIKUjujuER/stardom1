@@ -164,7 +164,7 @@ class WhereqDosboxActivity : SDLActivity() {
         // Read the pending launch and clear it immediately, so a crash or a
         // force-quit lands back at a clean C:\> prompt instead of looping.
         val prefs = getSharedPreferences(LAUNCH_PREFS, MODE_PRIVATE)
-        val pendingLaunch = prefs.getString(KEY_PENDING_LAUNCH, null)
+        var pendingLaunch = prefs.getString(KEY_PENDING_LAUNCH, null)
         // A "resume" also carries the slot to restore: the game is not started
         // from the beginning, its saved machine is loaded instead.
         val pendingState = prefs.getInt(KEY_PENDING_STATE, 0)
@@ -172,6 +172,13 @@ class WhereqDosboxActivity : SDLActivity() {
             prefs.edit().remove(KEY_PENDING_LAUNCH).remove(KEY_PENDING_STATE).commit()
         } else if (pendingState != 0) {
             prefs.edit().remove(KEY_PENDING_STATE).commit()
+        }
+
+        library = GameLibrary(filesDir)
+        // The Stardom build carries its game archive inside the APK. Install it
+        // once and boot it automatically on a normal launch, with no ZIP import.
+        if (pendingLaunch == null && intent?.action != Intent.ACTION_VIEW) {
+            pendingLaunch = ensureBuiltInGame()?.folder
         }
         // This is the game actually running this boot (null = a clean prompt);
         // "Save state" is offered only for it, so a slot is never overwritten
@@ -183,8 +190,6 @@ class WhereqDosboxActivity : SDLActivity() {
         // restore there is nothing to autostart - the restore brings the game
         // back by itself.
         writeConfig(filesDir, pendingLaunch, autostartGame = pendingState == 0)
-
-        library = GameLibrary(filesDir)
 
         // Two games can carry the same archive name, and the durable save
         // store is keyed by the display name, so their saves would overwrite
@@ -221,6 +226,25 @@ class WhereqDosboxActivity : SDLActivity() {
         }
 
         Log.i(TAG, "prepared environment, config dir = " + DosboxNative.nativeConfigDir())
+    }
+
+    /**
+     * Ensures the embedded Stardom archive is installed exactly once.
+     * A failed/missing asset leaves the ordinary DOSBox launcher available.
+     */
+    private fun ensureBuiltInGame(): GameBundle? {
+        val existing = library.list().firstOrNull {
+            it.archiveName.equals("明星志愿", ignoreCase = true)
+        }
+        if (existing != null) return existing
+        return try {
+            assets.open("stardom1-game.zip").use {
+                library.install(it, "明星志愿")
+            }
+        } catch (e: IOException) {
+            Log.e(TAG, "could not install the bundled Stardom game", e)
+            null
+        }
     }
 
     /**
