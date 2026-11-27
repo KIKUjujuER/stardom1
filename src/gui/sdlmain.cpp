@@ -2741,6 +2741,11 @@ static void android_handle_touch(SDL_TouchFingerEvent *finger) {
 			break;
 		}
 		if (android_touch_tracking && finger->fingerId == android_touch_tracked) {
+			/* ACTION_UP carries the final finger coordinate too. Apply it
+			 * synchronously before releasing LEFT, so a quick tap or a short
+			 * drag cannot click at the previous queued motion position. */
+			android_touch_cursor(px, py);
+			android_touch_position_pending.store(false, std::memory_order_release);
 			if (android_touch_left_down) {
 				Mouse_ButtonReleased(0);
 				android_touch_left_down = false;
