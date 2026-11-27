@@ -150,8 +150,12 @@ android {
 
     buildTypes {
         debug {
-            // android:debuggable comes from the build type, not from the
-            // manifest, so the release build is not debuggable.
+            // Keep the preview package separate from the installed release:
+            // a fork cannot sign with the upstream release key, and the player
+            // must not have to uninstall the app or lose its private game data.
+            applicationIdSuffix '.preview'
+            versionNameSuffix '-preview'
+            resValue 'string', 'app_name', 'WhereQ-DOSBox Preview'
             debuggable true
             jniDebuggable true
         }
