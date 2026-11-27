@@ -103,6 +103,10 @@ object DosboxNative {
     @JvmStatic
     external fun nativeUpdateTouchPosition(x: Float, y: Float)
 
+    /** Cancels an interrupted drag without synthesizing a click. */
+    @JvmStatic
+    external fun nativeCancelTouch()
+
     /** SDL's left/right mouse button numbers (SDL_BUTTON_LEFT/RIGHT). */
     const val SDL_BUTTON_LEFT = 1
     const val SDL_BUTTON_RIGHT = 3
