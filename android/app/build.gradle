@@ -89,7 +89,7 @@ android {
     compileSdk 36
     buildToolsVersion '36.0.0'
     defaultConfig {
-        applicationId 'com.whereq.dosbox'
+        applicationId 'com.kikujujuer.stardom3'
         minSdk 21
         targetSdk 36
         versionCode appVersionCode
