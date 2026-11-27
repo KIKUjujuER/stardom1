@@ -1238,33 +1238,43 @@ usable here. SDL's Android back end turns touches into mouse events
 
 So the conversion is done inside DOSBox instead —
 `android_handle_touch()` in `src/gui/sdlmain.cpp`, fenced by
-`#if defined(__ANDROID__)`:
+`#if defined(__ANDROID__)`. Button down/up events still travel through SDL,
+but high-frequency move events take a latest-position path:
 
 ![4.7 ▸ Touch, the mouse and the relative-mouse trap](diagrams/tr08-4-7-touch-the-mouse-and-the-relative-mouse-trap.svg)
 
 <details>
-<summary>The same diagram as text (the SVG above is the aligned version)</summary>
+<summary>The current event path, as text</summary>
 
 ```
-  SDL_FINGERDOWN / SDL_FINGERMOTION / SDL_FINGERUP
+  ACTION_DOWN / ACTION_UP
         │
         ▼
-  android_handle_touch(finger)              src/gui/sdlmain.cpp:2641
-        │  the FIRST finger drives the cursor and holds the LEFT button for as
-        │  long as it is down; a SECOND finger is a RIGHT click
-        ▼
-  px = finger.x * windowWidth               SDL normalises touches to 0..1
-  py = finger.y * windowHeight
+  SDL_FINGERDOWN / SDL_FINGERUP → android_handle_touch()
+        │  first finger holds LEFT; second finger holds RIGHT
+        │
+  ACTION_MOVE
         │
         ▼
-  map through sdl.clip — exactly what HandleMouseMotion() does for a real mouse
-        │  rx = (px - clip.x) / (clip.w - 1)
-        │  ry = (py - clip.y) / (clip.h - 1)
+  SDLSurface → DosboxNative.nativeUpdateTouchPosition(x, y)
+        │  normalized SurfaceView coords; one 32-bit atomic latest-value mailbox
         ▼
-  Mouse_CursorMoved(0, 0, rx, ry, sdl.mouse.locked)
+  GFX_Events() → android_apply_pending_touch_position()
+        │  runs on the DOSBox thread; stale move events are not queued
+        ▼
+  map through sdl.clip into the actual 4:3 game viewport
+        │  clamp to clip bounds, then calculate rx / ry in 0..1
+        ▼
+  Mouse_CursorMoved(0, 0, rx, ry, false)
 ```
 
 </details>
+
+The touchscreen is absolute-coordinate input, like iDOS/DOSPad's
+`mouseAbsEnable` path. Do not apply a guessed Y correction: the DOS game
+provides its cursor hotspot through INT 33h AX=09, and DOSBox already uses that
+hotspot when drawing the hand cursor. The logical mouse position is therefore
+the point that must land at the visible tip.
 
 ▸ **A click is a held button, not a tap.** The first finger presses the LEFT
 button on `SDL_FINGERDOWN` and releases it on `SDL_FINGERUP`, so the button is
