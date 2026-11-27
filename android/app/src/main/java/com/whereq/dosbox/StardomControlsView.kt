@@ -36,14 +36,14 @@ class StardomControlsView(context: Context) : FrameLayout(context) {
             gravity = Gravity.CENTER_VERTICAL
         }
         leftGroup.addView(makeKey("←", "left", 58, 25f))
-        leftGroup.addView(makeKey("→", "right", 58, 25f), gapParams())
+        leftGroup.addView(makeKey("→", "right", 58, 25f))
 
         val rightGroup = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
         rightGroup.addView(makeKey("ESC", "esc", 62, 16f))
-        rightGroup.addView(makeKey("ENTER", "enter", 76, 14f), gapParams())
+        rightGroup.addView(makeKey("ENTER", "enter", 76, 14f))
 
         // The two groups sit on the bottom edge like the iPad reference. They
         // have no backing strip, so the centre of the screen stays unobstructed.
