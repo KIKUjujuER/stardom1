@@ -95,6 +95,14 @@ object DosboxNative {
     @JvmStatic
     external fun nativePushMouseMotion(dx: Int, dy: Int): Boolean
 
+    /**
+     * Publishes the latest absolute touchscreen position without queuing a
+     * separate SDL event for every MotionEvent. DOSBox consumes it on its own
+     * thread; [x] and [y] are normalized SurfaceView coordinates in 0..1.
+     */
+    @JvmStatic
+    external fun nativeUpdateTouchPosition(x: Float, y: Float)
+
     /** SDL's left/right mouse button numbers (SDL_BUTTON_LEFT/RIGHT). */
     const val SDL_BUTTON_LEFT = 1
     const val SDL_BUTTON_RIGHT = 3
