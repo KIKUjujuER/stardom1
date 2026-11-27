@@ -1382,6 +1382,7 @@ class WhereqDosboxActivity : SDLActivity() {
 
     override fun onPause() {
         stardomControls?.releaseAll()
+        DosboxNative.nativeCancelTouch()
         super.onPause()
     }
 
