@@ -1,3 +1,4 @@
+extern "C" void DOSBOX_CancelAndroidTouch(void);
 extern "C" void DOSBOX_UpdateAndroidTouchPosition(float normalizedX, float normalizedY);
 
 /*
@@ -147,6 +148,14 @@ Java_com_whereq_dosbox_DosboxNative_nativeConfigDir(JNIEnv *env, jclass clazz)
     (void)clazz;
     const char *home = getenv("HOME");
     return env->NewStringUTF(home ? home : "");
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_whereq_dosbox_DosboxNative_nativeCancelTouch(JNIEnv *env, jclass clazz)
+{
+    (void)env;
+    (void)clazz;
+    DOSBOX_CancelAndroidTouch();
 }
 
 /* Keep high-frequency finger motion out of SDL's queued event stream.
