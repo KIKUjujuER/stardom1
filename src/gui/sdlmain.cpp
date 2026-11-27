@@ -2752,6 +2752,7 @@ static std::atomic<bool> android_touch_cancel_pending(false);
 static bool android_touch_tracking = false;
 static SDL_FingerID android_touch_tracked = 0;
 static bool android_touch_right_active = false;
+static bool android_touch_right_gesture = false;
 static SDL_FingerID android_touch_right_id = 0;
 static bool android_touch_click_pending = false;
 static Uint8 android_touch_click_button = 0;
@@ -2844,6 +2845,7 @@ static void android_apply_pending_touch_cancel(void) {
 		return;
 	android_touch_tracking = false;
 	android_touch_right_active = false;
+	android_touch_right_gesture = false;
 	android_touch_position_pending.store(false, std::memory_order_release);
 	if (android_touch_click_pending) {
 		Mouse_ButtonReleased(android_touch_click_button);
@@ -2881,6 +2883,7 @@ static void android_handle_touch(SDL_TouchFingerEvent *finger) {
 			android_touch_cursor(px, py);
 		} else if (!android_touch_right_active && finger->fingerId != android_touch_tracked) {
 			android_touch_right_active = true;
+			android_touch_right_gesture = true;
 			android_touch_right_id = finger->fingerId;
 		}
 		break;
@@ -2894,6 +2897,8 @@ static void android_handle_touch(SDL_TouchFingerEvent *finger) {
 		if (android_touch_right_active && finger->fingerId == android_touch_right_id) {
 			android_schedule_touch_click(1);
 			android_touch_right_active = false;
+			if (!android_touch_tracking)
+				android_touch_right_gesture = false;
 			break;
 		}
 		if (android_touch_tracking && finger->fingerId == android_touch_tracked) {
@@ -2901,9 +2906,11 @@ static void android_handle_touch(SDL_TouchFingerEvent *finger) {
 			   then click there; movement before this point was never a press. */
 			android_touch_cursor(px, py);
 			android_touch_position_pending.store(false, std::memory_order_release);
-			if (!android_touch_right_active)
+			if (!android_touch_right_gesture)
 				android_schedule_touch_click(0);
 			android_touch_tracking = false;
+			if (!android_touch_right_active)
+				android_touch_right_gesture = false;
 		}
 		break;
 
