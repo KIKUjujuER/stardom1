@@ -40,6 +40,10 @@
 #include "cross.h"
 #include "SDL.h"
 
+#if defined(__ANDROID__)
+#include <atomic>
+#endif
+
 #include "version.h"
 #include "dosbox.h"
 #include "video.h"
@@ -2630,81 +2634,119 @@ void GFX_HandleVideoResize(int width, int height) {
  * SDL's synthesis is switched off (SDL_HINT_TOUCH_MOUSE_EVENTS) in
  * GUI_StartUp(), otherwise the mouse would be moved twice.
  */
-/* Move the DOS cursor to a finger position (window px), through the letterbox
- * clip rectangle, exactly like HandleMouseMotion() does for a real mouse. */
+/*
+ * Touch coordinates arrive on Android's UI thread much faster than DOSBox
+ * necessarily polls its SDL event queue. Do not enqueue every move: keep only
+ * the newest normalized point in one lock-free 32-bit value. GFX_Events()
+ * consumes it on the DOSBox thread after handling press/release events.
+ */
+static std::atomic<Uint32> android_touch_position(0);
+static std::atomic<bool> android_touch_position_pending(false);
+static bool android_touch_tracking = false;
+static SDL_FingerID android_touch_tracked = 0;
+static bool android_touch_left_down = false;
+static bool android_touch_right_active = false;
+static SDL_FingerID android_touch_right_id = 0;
+
+/* Called from the Java UI thread. It only writes atomics; DOSBox state remains
+ * exclusively owned by the emulator thread. Coordinates are normalized 0..1
+ * against the Android SurfaceView, like SDL's native finger coordinates. */
+extern "C" void DOSBOX_UpdateAndroidTouchPosition(float normalizedX, float normalizedY) {
+	if (normalizedX < 0.0f) normalizedX = 0.0f;
+	if (normalizedX > 1.0f) normalizedX = 1.0f;
+	if (normalizedY < 0.0f) normalizedY = 0.0f;
+	if (normalizedY > 1.0f) normalizedY = 1.0f;
+	const Uint32 x = (Uint32)(normalizedX * 65535.0f + 0.5f);
+	const Uint32 y = (Uint32)(normalizedY * 65535.0f + 0.5f);
+	android_touch_position.store((x << 16) | y, std::memory_order_relaxed);
+	android_touch_position_pending.store(true, std::memory_order_release);
+}
+
+/* Move the DOS cursor to a finger position (window px) through the letterbox
+ * clip rectangle. The INT 33h cursor hotspot is already applied by DOSBox when
+ * drawing the game's hand-shaped cursor, so the touch point must not receive a
+ * guessed extra Y offset. This is the same absolute-coordinate model used by
+ * iDOS/DOSPad's mouseAbsEnable path. */
 static void android_touch_cursor(float px, float py) {
-	/*
-	 * Stardom uses a hand-shaped cursor whose visible click tip sits above the
-	 * point represented by the raw finger coordinate. Move the emulated target
-	 * up by 2.5% of the game viewport (about 10 DOS pixels on a 400 px-high
-	 * picture), then clamp it to the visible image.
-	 */
-	const float fingertipOffset = (float)sdl.clip.h * 0.025f;
-	float fingertipY = py - fingertipOffset;
+	const float clipLeft = (float)sdl.clip.x;
 	const float clipTop = (float)sdl.clip.y;
+	const float clipRight = clipLeft + (float)(sdl.clip.w > 1 ? sdl.clip.w - 1 : 1);
 	const float clipBottom = clipTop + (float)(sdl.clip.h > 1 ? sdl.clip.h - 1 : 1);
-	if (fingertipY < clipTop) fingertipY = clipTop;
-	if (fingertipY > clipBottom) fingertipY = clipBottom;
-	const float rx = (px - (float)sdl.clip.x) / (float)(sdl.clip.w > 1 ? sdl.clip.w - 1 : 1);
-	const float ry = (fingertipY - clipTop) / (float)(sdl.clip.h > 1 ? sdl.clip.h - 1 : 1);
-	Mouse_CursorMoved(0.0f, 0.0f, rx, ry, sdl.mouse.locked);
+	if (px < clipLeft) px = clipLeft;
+	if (px > clipRight) px = clipRight;
+	if (py < clipTop) py = clipTop;
+	if (py > clipBottom) py = clipBottom;
+	const float rx = (px - clipLeft) / (float)(sdl.clip.w > 1 ? sdl.clip.w - 1 : 1);
+	const float ry = (py - clipTop) / (float)(sdl.clip.h > 1 ? sdl.clip.h - 1 : 1);
+	/* Force absolute mode. A mouse-lock flag would otherwise interpret this as
+	 * relative input; with zero deltas that makes the pointer appear frozen. */
+	Mouse_CursorMoved(0.0f, 0.0f, rx, ry, false);
+}
+
+static void android_apply_pending_touch_position(void) {
+	if (!android_touch_position_pending.exchange(false, std::memory_order_acq_rel))
+		return;
+	if (!android_touch_tracking)
+		return;
+	const Uint32 packed = android_touch_position.load(std::memory_order_relaxed);
+	const float nx = (float)(packed >> 16) / 65535.0f;
+	const float ny = (float)(packed & 0xffffu) / 65535.0f;
+	int winw = 0, winh = 0;
+	SDL_GetWindowSize(sdl.window, &winw, &winh);
+	if (winw > 0 && winh > 0)
+		android_touch_cursor(nx * (float)winw, ny * (float)winh);
 }
 
 static void android_handle_touch(SDL_TouchFingerEvent *finger) {
-	/* The first finger drives the cursor and the LEFT button, held for exactly
-	 * as long as the finger is down - a tap is a real held-then-released click
-	 * and a drag keeps the button down while it moves. This matters: many games
-	 * (e.g. 三国志英杰传's battle UI) read the *live* button state (INT 33h
-	 * AX=3), so an instantaneous click would be missed. A second finger that
-	 * joins the first is a RIGHT click (cancel/back in most DOS games); the
-	 * on-screen RMB key does the same at the current cursor. */
-	static bool         tracking = false;   // a first finger is down
-	static SDL_FingerID tracked = 0;        // its id
-	static bool         leftDown = false;   // the LEFT button is pressed
-	static bool         rightActive = false;// a second finger is right-clicking
-	static SDL_FingerID rightId = 0;        // its id
-
+	/* The first finger drives the cursor and holds LEFT until it lifts. A
+	 * second finger is RIGHT-click (cancel/back in most DOS games). High-rate
+	 * motion is handled separately by android_apply_pending_touch_position()
+	 * so stale move events cannot accumulate in SDL's queue. */
 	int winw = 0, winh = 0;
 	SDL_GetWindowSize(sdl.window, &winw, &winh);
 	if (winw <= 0 || winh <= 0) return;
-
-	/* Finger coordinates are normalised to 0..1 by SDL's Android back end. */
 	const float px = finger->x * (float)winw;
 	const float py = finger->y * (float)winh;
 
 	switch (finger->type) {
 	case SDL_FINGERDOWN:
-		if (!tracking) {
-			tracking = true;
-			tracked = finger->fingerId;
+		if (!android_touch_tracking) {
+			android_touch_tracking = true;
+			android_touch_tracked = finger->fingerId;
 			android_touch_cursor(px, py);
-			Mouse_ButtonPressed(0);   // LEFT down, held until this finger lifts
-			leftDown = true;
-		} else if (!rightActive && finger->fingerId != tracked) {
-			// A second finger: a right-click. End the left click first so the
-			// two do not overlap, then hold RIGHT until this finger lifts.
-			rightActive = true;
-			rightId = finger->fingerId;
-			if (leftDown) { Mouse_ButtonReleased(0); leftDown = false; }
+			Mouse_ButtonPressed(0);
+			android_touch_left_down = true;
+		} else if (!android_touch_right_active && finger->fingerId != android_touch_tracked) {
+			android_touch_right_active = true;
+			android_touch_right_id = finger->fingerId;
+			if (android_touch_left_down) {
+				Mouse_ButtonReleased(0);
+				android_touch_left_down = false;
+			}
 			Mouse_ButtonPressed(1);
 		}
 		break;
 
 	case SDL_FINGERMOTION:
-		// Only the first finger moves the cursor (dragging with the button held).
-		if (tracking && finger->fingerId == tracked)
+		/* Fallback for SDL-generated movement; Android's main touch path uses
+		 * the latest-position mailbox above. */
+		if (android_touch_tracking && finger->fingerId == android_touch_tracked)
 			android_touch_cursor(px, py);
 		break;
 
 	case SDL_FINGERUP:
-		if (rightActive && finger->fingerId == rightId) {
+		if (android_touch_right_active && finger->fingerId == android_touch_right_id) {
 			Mouse_ButtonReleased(1);
-			rightActive = false;
+			android_touch_right_active = false;
 			break;
 		}
-		if (tracking && finger->fingerId == tracked) {
-			if (leftDown) { Mouse_ButtonReleased(0); leftDown = false; }
-			tracking = false;
+		if (android_touch_tracking && finger->fingerId == android_touch_tracked) {
+			if (android_touch_left_down) {
+				Mouse_ButtonReleased(0);
+				android_touch_left_down = false;
+			}
+			android_touch_tracking = false;
+			android_touch_position_pending.store(false, std::memory_order_release);
 		}
 		break;
 
@@ -2926,6 +2968,12 @@ void GFX_Events() {
 			MAPPER_CheckEvent(&event);
 		}
 	}
+#if defined(__ANDROID__)
+	/* Apply just the latest touch coordinate once the queued button events
+	 * have been handled. This removes motion backlog and keeps DOSBox's mouse
+	 * state single-threaded. */
+	android_apply_pending_touch_position();
+#endif
 }
 
 #if defined (WIN32)
