@@ -1,3 +1,5 @@
+extern "C" void DOSBOX_UpdateAndroidTouchPosition(float normalizedX, float normalizedY);
+
 /*
  * dosbox_android.cpp - Android glue for the DOSBox native library.
  *
@@ -145,6 +147,19 @@ Java_com_whereq_dosbox_DosboxNative_nativeConfigDir(JNIEnv *env, jclass clazz)
     (void)clazz;
     const char *home = getenv("HOME");
     return env->NewStringUTF(home ? home : "");
+}
+
+/* Keep high-frequency finger motion out of SDL's queued event stream.
+ * The DOSBox thread consumes only the most recent absolute position. */
+extern "C" JNIEXPORT void JNICALL
+Java_com_whereq_dosbox_DosboxNative_nativeUpdateTouchPosition(JNIEnv *env,
+                                                              jclass clazz,
+                                                              jfloat normalized_x,
+                                                              jfloat normalized_y)
+{
+    (void)env;
+    (void)clazz;
+    DOSBOX_UpdateAndroidTouchPosition((float)normalized_x, (float)normalized_y);
 }
 
 /* --------------------------------------------------------------- keyboard */
