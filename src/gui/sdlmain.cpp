@@ -2633,8 +2633,20 @@ void GFX_HandleVideoResize(int width, int height) {
 /* Move the DOS cursor to a finger position (window px), through the letterbox
  * clip rectangle, exactly like HandleMouseMotion() does for a real mouse. */
 static void android_touch_cursor(float px, float py) {
+	/*
+	 * Stardom uses a hand-shaped cursor whose visible click tip sits above the
+	 * point represented by the raw finger coordinate. Move the emulated target
+	 * up by 2.5% of the game viewport (about 10 DOS pixels on a 400 px-high
+	 * picture), then clamp it to the visible image.
+	 */
+	const float fingertipOffset = (float)sdl.clip.h * 0.025f;
+	float fingertipY = py - fingertipOffset;
+	const float clipTop = (float)sdl.clip.y;
+	const float clipBottom = clipTop + (float)(sdl.clip.h > 1 ? sdl.clip.h - 1 : 1);
+	if (fingertipY < clipTop) fingertipY = clipTop;
+	if (fingertipY > clipBottom) fingertipY = clipBottom;
 	const float rx = (px - (float)sdl.clip.x) / (float)(sdl.clip.w > 1 ? sdl.clip.w - 1 : 1);
-	const float ry = (py - (float)sdl.clip.y) / (float)(sdl.clip.h > 1 ? sdl.clip.h - 1 : 1);
+	const float ry = (fingertipY - clipTop) / (float)(sdl.clip.h > 1 ? sdl.clip.h - 1 : 1);
 	Mouse_CursorMoved(0.0f, 0.0f, rx, ry, sdl.mouse.locked);
 }
 
