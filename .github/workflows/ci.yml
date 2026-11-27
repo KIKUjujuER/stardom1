@@ -171,3 +171,53 @@ jobs:
           name: whereq-dosbox-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+ 
+      # Build a second APK with the repository's existing release certificate.
+      # This lets a preview build update an installed release without asking the
+      # player to uninstall the app (and losing its private game/save data).
+      - name: unpack the existing release key
+        id: release-key
+        env:
+          KEYSTORE_B64: ${{ secrets.WHEREQ_RELEASE_KEYSTORE_B64 }}
+          STORE_PASS: ${{ secrets.WHEREQ_RELEASE_STORE_PASS }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ] || [ -z "$STORE_PASS" ]; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "Release signing secrets are unavailable; only the debug APK will be produced."
+            exit 0
+          fi
+          printf '%s' "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+          chmod 600 "$RUNNER_TEMP/release.keystore"
+          echo "WHEREQ_RELEASE_KEYSTORE=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
+          echo "available=true" >> "$GITHUB_OUTPUT"
+
+      - name: build the release APK
+        if: steps.release-key.outputs.available == 'true'
+        env:
+          WHEREQ_RELEASE_STORE_PASS: ${{ secrets.WHEREQ_RELEASE_STORE_PASS }}
+          WHEREQ_RELEASE_ALIAS: ${{ secrets.WHEREQ_RELEASE_ALIAS }}
+        run: ./android/gradlew --project-dir android :app:assembleRelease --console=plain
+
+      - name: verify the existing release certificate
+        if: steps.release-key.outputs.available == 'true'
+        run: |
+          apk=android/app/build/outputs/apk/release/app-release.apk
+          expected="b16b480d5a1ff6d35baff0b15fa3fc4b0ee815e500861fbff1b062c9bf7d3933"
+          "$ANDROID_SDK_ROOT/build-tools/36.0.0/apksigner" verify --print-certs "$apk" | tee certificate.txt
+          actual="$(grep -o '[0-9a-f]\{64\}' certificate.txt | head -1)"
+          if [ "$actual" != "$expected" ]; then
+            echo "::error::The APK is signed with $actual, expected $expected"
+            exit 1
+          fi
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            unzip -l "$apk" | grep -q "lib/$abi/libdosbox.so" \
+              || { echo "::error::$abi is missing from the release APK"; exit 1; }
+          done
+          echo "release signature and all three ABIs verified"
+
+      - uses: actions/upload-artifact@v4
+        if: steps.release-key.outputs.available == 'true'
+        with:
+          name: whereq-dosbox-release-apk
+          path: android/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
