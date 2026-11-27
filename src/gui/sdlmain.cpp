@@ -254,6 +254,10 @@ struct SDL_Block {
 	struct {
 		SDL_Texture * texture;
 		SDL_PixelFormat * pixelFormat;
+#if defined(__ANDROID__)
+		SDL_Surface * staging;
+		bool stagingLocked;
+#endif
 	} texture;
 #else
 	SDL_Overlay * overlay;
@@ -791,6 +795,13 @@ static int int_log2 (int val) {
 static SDL_Window * GFX_SetSDLWindowMode(Bit16u width, Bit16u height, bool fullscreen, SCREEN_TYPES screenType) {
 	static SCREEN_TYPES lastType = SCREEN_SURFACE;
 #if defined(__ANDROID__)
+	if (sdl.texture.staging) {
+		SDL_FreeSurface(sdl.texture.staging);
+		sdl.texture.staging = 0;
+	}
+	sdl.texture.stagingLocked = false;
+#endif
+#if defined(__ANDROID__)
 	/* Android: destroy the texture *before* the renderer. SDL_DestroyRenderer()
 	   frees every texture that belongs to the renderer (SDL_render.c), so the
 	   upstream order - renderer first, texture second - hands SDL_DestroyTexture()
@@ -1239,6 +1250,26 @@ dosurface:
 		Uint32 pixelFormat;
 		SDL_QueryTexture(sdl.texture.texture, &pixelFormat, NULL, NULL, NULL);
 		sdl.texture.pixelFormat = SDL_AllocFormat(pixelFormat);
+#if defined(__ANDROID__)
+		/* Keep a persistent software framebuffer. Locking a streaming texture
+		   with a NULL rectangle can require full-frame uploads even when DOSBox
+		   changed only a few text scanlines. This staging buffer lets us upload
+		   only the dirty line bands after each guest frame. */
+		sdl.texture.staging = SDL_CreateRGBSurfaceWithFormat(
+			0, width, height, SDL_BITSPERPIXEL(pixelFormat), pixelFormat);
+		sdl.texture.stagingLocked = false;
+		if (sdl.texture.staging) {
+			SDL_SetSurfaceBlendMode(sdl.texture.staging, SDL_BLENDMODE_NONE);
+			SDL_FillRect(sdl.texture.staging, NULL,
+			             SDL_MapRGBA(sdl.texture.staging->format, 0, 0, 0, 255));
+			LOG_MSG("Android texture staging enabled: %ux%u pitch=%d",
+			        (unsigned int)width, (unsigned int)height,
+			        sdl.texture.staging->pitch);
+		} else {
+			LOG_MSG("Android texture staging allocation failed: %s; using SDL_LockTexture",
+			        SDL_GetError());
+		}
+#endif
 		switch (SDL_BITSPERPIXEL(pixelFormat)) {
 			case 8:
 				retFlags = GFX_CAN_8;
@@ -1679,6 +1710,17 @@ bool GFX_StartUpdate(Bit8u * & pixels,Bitu & pitch) {
 #if SDL_VERSION_ATLEAST(2,0,0)
 	case SCREEN_TEXTURE:
 	{
+#if defined(__ANDROID__)
+		if (sdl.texture.staging) {
+			if (SDL_LockSurface(sdl.texture.staging) < 0)
+				return false;
+			sdl.texture.stagingLocked = true;
+			pixels = (Bit8u *)sdl.texture.staging->pixels;
+			pitch = sdl.texture.staging->pitch;
+			sdl.updating = true;
+			return true;
+		}
+#endif
 		void * texPixels;
 		int texPitch;
 		if (SDL_LockTexture(sdl.texture.texture, NULL, &texPixels, &texPitch) < 0)
@@ -2256,6 +2298,10 @@ static void GUI_StartUp(Section * sec) {
 #if SDL_VERSION_ATLEAST(2,0,0)
 	sdl.texture.texture=0;
 	sdl.texture.pixelFormat=0;
+#if defined(__ANDROID__)
+	sdl.texture.staging=0;
+	sdl.texture.stagingLocked=false;
+#endif
 	sdl.window=0;
 	sdl.renderer=0;
 	sdl.rendererDriver = section->Get_string("renderer");
