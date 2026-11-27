@@ -1835,15 +1835,74 @@ void GFX_EndUpdate( const Bit16u *changedLines ) {
 		}
 		break;
 #if SDL_VERSION_ATLEAST(2,0,0)
-	case SCREEN_TEXTURE:
+	case SCREEN_TEXTURE: {
+		bool shouldPresent = true;
+#if defined(__ANDROID__)
+		if (sdl.texture.staging) {
+			if (sdl.texture.stagingLocked) {
+				SDL_UnlockSurface(sdl.texture.staging);
+				sdl.texture.stagingLocked = false;
+			}
+			const Bit8u *frame = (const Bit8u *)sdl.texture.staging->pixels;
+			const int framePitch = sdl.texture.staging->pitch;
+			bool uploadOK = true;
+			if (!changedLines) {
+				uploadOK = SDL_UpdateTexture(sdl.texture.texture, NULL, frame, framePitch) == 0;
+			} else {
+				Bitu y = 0, index = 0, rectCount = 0, changedTotal = 0;
+				while (y < sdl.draw.height && rectCount < 1024) {
+					y += changedLines[index++];
+					if (y >= sdl.draw.height) break;
+					const Bitu run = changedLines[index++];
+					if (run) {
+						SDL_Rect *rect = &sdl.updateRects[rectCount++];
+						rect->x = 0;
+						rect->y = (int)y;
+						rect->w = (int)sdl.draw.width;
+						rect->h = (int)run;
+						changedTotal += run;
+					}
+					y += run;
+				}
+				if (y < sdl.draw.height && rectCount >= 1024) {
+					/* If the changed-line map is unusually fragmented, prefer one
+					   safe full upload over overflowing the rectangle array. */
+					uploadOK = SDL_UpdateTexture(sdl.texture.texture, NULL, frame, framePitch) == 0;
+				} else if (!rectCount) {
+					/* Nothing changed; don't submit an identical full-screen frame. */
+					shouldPresent = false;
+				} else if (rectCount > 12 || changedTotal * 100 >= sdl.draw.height * 55) {
+					uploadOK = SDL_UpdateTexture(sdl.texture.texture, NULL, frame, framePitch) == 0;
+				} else {
+					for (Bitu i = 0; i < rectCount; ++i) {
+						const SDL_Rect *rect = &sdl.updateRects[i];
+						const Bit8u *band = frame + (Bitu)rect->y * (Bitu)framePitch;
+						if (SDL_UpdateTexture(sdl.texture.texture, rect, band, framePitch) < 0) {
+							uploadOK = false;
+							break;
+						}
+					}
+				}
+			}
+			if (!uploadOK) {
+				LOG_MSG("Android dirty texture upload failed: %s; retrying full frame", SDL_GetError());
+				uploadOK = SDL_UpdateTexture(sdl.texture.texture, NULL, frame, framePitch) == 0;
+				shouldPresent = uploadOK;
+			}
+		} else {
+			/* Safe fallback if the staging surface could not be allocated. */
+			SDL_UnlockTexture(sdl.texture.texture);
+		}
+#else
 		SDL_UnlockTexture(sdl.texture.texture);
-		SDL_RenderClear(sdl.renderer);
-		SDL_RenderCopy(sdl.renderer, sdl.texture.texture, NULL, &sdl.clip);
-		SDL_RenderPresent(sdl.renderer);
-		/* WhereQ: the output is alive once a frame has been shown. A
-		   save-state restore may only rebuild the picture after that (see
-		   GFX_VideoReady). */
-		if (!sdl.video_presented) {
+#endif
+		if (shouldPresent) {
+			SDL_RenderClear(sdl.renderer);
+			SDL_RenderCopy(sdl.renderer, sdl.texture.texture, NULL, &sdl.clip);
+			SDL_RenderPresent(sdl.renderer);
+		}
+		/* WhereQ: the output is alive once a frame has been shown. */
+		if (!sdl.video_presented && shouldPresent) {
 			sdl.video_presented = true;
 			sdl.video_presented_at = SDL_GetTicks();
 		}
@@ -1857,6 +1916,7 @@ void GFX_EndUpdate( const Bit16u *changedLines ) {
 		}
 #endif
 		break;
+	}
 #else	// !SDL_VERSION_ATLEAST(2,0,0)
 #if C_DDRAW
 	case SCREEN_SURFACE_DDRAW:
