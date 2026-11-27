@@ -2777,29 +2777,37 @@ extern "C" void DOSBOX_CancelAndroidTouch(void) {
 	android_touch_cancel_pending.store(true, std::memory_order_release);
 }
 
-/* The DOS renderer's clip rectangle is in renderer-output coordinates. On a
- * high-DPI device this can differ from SDL_GetWindowSize(), so always convert
- * normalized SurfaceView points using SDL_GetRendererOutputSize() when the
- * texture renderer is active. */
-static bool android_get_touch_target_size(int *width, int *height) {
-	*width = 0;
-	*height = 0;
-	if (sdl.renderer && SDL_GetRendererOutputSize(sdl.renderer, width, height) == 0 &&
-	    *width > 0 && *height > 0) {
+/* Convert normalized SurfaceView input through SDL's own DPI and
+ * renderer-coordinate transform. SDL_RenderCopy destination rectangles (and
+ * sdl.clip) live in renderer logical coordinates; raw window points or raw
+ * renderer-output pixels are not interchangeable on every high-DPI device. */
+static bool android_map_touch_to_renderer(float nx, float ny, float *renderX, float *renderY) {
+	int windowW = 0, windowH = 0;
+	if (!sdl.window || !renderX || !renderY) return false;
+	SDL_GetWindowSize(sdl.window, &windowW, &windowH);
+	if (windowW <= 0 || windowH <= 0) return false;
+
+	const int windowX = (int)(nx * (float)windowW + 0.5f);
+	const int windowY = (int)(ny * (float)windowH + 0.5f);
+	if (sdl.renderer) {
+		/* Handles high-DPI scale, renderer viewport and renderer scale. */
+		SDL_RenderWindowToLogical(sdl.renderer, windowX, windowY, renderX, renderY);
 		static bool reported = false;
 		if (!reported) {
-			int ww = 0, wh = 0;
-			if (sdl.window) SDL_GetWindowSize(sdl.window, &ww, &wh);
-			LOG_MSG("Android touch mapping: renderer=%dx%d window=%dx%d clip=%d,%d %dx%d",
-			        *width, *height, ww, wh,
+			int outputW = 0, outputH = 0;
+			float scaleX = 1.0f, scaleY = 1.0f;
+			SDL_GetRendererOutputSize(sdl.renderer, &outputW, &outputH);
+			SDL_RenderGetScale(sdl.renderer, &scaleX, &scaleY);
+			LOG_MSG("Android touch map: window=%dx%d output=%dx%d scale=%.3fx%.3f clip=%d,%d %dx%d",
+			        windowW, windowH, outputW, outputH, scaleX, scaleY,
 			        sdl.clip.x, sdl.clip.y, sdl.clip.w, sdl.clip.h);
 			reported = true;
 		}
-		return true;
+	} else {
+		*renderX = (float)windowX;
+		*renderY = (float)windowY;
 	}
-	if (sdl.window)
-		SDL_GetWindowSize(sdl.window, width, height);
-	return (*width > 0 && *height > 0);
+	return true;
 }
 
 /* Move the DOS cursor through the exact aspect-corrected game viewport.
@@ -2864,16 +2872,14 @@ static void android_apply_pending_touch_position(void) {
 	const Uint32 packed = android_touch_position.load(std::memory_order_relaxed);
 	const float nx = (float)(packed >> 16) / 65535.0f;
 	const float ny = (float)(packed & 0xffffu) / 65535.0f;
-	int targetW = 0, targetH = 0;
-	if (android_get_touch_target_size(&targetW, &targetH))
-		android_touch_cursor(nx * (float)targetW, ny * (float)targetH);
+	float renderX = 0.0f, renderY = 0.0f;
+	if (android_map_touch_to_renderer(nx, ny, &renderX, &renderY))
+		android_touch_cursor(renderX, renderY);
 }
 
 static void android_handle_touch(SDL_TouchFingerEvent *finger) {
-	int targetW = 0, targetH = 0;
-	if (!android_get_touch_target_size(&targetW, &targetH)) return;
-	const float px = finger->x * (float)targetW;
-	const float py = finger->y * (float)targetH;
+	float px = 0.0f, py = 0.0f;
+	if (!android_map_touch_to_renderer(finger->x, finger->y, &px, &py)) return;
 
 	switch (finger->type) {
 	case SDL_FINGERDOWN:
