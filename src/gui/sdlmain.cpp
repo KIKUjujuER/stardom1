@@ -2917,7 +2917,8 @@ static void android_handle_touch(SDL_TouchFingerEvent *finger) {
 	default:
 		break;
 	}
-}#endif
+}
+#endif
 
 void GFX_Events() {
 	//Don't poll too often. This can be heavy on the OS, especially Macs.
