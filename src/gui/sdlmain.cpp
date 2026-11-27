@@ -40,6 +40,10 @@
 #include "cross.h"
 #include "SDL.h"
 
+#if defined(__ANDROID__)
+#include <atomic>
+#endif
+
 #include "version.h"
 #include "dosbox.h"
 #include "video.h"
@@ -250,6 +254,10 @@ struct SDL_Block {
 	struct {
 		SDL_Texture * texture;
 		SDL_PixelFormat * pixelFormat;
+#if defined(__ANDROID__)
+		SDL_Surface * staging;
+		bool stagingLocked;
+#endif
 	} texture;
 #else
 	SDL_Overlay * overlay;
@@ -787,6 +795,13 @@ static int int_log2 (int val) {
 static SDL_Window * GFX_SetSDLWindowMode(Bit16u width, Bit16u height, bool fullscreen, SCREEN_TYPES screenType) {
 	static SCREEN_TYPES lastType = SCREEN_SURFACE;
 #if defined(__ANDROID__)
+	if (sdl.texture.staging) {
+		SDL_FreeSurface(sdl.texture.staging);
+		sdl.texture.staging = 0;
+	}
+	sdl.texture.stagingLocked = false;
+#endif
+#if defined(__ANDROID__)
 	/* Android: destroy the texture *before* the renderer. SDL_DestroyRenderer()
 	   frees every texture that belongs to the renderer (SDL_render.c), so the
 	   upstream order - renderer first, texture second - hands SDL_DestroyTexture()
@@ -1235,6 +1250,26 @@ dosurface:
 		Uint32 pixelFormat;
 		SDL_QueryTexture(sdl.texture.texture, &pixelFormat, NULL, NULL, NULL);
 		sdl.texture.pixelFormat = SDL_AllocFormat(pixelFormat);
+#if defined(__ANDROID__)
+		/* Keep a persistent software framebuffer. Locking a streaming texture
+		   with a NULL rectangle can require full-frame uploads even when DOSBox
+		   changed only a few text scanlines. This staging buffer lets us upload
+		   only the dirty line bands after each guest frame. */
+		sdl.texture.staging = SDL_CreateRGBSurfaceWithFormat(
+			0, width, height, SDL_BITSPERPIXEL(pixelFormat), pixelFormat);
+		sdl.texture.stagingLocked = false;
+		if (sdl.texture.staging) {
+			SDL_SetSurfaceBlendMode(sdl.texture.staging, SDL_BLENDMODE_NONE);
+			SDL_FillRect(sdl.texture.staging, NULL,
+			             SDL_MapRGBA(sdl.texture.staging->format, 0, 0, 0, 255));
+			LOG_MSG("Android texture staging enabled: %ux%u pitch=%d",
+			        (unsigned int)width, (unsigned int)height,
+			        sdl.texture.staging->pitch);
+		} else {
+			LOG_MSG("Android texture staging allocation failed: %s; using SDL_LockTexture",
+			        SDL_GetError());
+		}
+#endif
 		switch (SDL_BITSPERPIXEL(pixelFormat)) {
 			case 8:
 				retFlags = GFX_CAN_8;
@@ -1675,6 +1710,17 @@ bool GFX_StartUpdate(Bit8u * & pixels,Bitu & pitch) {
 #if SDL_VERSION_ATLEAST(2,0,0)
 	case SCREEN_TEXTURE:
 	{
+#if defined(__ANDROID__)
+		if (sdl.texture.staging) {
+			if (SDL_LockSurface(sdl.texture.staging) < 0)
+				return false;
+			sdl.texture.stagingLocked = true;
+			pixels = (Bit8u *)sdl.texture.staging->pixels;
+			pitch = sdl.texture.staging->pitch;
+			sdl.updating = true;
+			return true;
+		}
+#endif
 		void * texPixels;
 		int texPitch;
 		if (SDL_LockTexture(sdl.texture.texture, NULL, &texPixels, &texPitch) < 0)
@@ -1789,15 +1835,74 @@ void GFX_EndUpdate( const Bit16u *changedLines ) {
 		}
 		break;
 #if SDL_VERSION_ATLEAST(2,0,0)
-	case SCREEN_TEXTURE:
+	case SCREEN_TEXTURE: {
+		bool shouldPresent = true;
+#if defined(__ANDROID__)
+		if (sdl.texture.staging) {
+			if (sdl.texture.stagingLocked) {
+				SDL_UnlockSurface(sdl.texture.staging);
+				sdl.texture.stagingLocked = false;
+			}
+			const Bit8u *frame = (const Bit8u *)sdl.texture.staging->pixels;
+			const int framePitch = sdl.texture.staging->pitch;
+			bool uploadOK = true;
+			if (!changedLines) {
+				uploadOK = SDL_UpdateTexture(sdl.texture.texture, NULL, frame, framePitch) == 0;
+			} else {
+				Bitu y = 0, index = 0, rectCount = 0, changedTotal = 0;
+				while (y < sdl.draw.height && rectCount < 1024) {
+					y += changedLines[index++];
+					if (y >= sdl.draw.height) break;
+					const Bitu run = changedLines[index++];
+					if (run) {
+						SDL_Rect *rect = &sdl.updateRects[rectCount++];
+						rect->x = 0;
+						rect->y = (int)y;
+						rect->w = (int)sdl.draw.width;
+						rect->h = (int)run;
+						changedTotal += run;
+					}
+					y += run;
+				}
+				if (y < sdl.draw.height && rectCount >= 1024) {
+					/* If the changed-line map is unusually fragmented, prefer one
+					   safe full upload over overflowing the rectangle array. */
+					uploadOK = SDL_UpdateTexture(sdl.texture.texture, NULL, frame, framePitch) == 0;
+				} else if (!rectCount) {
+					/* Nothing changed; don't submit an identical full-screen frame. */
+					shouldPresent = false;
+				} else if (rectCount > 12 || changedTotal * 100 >= sdl.draw.height * 55) {
+					uploadOK = SDL_UpdateTexture(sdl.texture.texture, NULL, frame, framePitch) == 0;
+				} else {
+					for (Bitu i = 0; i < rectCount; ++i) {
+						const SDL_Rect *rect = &sdl.updateRects[i];
+						const Bit8u *band = frame + (Bitu)rect->y * (Bitu)framePitch;
+						if (SDL_UpdateTexture(sdl.texture.texture, rect, band, framePitch) < 0) {
+							uploadOK = false;
+							break;
+						}
+					}
+				}
+			}
+			if (!uploadOK) {
+				LOG_MSG("Android dirty texture upload failed: %s; retrying full frame", SDL_GetError());
+				uploadOK = SDL_UpdateTexture(sdl.texture.texture, NULL, frame, framePitch) == 0;
+				shouldPresent = uploadOK;
+			}
+		} else {
+			/* Safe fallback if the staging surface could not be allocated. */
+			SDL_UnlockTexture(sdl.texture.texture);
+		}
+#else
 		SDL_UnlockTexture(sdl.texture.texture);
-		SDL_RenderClear(sdl.renderer);
-		SDL_RenderCopy(sdl.renderer, sdl.texture.texture, NULL, &sdl.clip);
-		SDL_RenderPresent(sdl.renderer);
-		/* WhereQ: the output is alive once a frame has been shown. A
-		   save-state restore may only rebuild the picture after that (see
-		   GFX_VideoReady). */
-		if (!sdl.video_presented) {
+#endif
+		if (shouldPresent) {
+			SDL_RenderClear(sdl.renderer);
+			SDL_RenderCopy(sdl.renderer, sdl.texture.texture, NULL, &sdl.clip);
+			SDL_RenderPresent(sdl.renderer);
+		}
+		/* WhereQ: the output is alive once a frame has been shown. */
+		if (!sdl.video_presented && shouldPresent) {
 			sdl.video_presented = true;
 			sdl.video_presented_at = SDL_GetTicks();
 		}
@@ -1811,6 +1916,7 @@ void GFX_EndUpdate( const Bit16u *changedLines ) {
 		}
 #endif
 		break;
+	}
 #else	// !SDL_VERSION_ATLEAST(2,0,0)
 #if C_DDRAW
 	case SCREEN_SURFACE_DDRAW:
@@ -2252,6 +2358,10 @@ static void GUI_StartUp(Section * sec) {
 #if SDL_VERSION_ATLEAST(2,0,0)
 	sdl.texture.texture=0;
 	sdl.texture.pixelFormat=0;
+#if defined(__ANDROID__)
+	sdl.texture.staging=0;
+	sdl.texture.stagingLocked=false;
+#endif
 	sdl.window=0;
 	sdl.renderer=0;
 	sdl.rendererDriver = section->Get_string("renderer");
@@ -2630,69 +2740,183 @@ void GFX_HandleVideoResize(int width, int height) {
  * SDL's synthesis is switched off (SDL_HINT_TOUCH_MOUSE_EVENTS) in
  * GUI_StartUp(), otherwise the mouse would be moved twice.
  */
-/* Move the DOS cursor to a finger position (window px), through the letterbox
- * clip rectangle, exactly like HandleMouseMotion() does for a real mouse. */
+/*
+ * Touch coordinates arrive on Android's UI thread much faster than DOSBox
+ * necessarily polls its SDL event queue. Do not enqueue every move: keep only
+ * the newest normalized point in one lock-free 32-bit value. GFX_Events()
+ * consumes it on the DOSBox thread after handling press/release events.
+ */
+static std::atomic<Uint32> android_touch_position(0);
+static std::atomic<bool> android_touch_position_pending(false);
+static std::atomic<bool> android_touch_cancel_pending(false);
+static bool android_touch_tracking = false;
+static SDL_FingerID android_touch_tracked = 0;
+static bool android_touch_right_active = false;
+static bool android_touch_right_gesture = false;
+static SDL_FingerID android_touch_right_id = 0;
+static bool android_touch_click_pending = false;
+static Uint8 android_touch_click_button = 0;
+static Uint32 android_touch_click_release_at = 0;
+
+/* Called from the Java UI thread. It only writes atomics; DOSBox state remains
+ * exclusively owned by the emulator thread. Coordinates are normalized 0..1
+ * against the Android SurfaceView. */
+extern "C" void DOSBOX_UpdateAndroidTouchPosition(float normalizedX, float normalizedY) {
+	if (normalizedX < 0.0f) normalizedX = 0.0f;
+	if (normalizedX > 1.0f) normalizedX = 1.0f;
+	if (normalizedY < 0.0f) normalizedY = 0.0f;
+	if (normalizedY > 1.0f) normalizedY = 1.0f;
+	const Uint32 x = (Uint32)(normalizedX * 65535.0f + 0.5f);
+	const Uint32 y = (Uint32)(normalizedY * 65535.0f + 0.5f);
+	android_touch_position.store((x << 16) | y, std::memory_order_relaxed);
+	android_touch_position_pending.store(true, std::memory_order_release);
+}
+
+/* An Android ACTION_CANCEL must abandon the gesture, not turn it into a tap. */
+extern "C" void DOSBOX_CancelAndroidTouch(void) {
+	android_touch_cancel_pending.store(true, std::memory_order_release);
+}
+
+/* Convert normalized SurfaceView input through SDL's own DPI and
+ * renderer-coordinate transform. SDL_RenderCopy destination rectangles (and
+ * sdl.clip) live in renderer logical coordinates; raw window points or raw
+ * renderer-output pixels are not interchangeable on every high-DPI device. */
+static bool android_map_touch_to_renderer(float nx, float ny, float *renderX, float *renderY) {
+	int windowW = 0, windowH = 0;
+	if (!sdl.window || !renderX || !renderY) return false;
+	SDL_GetWindowSize(sdl.window, &windowW, &windowH);
+	if (windowW <= 0 || windowH <= 0) return false;
+
+	const int windowX = (int)(nx * (float)windowW + 0.5f);
+	const int windowY = (int)(ny * (float)windowH + 0.5f);
+	if (sdl.renderer) {
+		/* Handles high-DPI scale, renderer viewport and renderer scale. */
+		SDL_RenderWindowToLogical(sdl.renderer, windowX, windowY, renderX, renderY);
+		static bool reported = false;
+		if (!reported) {
+			int outputW = 0, outputH = 0;
+			float scaleX = 1.0f, scaleY = 1.0f;
+			SDL_GetRendererOutputSize(sdl.renderer, &outputW, &outputH);
+			SDL_RenderGetScale(sdl.renderer, &scaleX, &scaleY);
+			LOG_MSG("Android touch map: window=%dx%d output=%dx%d scale=%.3fx%.3f clip=%d,%d %dx%d",
+			        windowW, windowH, outputW, outputH, scaleX, scaleY,
+			        sdl.clip.x, sdl.clip.y, sdl.clip.w, sdl.clip.h);
+			reported = true;
+		}
+	} else {
+		*renderX = (float)windowX;
+		*renderY = (float)windowY;
+	}
+	return true;
+}
+
+/* Move the DOS cursor through the exact aspect-corrected game viewport.
+ * The DOS game's INT 33h hotspot is already applied by DOSBox when drawing
+ * its hand cursor; do not add a guessed offset on top of it. */
 static void android_touch_cursor(float px, float py) {
-	const float rx = (px - (float)sdl.clip.x) / (float)(sdl.clip.w > 1 ? sdl.clip.w - 1 : 1);
-	const float ry = (py - (float)sdl.clip.y) / (float)(sdl.clip.h > 1 ? sdl.clip.h - 1 : 1);
-	Mouse_CursorMoved(0.0f, 0.0f, rx, ry, sdl.mouse.locked);
+	const float clipLeft = (float)sdl.clip.x;
+	const float clipTop = (float)sdl.clip.y;
+	const float clipRight = clipLeft + (float)(sdl.clip.w > 1 ? sdl.clip.w - 1 : 1);
+	const float clipBottom = clipTop + (float)(sdl.clip.h > 1 ? sdl.clip.h - 1 : 1);
+	if (px < clipLeft) px = clipLeft;
+	if (px > clipRight) px = clipRight;
+	if (py < clipTop) py = clipTop;
+	if (py > clipBottom) py = clipBottom;
+	const float rx = (px - clipLeft) / (float)(sdl.clip.w > 1 ? sdl.clip.w - 1 : 1);
+	const float ry = (py - clipTop) / (float)(sdl.clip.h > 1 ? sdl.clip.h - 1 : 1);
+	Mouse_CursorMoved(0.0f, 0.0f, rx, ry, false);
+}
+
+/* The game samples INT 33h button state asynchronously. Keep the click down
+ * for 70 ms after release so it cannot be missed between two guest polls. */
+static void android_schedule_touch_click(Uint8 button) {
+	if (android_touch_click_pending) {
+		Mouse_ButtonReleased(android_touch_click_button);
+		android_touch_click_pending = false;
+	}
+	android_touch_click_button = button;
+	Mouse_ButtonPressed(button);
+	android_touch_click_release_at = SDL_GetTicks() + 70;
+	android_touch_click_pending = true;
+}
+
+static void android_service_touch_click(void) {
+	if (android_touch_click_pending &&
+	    (Sint32)(SDL_GetTicks() - android_touch_click_release_at) >= 0) {
+		Mouse_ButtonReleased(android_touch_click_button);
+		android_touch_click_pending = false;
+	}
+}
+
+static void android_apply_pending_touch_cancel(void) {
+	if (!android_touch_cancel_pending.exchange(false, std::memory_order_acq_rel))
+		return;
+	android_touch_tracking = false;
+	android_touch_right_active = false;
+	android_touch_right_gesture = false;
+	android_touch_position_pending.store(false, std::memory_order_release);
+	if (android_touch_click_pending) {
+		Mouse_ButtonReleased(android_touch_click_button);
+		android_touch_click_pending = false;
+	}
+}
+
+/* Apply the most recent drag coordinate once per DOSBox event-pump cycle.
+ * The finger moves the pointer only; the mouse button is not pressed until
+ * SDL_FINGERUP, so crossing another clickable item cannot activate it. */
+static void android_apply_pending_touch_position(void) {
+	if (!android_touch_position_pending.exchange(false, std::memory_order_acq_rel))
+		return;
+	if (!android_touch_tracking)
+		return;
+	const Uint32 packed = android_touch_position.load(std::memory_order_relaxed);
+	const float nx = (float)(packed >> 16) / 65535.0f;
+	const float ny = (float)(packed & 0xffffu) / 65535.0f;
+	float renderX = 0.0f, renderY = 0.0f;
+	if (android_map_touch_to_renderer(nx, ny, &renderX, &renderY))
+		android_touch_cursor(renderX, renderY);
 }
 
 static void android_handle_touch(SDL_TouchFingerEvent *finger) {
-	/* The first finger drives the cursor and the LEFT button, held for exactly
-	 * as long as the finger is down - a tap is a real held-then-released click
-	 * and a drag keeps the button down while it moves. This matters: many games
-	 * (e.g. 三国志英杰传's battle UI) read the *live* button state (INT 33h
-	 * AX=3), so an instantaneous click would be missed. A second finger that
-	 * joins the first is a RIGHT click (cancel/back in most DOS games); the
-	 * on-screen RMB key does the same at the current cursor. */
-	static bool         tracking = false;   // a first finger is down
-	static SDL_FingerID tracked = 0;        // its id
-	static bool         leftDown = false;   // the LEFT button is pressed
-	static bool         rightActive = false;// a second finger is right-clicking
-	static SDL_FingerID rightId = 0;        // its id
-
-	int winw = 0, winh = 0;
-	SDL_GetWindowSize(sdl.window, &winw, &winh);
-	if (winw <= 0 || winh <= 0) return;
-
-	/* Finger coordinates are normalised to 0..1 by SDL's Android back end. */
-	const float px = finger->x * (float)winw;
-	const float py = finger->y * (float)winh;
+	float px = 0.0f, py = 0.0f;
+	if (!android_map_touch_to_renderer(finger->x, finger->y, &px, &py)) return;
 
 	switch (finger->type) {
 	case SDL_FINGERDOWN:
-		if (!tracking) {
-			tracking = true;
-			tracked = finger->fingerId;
+		if (!android_touch_tracking) {
+			android_touch_tracking = true;
+			android_touch_tracked = finger->fingerId;
 			android_touch_cursor(px, py);
-			Mouse_ButtonPressed(0);   // LEFT down, held until this finger lifts
-			leftDown = true;
-		} else if (!rightActive && finger->fingerId != tracked) {
-			// A second finger: a right-click. End the left click first so the
-			// two do not overlap, then hold RIGHT until this finger lifts.
-			rightActive = true;
-			rightId = finger->fingerId;
-			if (leftDown) { Mouse_ButtonReleased(0); leftDown = false; }
-			Mouse_ButtonPressed(1);
+		} else if (!android_touch_right_active && finger->fingerId != android_touch_tracked) {
+			android_touch_right_active = true;
+			android_touch_right_gesture = true;
+			android_touch_right_id = finger->fingerId;
 		}
 		break;
 
 	case SDL_FINGERMOTION:
-		// Only the first finger moves the cursor (dragging with the button held).
-		if (tracking && finger->fingerId == tracked)
+		if (android_touch_tracking && finger->fingerId == android_touch_tracked)
 			android_touch_cursor(px, py);
 		break;
 
 	case SDL_FINGERUP:
-		if (rightActive && finger->fingerId == rightId) {
-			Mouse_ButtonReleased(1);
-			rightActive = false;
+		if (android_touch_right_active && finger->fingerId == android_touch_right_id) {
+			android_schedule_touch_click(1);
+			android_touch_right_active = false;
+			if (!android_touch_tracking)
+				android_touch_right_gesture = false;
 			break;
 		}
-		if (tracking && finger->fingerId == tracked) {
-			if (leftDown) { Mouse_ButtonReleased(0); leftDown = false; }
-			tracking = false;
+		if (android_touch_tracking && finger->fingerId == android_touch_tracked) {
+			/* ACTION_UP includes the final position. Apply it synchronously,
+			   then click there; movement before this point was never a press. */
+			android_touch_cursor(px, py);
+			android_touch_position_pending.store(false, std::memory_order_release);
+			if (!android_touch_right_gesture)
+				android_schedule_touch_click(0);
+			android_touch_tracking = false;
+			if (!android_touch_right_active)
+				android_touch_right_gesture = false;
 		}
 		break;
 
@@ -2914,6 +3138,11 @@ void GFX_Events() {
 			MAPPER_CheckEvent(&event);
 		}
 	}
+#if defined(__ANDROID__)
+	android_apply_pending_touch_cancel();
+	android_apply_pending_touch_position();
+	android_service_touch_click();
+#endif
 }
 
 #if defined (WIN32)

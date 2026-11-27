@@ -1,6 +1,7 @@
 package org.libsdl.app;
 
 
+import com.whereq.dosbox.DosboxNative;
 import android.content.Context;
 import android.content.pm.ActivityInfo;
 import android.hardware.Sensor;
@@ -237,17 +238,18 @@ public class SDLSurface extends SurfaceView implements SurfaceHolder.Callback,
         } else {
             switch(action) {
                 case MotionEvent.ACTION_MOVE:
-                    for (i = 0; i < pointerCount; i++) {
-                        pointerFingerId = event.getPointerId(i);
-                        x = event.getX(i) / mWidth;
-                        y = event.getY(i) / mHeight;
-                        p = event.getPressure(i);
-                        if (p > 1.0f) {
-                            // may be larger than 1.0f on some devices
-                            // see the documentation of getPressure(i)
-                            p = 1.0f;
-                        }
-                        SDLActivity.onNativeTouch(touchDevId, pointerFingerId, action, x, y, p);
+                    /*
+                     * The first finger controls Stardom's absolute DOS mouse.
+                     * Enqueuing every SDL_FINGERMOTION behind a busy emulator
+                     * causes old coordinates to pile up and makes the pointer
+                     * trail the finger. Publish only the latest normalized
+                     * position to the native lock-free mailbox instead. Button
+                     * down/up still use SDL touch events below.
+                     */
+                    if (pointerCount > 0) {
+                        x = event.getX(0) / mWidth;
+                        y = event.getY(0) / mHeight;
+                        DosboxNative.nativeUpdateTouchPosition(x, y);
                     }
                     break;
 
@@ -276,18 +278,9 @@ public class SDLSurface extends SurfaceView implements SurfaceHolder.Callback,
                     break;
 
                 case MotionEvent.ACTION_CANCEL:
-                    for (i = 0; i < pointerCount; i++) {
-                        pointerFingerId = event.getPointerId(i);
-                        x = event.getX(i) / mWidth;
-                        y = event.getY(i) / mHeight;
-                        p = event.getPressure(i);
-                        if (p > 1.0f) {
-                            // may be larger than 1.0f on some devices
-                            // see the documentation of getPressure(i)
-                            p = 1.0f;
-                        }
-                        SDLActivity.onNativeTouch(touchDevId, pointerFingerId, MotionEvent.ACTION_UP, x, y, p);
-                    }
+                    // The gesture was interrupted by the system; abandon it
+                    // instead of turning ACTION_CANCEL into a mouse click.
+                    DosboxNative.nativeCancelTouch();
                     break;
 
                 default:
