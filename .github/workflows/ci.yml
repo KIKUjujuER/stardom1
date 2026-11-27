@@ -178,8 +178,8 @@ jobs:
       - name: unpack the existing release key
         id: release-key
         env:
-          KEYSTORE_B64: \${{ secrets.WHEREQ_RELEASE_KEYSTORE_B64 }}
-          STORE_PASS: \${{ secrets.WHEREQ_RELEASE_STORE_PASS }}
+          KEYSTORE_B64: ${{ secrets.WHEREQ_RELEASE_KEYSTORE_B64 }}
+          STORE_PASS: ${{ secrets.WHEREQ_RELEASE_STORE_PASS }}
         run: |
           if [ -z "$KEYSTORE_B64" ] || [ -z "$STORE_PASS" ]; then
             echo "available=false" >> "$GITHUB_OUTPUT"
@@ -194,8 +194,8 @@ jobs:
       - name: build the release APK
         if: steps.release-key.outputs.available == 'true'
         env:
-          WHEREQ_RELEASE_STORE_PASS: \${{ secrets.WHEREQ_RELEASE_STORE_PASS }}
-          WHEREQ_RELEASE_ALIAS: \${{ secrets.WHEREQ_RELEASE_ALIAS }}
+          WHEREQ_RELEASE_STORE_PASS: ${{ secrets.WHEREQ_RELEASE_STORE_PASS }}
+          WHEREQ_RELEASE_ALIAS: ${{ secrets.WHEREQ_RELEASE_ALIAS }}
         run: ./android/gradlew --project-dir android :app:assembleRelease --console=plain
 
       - name: verify the existing release certificate
