@@ -637,6 +637,39 @@ void Mouse_CursorSet(float x,float y) {
 	DrawCursor();
 }
 
+/* Set an absolute pointer location from a normalized host coordinate.
+ * Unlike Mouse_CursorMoved(), this is intentionally never interpreted as
+ * relative motion when the guest has defined a large/equal INT 33h range.
+ * Android touch input is positional, so every final finger coordinate must
+ * resolve to the same guest coordinate regardless of the current mouse mode.
+ */
+void Mouse_CursorSetNormalized(float x,float y) {
+	if (x < 0.0f) x = 0.0f;
+	if (x > 1.0f) x = 1.0f;
+	if (y < 0.0f) y = 0.0f;
+	if (y > 1.0f) y = 1.0f;
+
+	if (CurMode->type == M_TEXT) {
+		mouse.x = x * real_readw(BIOSMEM_SEG,BIOSMEM_NB_COLS) * 8;
+		mouse.y = y * (real_readb(BIOSMEM_SEG,BIOSMEM_NB_ROWS) + 1) * 8;
+	} else if (useps2callback) {
+		mouse.x = x * 32767.0f;
+		mouse.y = y * 32767.0f;
+	} else {
+		mouse.x = mouse.min_x + x * (mouse.max_x - mouse.min_x);
+		mouse.y = mouse.min_y + y * (mouse.max_y - mouse.min_y);
+	}
+
+	if (!useps2callback) {
+		if (mouse.x > mouse.max_x) mouse.x = mouse.max_x;
+		if (mouse.x < mouse.min_x) mouse.x = mouse.min_x;
+		if (mouse.y > mouse.max_y) mouse.y = mouse.max_y;
+		if (mouse.y < mouse.min_y) mouse.y = mouse.min_y;
+	}
+	Mouse_AddEvent(MOUSE_HAS_MOVED);
+	DrawCursor();
+}
+
 void Mouse_ButtonPressed(Bit8u button) {
 	switch (button) {
 #if (MOUSE_BUTTONS >= 1)
