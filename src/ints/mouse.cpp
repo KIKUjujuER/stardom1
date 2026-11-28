@@ -649,23 +649,39 @@ void Mouse_CursorSetNormalized(float x,float y) {
 	if (y < 0.0f) y = 0.0f;
 	if (y > 1.0f) y = 1.0f;
 
+	float newX = 0.0f;
+	float newY = 0.0f;
 	if (CurMode->type == M_TEXT) {
-		mouse.x = x * real_readw(BIOSMEM_SEG,BIOSMEM_NB_COLS) * 8;
-		mouse.y = y * (real_readb(BIOSMEM_SEG,BIOSMEM_NB_ROWS) + 1) * 8;
+		newX = x * real_readw(BIOSMEM_SEG,BIOSMEM_NB_COLS) * 8;
+		newY = y * (real_readb(BIOSMEM_SEG,BIOSMEM_NB_ROWS) + 1) * 8;
 	} else if (useps2callback) {
-		mouse.x = x * 32767.0f;
-		mouse.y = y * 32767.0f;
+		newX = x * 32767.0f;
+		newY = y * 32767.0f;
 	} else {
-		mouse.x = mouse.min_x + x * (mouse.max_x - mouse.min_x);
-		mouse.y = mouse.min_y + y * (mouse.max_y - mouse.min_y);
+		newX = mouse.min_x + x * (mouse.max_x - mouse.min_x);
+		newY = mouse.min_y + y * (mouse.max_y - mouse.min_y);
 	}
 
 	if (!useps2callback) {
-		if (mouse.x > mouse.max_x) mouse.x = mouse.max_x;
-		if (mouse.x < mouse.min_x) mouse.x = mouse.min_x;
-		if (mouse.y > mouse.max_y) mouse.y = mouse.max_y;
-		if (mouse.y < mouse.min_y) mouse.y = mouse.min_y;
+		if (newX > mouse.max_x) newX = mouse.max_x;
+		if (newX < mouse.min_x) newX = mouse.min_x;
+		if (newY > mouse.max_y) newY = mouse.max_y;
+		if (newY < mouse.min_y) newY = mouse.min_y;
 	}
+
+	/* Keep the INT 33h mickey counters in sync with the absolute pointer.
+	   Some DOS titles query both the absolute position and accumulated motion. */
+	const float dx = newX - mouse.x;
+	const float dy = newY - mouse.y;
+	mouse.mickey_x += dx * mouse.mickeysPerPixel_x;
+	mouse.mickey_y += dy * mouse.mickeysPerPixel_y;
+	if (mouse.mickey_x >= 32768.0f) mouse.mickey_x -= 65536.0f;
+	else if (mouse.mickey_x <= -32769.0f) mouse.mickey_x += 65536.0f;
+	if (mouse.mickey_y >= 32768.0f) mouse.mickey_y -= 65536.0f;
+	else if (mouse.mickey_y <= -32769.0f) mouse.mickey_y += 65536.0f;
+
+	mouse.x = newX;
+	mouse.y = newY;
 	Mouse_AddEvent(MOUSE_HAS_MOVED);
 	DrawCursor();
 }
