@@ -32,6 +32,7 @@ void Mouse_ChangePS2Callback(Bit16u pseg, Bit16u pofs);
 
 void Mouse_CursorMoved(float xrel,float yrel,float x,float y,bool emulate);
 void Mouse_CursorSet(float x,float y);
+void Mouse_CursorSetNormalized(float x,float y);
 void Mouse_ButtonPressed(Bit8u button);
 void Mouse_ButtonReleased(Bit8u button);
 

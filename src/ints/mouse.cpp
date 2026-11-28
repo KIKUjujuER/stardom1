@@ -637,6 +637,55 @@ void Mouse_CursorSet(float x,float y) {
 	DrawCursor();
 }
 
+/* Set an absolute pointer location from a normalized host coordinate.
+ * Unlike Mouse_CursorMoved(), this is intentionally never interpreted as
+ * relative motion when the guest has defined a large/equal INT 33h range.
+ * Android touch input is positional, so every final finger coordinate must
+ * resolve to the same guest coordinate regardless of the current mouse mode.
+ */
+void Mouse_CursorSetNormalized(float x,float y) {
+	if (x < 0.0f) x = 0.0f;
+	if (x > 1.0f) x = 1.0f;
+	if (y < 0.0f) y = 0.0f;
+	if (y > 1.0f) y = 1.0f;
+
+	float newX = 0.0f;
+	float newY = 0.0f;
+	if (CurMode->type == M_TEXT) {
+		newX = x * real_readw(BIOSMEM_SEG,BIOSMEM_NB_COLS) * 8;
+		newY = y * (real_readb(BIOSMEM_SEG,BIOSMEM_NB_ROWS) + 1) * 8;
+	} else if (useps2callback) {
+		newX = x * 32767.0f;
+		newY = y * 32767.0f;
+	} else {
+		newX = mouse.min_x + x * (mouse.max_x - mouse.min_x);
+		newY = mouse.min_y + y * (mouse.max_y - mouse.min_y);
+	}
+
+	if (!useps2callback) {
+		if (newX > mouse.max_x) newX = mouse.max_x;
+		if (newX < mouse.min_x) newX = mouse.min_x;
+		if (newY > mouse.max_y) newY = mouse.max_y;
+		if (newY < mouse.min_y) newY = mouse.min_y;
+	}
+
+	/* Keep the INT 33h mickey counters in sync with the absolute pointer.
+	   Some DOS titles query both the absolute position and accumulated motion. */
+	const float dx = newX - mouse.x;
+	const float dy = newY - mouse.y;
+	mouse.mickey_x += dx * mouse.mickeysPerPixel_x;
+	mouse.mickey_y += dy * mouse.mickeysPerPixel_y;
+	if (mouse.mickey_x >= 32768.0f) mouse.mickey_x -= 65536.0f;
+	else if (mouse.mickey_x <= -32769.0f) mouse.mickey_x += 65536.0f;
+	if (mouse.mickey_y >= 32768.0f) mouse.mickey_y -= 65536.0f;
+	else if (mouse.mickey_y <= -32769.0f) mouse.mickey_y += 65536.0f;
+
+	mouse.x = newX;
+	mouse.y = newY;
+	Mouse_AddEvent(MOUSE_HAS_MOVED);
+	DrawCursor();
+}
+
 void Mouse_ButtonPressed(Bit8u button) {
 	switch (button) {
 #if (MOUSE_BUTTONS >= 1)
