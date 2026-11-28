@@ -1850,38 +1850,43 @@ void GFX_EndUpdate( const Bit16u *changedLines ) {
 				uploadOK = SDL_UpdateTexture(sdl.texture.texture, NULL, frame, framePitch) == 0;
 			} else {
 				Bitu y = 0, index = 0, rectCount = 0, changedTotal = 0;
+				Bitu firstChangedY = sdl.draw.height;
+				Bitu lastChangedY = 0;
+				/* DOSBox's dirty-line map alternates unchanged and changed
+				   scanline runs. Coalesce all changed runs into one vertical band:
+				   this keeps a text frame to a single GL texture update instead of
+				   issuing one driver call for every isolated line. The unchanged
+				   gaps inside the band are copied too, which is cheaper on Android
+				   than many tiny uploads and still avoids touching the rest of the
+				   screen. */
 				while (y < sdl.draw.height && rectCount < 1024) {
 					y += changedLines[index++];
 					if (y >= sdl.draw.height) break;
 					const Bitu run = changedLines[index++];
 					if (run) {
-						SDL_Rect *rect = &sdl.updateRects[rectCount++];
-						rect->x = 0;
-						rect->y = (int)y;
-						rect->w = (int)sdl.draw.width;
-						rect->h = (int)run;
+						if (firstChangedY == sdl.draw.height) firstChangedY = y;
+						lastChangedY = y + run;
 						changedTotal += run;
+						rectCount++;
 					}
 					y += run;
 				}
 				if (y < sdl.draw.height && rectCount >= 1024) {
-					/* If the changed-line map is unusually fragmented, prefer one
-					   safe full upload over overflowing the rectangle array. */
+					/* Pathological fragmentation: use one safe full upload. */
 					uploadOK = SDL_UpdateTexture(sdl.texture.texture, NULL, frame, framePitch) == 0;
 				} else if (!rectCount) {
 					/* Nothing changed; don't submit an identical full-screen frame. */
 					shouldPresent = false;
-				} else if (rectCount > 12 || changedTotal * 100 >= sdl.draw.height * 55) {
+				} else if (changedTotal * 100 >= sdl.draw.height * 60) {
 					uploadOK = SDL_UpdateTexture(sdl.texture.texture, NULL, frame, framePitch) == 0;
 				} else {
-					for (Bitu i = 0; i < rectCount; ++i) {
-						const SDL_Rect *rect = &sdl.updateRects[i];
-						const Bit8u *band = frame + (Bitu)rect->y * (Bitu)framePitch;
-						if (SDL_UpdateTexture(sdl.texture.texture, rect, band, framePitch) < 0) {
-							uploadOK = false;
-							break;
-						}
-					}
+					SDL_Rect dirtyBand;
+					dirtyBand.x = 0;
+					dirtyBand.y = (int)firstChangedY;
+					dirtyBand.w = (int)sdl.draw.width;
+					dirtyBand.h = (int)(lastChangedY - firstChangedY);
+					const Bit8u *band = frame + firstChangedY * (Bitu)framePitch;
+					uploadOK = SDL_UpdateTexture(sdl.texture.texture, &dirtyBand, band, framePitch) == 0;
 				}
 			}
 			if (!uploadOK) {
@@ -2824,7 +2829,7 @@ static void android_touch_cursor(float px, float py) {
 	if (py > clipBottom) py = clipBottom;
 	const float rx = (px - clipLeft) / (float)(sdl.clip.w > 1 ? sdl.clip.w - 1 : 1);
 	const float ry = (py - clipTop) / (float)(sdl.clip.h > 1 ? sdl.clip.h - 1 : 1);
-	Mouse_CursorMoved(0.0f, 0.0f, rx, ry, false);
+	Mouse_CursorSetNormalized(rx, ry);
 }
 
 /* The game samples INT 33h button state asynchronously. Keep the click down
