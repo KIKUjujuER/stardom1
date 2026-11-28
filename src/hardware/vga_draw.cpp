@@ -1565,6 +1565,26 @@ void VGA_SetupDrawing(Bitu /*val*/) {
 	if ( width >= 640 && height >= 480 ) {
 		aspect_ratio = ((float)width / (float)height) * ( 3.0 / 4.0);
 	}
+#if defined(__ANDROID__)
+	/* Several 1990s VGA games switch to 640x350/400 active lines while
+	   retaining 480-line timing. Some custom timing combinations therefore
+	   report a square-pixel ratio of 1.0 even though the original VGA display
+	   geometry is 4:3. On Android's square-pixel tablet this makes gameplay
+	   visibly shorter than the title/settlement screens. When such a legacy
+	   640-wide mode has no aspect correction at all, apply the standard 4:3
+	   VGA pixel geometry. Modes that already report a correction are untouched. */
+	if (width >= 640 && width <= 800 && height >= 320 && height < 480 &&
+	    aspect_ratio > 0.95 && aspect_ratio < 1.05) {
+		const double detected_ratio = aspect_ratio;
+		aspect_ratio = ((double)width / (double)height) * (3.0 / 4.0);
+		LOG_MSG("Android VGA aspect fallback: %ux%u detected=%.4f corrected=%.4f",
+		        (unsigned int)width, (unsigned int)height,
+		        detected_ratio, aspect_ratio);
+	} else {
+		LOG_MSG("Android VGA mode: %ux%u aspect=%.4f",
+		        (unsigned int)width, (unsigned int)height, aspect_ratio);
+	}
+#endif
 //	LOG_MSG("ht %d vt %d ratio %f", htotal, vtotal, aspect_ratio );
 
 	bool fps_changed = false;
